@@ -1,7 +1,11 @@
 // src/data/songs.js
 // Nơi chứa dữ liệu bài hát, liên kết trực tiếp với repo luongnuong131/db_lunumusic
 
+// Đường dẫn gốc trỏ vào đúng thư mục chứa nhạc trên GitHub của ông
 const baseUrl = 'https://raw.githubusercontent.com/luongnuong131/db_lunumusic/main/DB_LuNuMusic-66d75bbf04dc13b143139b727fe94d48741dd8cc/';
+
+// Hàm encode tên file để trình duyệt không bị lỗi khi đọc dấu cách và ký tự đặc biệt
+const getAudioUrl = (fileName) => baseUrl + encodeURIComponent(fileName);
 
 export const songs = [
   // ==========================================
@@ -11,64 +15,64 @@ export const songs = [
     id: 1,
     title: 'Quan Hệ Rộng',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273b0636254ab24d081f9a26569',
-    url: baseUrl + 'Quan%20Hệ%20Rộng%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=300&q=80',
+    url: getAudioUrl('Quan Hệ Rộng - Donald Gold.mp3')
   },
   {
     id: 2,
     title: 'Ngáo Ngơ Hết Ngày',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b27376c694a0d91244ab9eb2f1db',
-    url: baseUrl + 'Ngáo%20Ngơ%20Hết%20Ngày%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1493225457124-a1a2a29ce73?w=300&q=80',
+    url: getAudioUrl('Ngáo Ngơ Hết Ngày - Donald Gold.mp3')
   },
   {
     id: 3,
     title: 'Đỉnh (Sao Hạng A Dissing)',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273575b40bc84fb34dc517a637a',
-    url: baseUrl + 'Donald%20Gold%20-%20Đỉnh%20[%20Sao%20Hạng%20A%20Dissing%20]%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1514525253161-7a46d19cd819?w=300&q=80',
+    url: getAudioUrl('Donald Gold - Đỉnh [ Sao Hạng A Dissing ] - Donald Gold.mp3')
   },
   {
     id: 4,
     title: 'Trăng Hoa Mây Mưa',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b27318dbbd093c3cce9b291c1af2',
-    url: baseUrl + 'Donald%20Gold%20-%20Trăng%20Hoa%20Mây%20Mưa%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1470225620780-dba8ba36b745?w=300&q=80',
+    url: getAudioUrl('Donald Gold - Trăng Hoa Mây Mưa - Donald Gold.mp3')
   },
   {
     id: 5,
     title: 'OBGTLH',
     artist: 'Donald Gold x Lil Shady',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273ea61db6358c306d15a51c4a0',
-    url: baseUrl + 'Donald%20Gold%20-%20OBGTLH%20x%20Lil%20Shady%20%20Official%20MV%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1511379938547-c1f69419868d?w=300&q=80',
+    url: getAudioUrl('Donald Gold - OBGTLH x Lil Shady  Official MV - Donald Gold.mp3')
   },
   {
     id: 6,
     title: 'Lái Máy Bay',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273641b6ec2e915003b5f3a0273',
-    url: baseUrl + 'Donald%20Gold%20-%20Lái%20Máy%20Bay%20%20%20Official%20Lyrics%20Video%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1571330804093-g219a16f21c2?w=300&q=80',
+    url: getAudioUrl('Donald Gold - Lái Máy Bay   Official Lyrics Video - Donald Gold.mp3')
   },
   {
     id: 7,
     title: 'Đổi Tư Thế',
     artist: 'Donald Gold x Andree Right Hand',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273c52a0a20cb3a0d540292dc22',
-    url: baseUrl + 'DONALD%20GOLD%20-%20ĐỔI%20TƯ%20THẾ%20x%20ANDREE%20RIGHT%20HAND%20%20OFFICIAL%20MUSIC%20VIDEO%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1508700115892-45ecd05ae2ad?w=300&q=80',
+    url: getAudioUrl('DONALD GOLD - ĐỔI TƯ THẾ x ANDREE RIGHT HAND  OFFICIAL MUSIC VIDEO - Donald Gold.mp3')
   },
   {
     id: 8,
     title: 'ADAMN',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273a00b11c129b27a88fc72f36b',
-    url: baseUrl + 'DONALD%20GOLD%20-%20ADAMN%20%20[OFFICIAL%20MV]%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1598387993441-a364f854c3e1?w=300&q=80',
+    url: getAudioUrl('DONALD GOLD - ADAMN  [OFFICIAL MV] - Donald Gold.mp3')
   },
   {
     id: 9,
     title: 'BCDBL',
     artist: 'Donald Gold',
-    cover: 'https://i.scdn.co/image/ab67616d0000b2739343ee099232eddb5cc9f8d9',
-    url: baseUrl + 'BCDBL%20-%20Donald%20Gold.mp3'
+    cover: 'https://images.unsplash.com/photo-1483058712412-4245e9b90334?w=300&q=80',
+    url: getAudioUrl('BCDBL - Donald Gold.mp3')
   },
 
   // ==========================================
@@ -78,21 +82,21 @@ export const songs = [
     id: 10,
     title: 'Chơi Như Tụi Mỹ',
     artist: 'Andree Right Hand',
-    cover: 'https://i.scdn.co/image/ab67616d0000b2738fa099ba5ed694c9efbda043',
-    url: baseUrl + 'Andree%20Right%20Hand%20-%20Chơi%20Như%20Tụi%20Mỹ%20%20Official%20MV%20-%20Andree%20Right%20Hand.mp3'
+    cover: 'https://images.unsplash.com/photo-1506157786151-b8491531f063?w=300&q=80',
+    url: getAudioUrl('Andree Right Hand - Ch i Nh   Official MV - Andree Right Hand.mp3')
   },
   {
     id: 11,
     title: 'Công Ty 4',
     artist: 'Andree Right Hand ft. Dangrangto, TeuYungBoy, WOKEUP',
-    cover: 'https://i.scdn.co/image/ab67616d0000b27344fa2bc7d66dd8f7895cf39f',
-    url: baseUrl + 'Andree%20Right%20Hand%20-%20Công%20Ty%204%20ft.%20Dangrangto,%20TeuYungBoy,%20WOKEUP%20%20Official%20MV%20-%20Andree%20Right%20Hand.mp3'
+    cover: 'https://images.unsplash.com/photo-1520008358485-802521fde5d0?w=300&q=80',
+    url: getAudioUrl('Andree Right Hand - C ng Ty 4 ft. Dangrangto, TeuYungBoy, WOKEUP  Official MV - Andree Right Hand.mp3')
   },
   {
     id: 12,
     title: 'Em Iu (Cleaned Version)',
     artist: 'Andree Right Hand ft. Wxrdie, Bình Gold, 2pillz',
-    cover: 'https://i.scdn.co/image/ab67616d0000b273dc912a2a0a2ff91bb4d9ba88',
-    url: baseUrl + 'Andree%20Right%20Hand%20-%20Em%20iu%20feat.%20Wxrdie,%20Bình%20Gold,%202pillz%20%20Official%20MV%20(CLEANED%20VERSION)%20-%20Andree%20Right%20Hand.mp3'
+    cover: 'https://images.unsplash.com/photo-1459749411175-04bf5292ceea?w=300&q=80',
+    url: getAudioUrl('Andree Right Hand - Em iu feat. Wxrdie, Bình Gold, 2pillz  Official MV (CLEANED VERSION) - Andree Right Hand.mp3')
   }
 ];
