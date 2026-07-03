@@ -41,12 +41,16 @@
 </template>
 
 <script setup>
-import { ref } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import Sidebar from '../components/Sidebar.vue';
 import MainView from '../components/MainView.vue';
 import PlayerBar from '../components/PlayerBar.vue';
 import QueuePanel from '../components/QueuePanel.vue';
+import CommandPalette from '../components/CommandPalette.vue';
 import { songs } from '../data/songs.js';
+import { usePlaylists } from '../composables/usePlaylists.js';
+
+const { playlists } = usePlaylists();
 
 const currentSong = ref(null);
 const isPlaying = ref(false); // Trạng thái phát nhạc, dùng để hiển thị equalizer ở MainView
@@ -69,6 +73,38 @@ const showQueue = ref(false);
 
 const playedTracks = ref([]); // Danh sách ID các bài đã phát (dùng cho shuffle)
 const unplayedTracks = ref([]); // Danh sách ID các bài chưa phát (dùng cho shuffle)
+
+// ===== Command Palette (Ctrl/Cmd + K) =====
+const showCommandPalette = ref(false);
+
+const handleGlobalKeydown = (e) => {
+  const isCmdK = (e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'k';
+  if (isCmdK) {
+    e.preventDefault(); // tránh trình duyệt mở ô tìm kiếm riêng của nó
+    showCommandPalette.value = !showCommandPalette.value;
+  } else if (e.key === 'Escape' && showCommandPalette.value) {
+    showCommandPalette.value = false;
+  }
+};
+
+onMounted(() => window.addEventListener('keydown', handleGlobalKeydown));
+onUnmounted(() => window.removeEventListener('keydown', handleGlobalKeydown));
+
+const handlePaletteAction = (action) => {
+  if (action === 'home') handleNavigate({ view: 'home' });
+  else if (action === 'search') handleNavigate({ view: 'search' });
+  else if (action === 'toggle-shuffle') toggleShuffle();
+  else if (action === 'toggle-queue') showQueue.value = !showQueue.value;
+};
+
+const handlePaletteOpenPlaylist = (playlist) => {
+  handleNavigate({ view: 'playlist', playlistId: playlist.id });
+};
+
+const reorderQueue = ({ from, to }) => {
+  const item = queue.value.splice(from, 1)[0];
+  if (item) queue.value.splice(to, 0, item);
+};
 
 const handleNavigate = ({ view, playlistId = null }) => {
   activeView.value = view;
