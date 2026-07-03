@@ -1,0 +1,44 @@
+/* src/style.css */
+:root {
+  --primary-color: #1db954; /* Xanh lá Spotify */
+  --bg-color: #121212;      /* Đen nền */
+  --panel-bg: #181818;      /* Đen xám cho panel */
+  --text-main: #ffffff;     /* Trắng chữ chính */
+  --text-sub: #b3b3b3;      /* Xám chữ phụ */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  background-color: var(--bg-color);
+  color: var(--text-main);
+  /* Ngăn cuộn toàn trang, chỉ cho cuộn ở MainView */
+  overflow: hidden; 
+}
+
+/* =========================================
+   TÙY CHỈNH THANH CUỘN (SCROLLBAR) XỊN XÒ
+   ========================================= */
+::-webkit-scrollbar {
+  width: 12px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  background-color: rgba(255, 255, 255, 0.3);
+  border-radius: 8px;
+  /* Viền tiệp màu nền để tạo cảm giác nhỏ lại */
+  border: 3px solid var(--bg-color); 
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(255, 255, 255, 0.5);
+}
