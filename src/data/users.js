@@ -6,6 +6,10 @@ export const users = [
     username: 'LuNu',
     password: '0907987126_LuNu'
   },
+  {
+    username: 'CR7',
+    password: 'cr7vodich'
+  },
   
   // =====================================================================
   // HƯỚNG DẪN TẠO THÊM TÀI KHOẢN CHO NGƯỜI KHÁC
