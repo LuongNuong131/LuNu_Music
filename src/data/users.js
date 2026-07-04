@@ -7,6 +7,10 @@ export const users = [
     password: '0907987126_LuNu'
   },
   {
+    username: 'Mieee',
+    password: '123456789'
+  },
+  {
     username: 'CR7',
     password: 'cr7vodich'
   },
