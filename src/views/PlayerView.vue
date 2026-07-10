@@ -1,11 +1,21 @@
 <!-- src/views/PlayerView.vue -->
 <template>
   <div class="player-layout">
+    <!-- Nút mở menu — chỉ hiện trên mobile -->
+    <button class="mobile-menu-btn" @click="sidebarOpen = true" aria-label="Mở menu">
+      <span></span><span></span><span></span>
+    </button>
+
+    <!-- Lớp phủ tối khi mở drawer sidebar trên mobile -->
+    <div v-if="sidebarOpen" class="sidebar-backdrop" @click="sidebarOpen = false"></div>
+
     <Sidebar
       class="sidebar-area"
+      :open="sidebarOpen"
       :active-view="activeView"
       :active-playlist-id="activePlaylistId"
       @navigate="handleNavigate"
+      @close="sidebarOpen = false"
     />
     <MainView
       class="main-area"
@@ -51,6 +61,8 @@ import { songs } from '../data/songs.js';
 import { usePlaylists } from '../composables/usePlaylists.js';
 
 const { playlists } = usePlaylists();
+
+const sidebarOpen = ref(false); // Trạng thái mở/đóng drawer sidebar trên mobile
 
 const currentSong = ref(null);
 const isPlaying = ref(false); // Trạng thái phát nhạc, dùng để hiển thị equalizer ở MainView
@@ -109,6 +121,7 @@ const reorderQueue = ({ from, to }) => {
 const handleNavigate = ({ view, playlistId = null }) => {
   activeView.value = view;
   activePlaylistId.value = playlistId;
+  sidebarOpen.value = false; // Đóng drawer trên mobile sau khi chọn mục
 };
 
 const handleAddToQueue = (song) => {
@@ -228,16 +241,72 @@ const playPrev = () => {
     radial-gradient(120% 60% at 50% 0%, rgba(232, 184, 109, 0.06) 0%, transparent 55%),
     linear-gradient(180deg, #17140f 0%, var(--bg-color) 45%);
   overflow-y: auto;
+  min-width: 0;
 }
 .player-bar-area {
   grid-area: player;
   background-color: var(--panel-bg);
   border-top: 1px solid var(--hairline);
+  min-width: 0;
 }
 
-@media (max-width: 720px) {
+/* Nút hamburger mở drawer sidebar — mặc định ẩn, chỉ hiện ở mobile */
+.mobile-menu-btn {
+  display: none;
+}
+
+.sidebar-backdrop {
+  display: none;
+}
+
+/* ===== Tablet: sidebar co lại thành dải icon ===== */
+@media (max-width: 900px) {
   .player-layout {
     grid-template-columns: 76px 1fr;
+  }
+}
+
+/* ===== Mobile: sidebar biến thành drawer trượt, main chiếm toàn bộ chiều rộng ===== */
+@media (max-width: 640px) {
+  .player-layout {
+    grid-template-columns: 1fr;
+    grid-template-rows: calc(100vh - 76px) 76px;
+    grid-template-areas: "main" "player";
+  }
+
+  .mobile-menu-btn {
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    gap: 4px;
+    position: fixed;
+    top: 14px;
+    left: 14px;
+    z-index: 210;
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    border: 1px solid var(--hairline);
+    background: rgba(23, 20, 15, 0.85);
+    backdrop-filter: blur(6px);
+    cursor: pointer;
+  }
+
+  .mobile-menu-btn span {
+    display: block;
+    width: 16px;
+    height: 2px;
+    border-radius: 1px;
+    background: var(--text-main);
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 250;
+    background: rgba(5, 4, 3, 0.55);
   }
 }
 </style>

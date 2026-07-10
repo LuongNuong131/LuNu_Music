@@ -1,19 +1,20 @@
 <!-- src/components/Sidebar.vue -->
 <template>
-  <div class="sidebar">
+  <div class="sidebar" :class="{ open }">
     <div class="logo">
       <span class="logo-mark">LN</span>
       <h2 class="premium-text">LuNu Music</h2>
+      <button class="sidebar-close" @click="emit('close')" aria-label="Đóng menu">✕</button>
     </div>
 
     <nav class="nav-links">
-      <a href="#" :class="{ active: activeView === 'home' }" @click.prevent="emit('navigate', { view: 'home' })">
+      <a href="#" title="Trang chủ" :class="{ active: activeView === 'home' }" @click.prevent="emit('navigate', { view: 'home' })">
         <span class="icon">⌂</span> Trang chủ
       </a>
-      <a href="#" :class="{ active: activeView === 'search' }" @click.prevent="emit('navigate', { view: 'search' })">
+      <a href="#" title="Tìm kiếm" :class="{ active: activeView === 'search' }" @click.prevent="emit('navigate', { view: 'search' })">
         <span class="icon">⌕</span> Tìm kiếm
       </a>
-      <a href="#">
+      <a href="#" title="Thư viện">
         <span class="icon">▤</span> Thư viện
       </a>
     </nav>
@@ -102,10 +103,11 @@ import ConfirmModal from './ConfirmModal.vue';
 
 defineProps({
   activeView: { type: String, default: 'home' },
-  activePlaylistId: { type: String, default: null }
+  activePlaylistId: { type: String, default: null },
+  open: { type: Boolean, default: false } // Trạng thái mở drawer trên mobile
 });
 
-const emit = defineEmits(['navigate']);
+const emit = defineEmits(['navigate', 'close']);
 
 const { playlists, createPlaylist, deletePlaylist, renamePlaylist } = usePlaylists();
 const { showToast } = useToast();
@@ -155,6 +157,10 @@ const handleDelete = () => {
   gap: 10px;
   padding: 0 10px;
   margin-bottom: 6px;
+}
+
+.sidebar-close {
+  display: none;
 }
 
 .logo-mark {
