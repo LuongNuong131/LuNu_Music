@@ -524,7 +524,7 @@ export const songs = [
     "title": "Thế Giới Ảo Tình Yêu Thật (Remake)",
     "artist": "Trịnh Đình Quang",
     "cover": "/images/ChoCiu.jpg",
-    "url": "/music/Thế Giới Ảo Tình Yêu Thật Remake - Trịnh Đình Quang [Official MV] #TGATYT - Trịnh Đình Quang Official.mp3"
+    "url": "/music/The-Gioi-Ao-Tinh-Yeu-That-Remake.mp3"
   },
   {
     "id": 76,
@@ -720,7 +720,7 @@ export const songs = [
         "title": "Cự Tuyệt (Live Stage)",
         "artist": "Bùi Anh Tuấn",
         "cover": "/images/ChoCiu.jpg",
-        "url": "/music/Cự Tuyệt  Cảm nhận sâu sắc 'nỗi đau xót xa' qua giọng hát Bùi Anh Tuấn  Live - Stage - TINH TÚ NHẠC VIỆT.mp3"
+        "url": "/music/Cu-Tuyet-Bui-Anh-Tuan.mp3"
     },
     {
         "id": 104,
@@ -741,13 +741,13 @@ export const songs = [
         "title": "That Girl",
         "artist": "Olly Murs",
         "cover": "/images/ChoCiu.jpg",
-        "url": "/music/[Vietsub + Kara] That Girl - Olly Murs (lyrics) - Ổ Mốc Meow.mp3"
+        "url": "/music/That-Girl-Olly-Murs.mp3"
     },
     {
         "id": 107,
         "title": "Cưới Vợ Trả Góp",
         "artist": "Masew x 24K.RIGHT x Tuấn Cry",
         "cover": "/images/ChoCiu.jpg",
-        "url": "/music/Album Xưa  Cưới Vợ Trả Góp - Masew x 24K.RIGHT x Tuấn Cry - Masew.mp3"
+        "url": "/music/Cuoi-Vo-Tra-Gop-Masew.mp3"
     },
 ];
