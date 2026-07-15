@@ -9,6 +9,7 @@
       class="wf-bars"
       ref="barsRef"
       @mousedown="startDrag"
+      @touchstart="startDrag"
       role="slider"
       :aria-valuenow="Math.round(currentTime)"
       :aria-valuemax="Math.round(duration)"
@@ -59,9 +60,12 @@ const emit = defineEmits(['seek']);
 const barsRef = ref(null);
 const progress = computed(() => (props.duration ? props.currentTime / props.duration : 0));
 
+// Chấp nhận cả MouseEvent (clientX trực tiếp) lẫn TouchEvent (clientX nằm trong touches[0])
+const clientXOf = (e) => (e.touches && e.touches.length ? e.touches[0].clientX : e.clientX);
+
 const fractionFromEvent = (e) => {
   const rect = barsRef.value.getBoundingClientRect();
-  const x = Math.min(Math.max(e.clientX - rect.left, 0), rect.width);
+  const x = Math.min(Math.max(clientXOf(e) - rect.left, 0), rect.width);
   return rect.width ? x / rect.width : 0;
 };
 
@@ -71,14 +75,24 @@ const seekToEvent = (e) => {
 };
 
 const startDrag = (e) => {
+  if (e.type === 'touchstart') e.preventDefault(); // tránh cuộn trang khi kéo tua trên mobile
   seekToEvent(e);
-  const onMove = (ev) => seekToEvent(ev);
+
+  const onMove = (ev) => {
+    if (ev.type === 'touchmove') ev.preventDefault();
+    seekToEvent(ev);
+  };
   const onUp = () => {
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
+    window.removeEventListener('touchmove', onMove);
+    window.removeEventListener('touchend', onUp);
   };
+
   window.addEventListener('mousemove', onMove);
   window.addEventListener('mouseup', onUp);
+  window.addEventListener('touchmove', onMove, { passive: false });
+  window.addEventListener('touchend', onUp);
 };
 
 const formatTime = (time) => {
@@ -114,6 +128,7 @@ const formatTime = (time) => {
   gap: 2px;
   cursor: pointer;
   padding: 4px 0;
+  touch-action: none;
 }
 
 .wf-bar {

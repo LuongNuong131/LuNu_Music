@@ -281,8 +281,8 @@ const playPrev = () => {
     align-items: center;
     gap: 4px;
     position: fixed;
-    top: 14px;
-    left: 14px;
+    top: max(14px, env(safe-area-inset-top));
+    left: max(14px, env(safe-area-inset-left));
     z-index: 210;
     width: 38px;
     height: 38px;
@@ -291,6 +291,10 @@ const playPrev = () => {
     background: rgba(23, 20, 15, 0.85);
     backdrop-filter: blur(6px);
     cursor: pointer;
+  }
+
+  .player-bar-area {
+    padding-bottom: env(safe-area-inset-bottom);
   }
 
   .mobile-menu-btn span {

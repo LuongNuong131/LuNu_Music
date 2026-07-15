@@ -587,4 +587,29 @@ onUnmounted(() => document.removeEventListener('click', closeMenuOnOutsideClick)
     display: none;
   }
 }
+
+@media (max-width: 640px) {
+  .main-view {
+    padding: 24px 16px 100px;
+  }
+  .hero {
+    margin-bottom: 22px;
+    padding-bottom: 18px;
+  }
+  .hero-title {
+    font-size: 32px;
+  }
+  .search-box {
+    max-width: 100%;
+  }
+  .song-cover {
+    width: 38px;
+    height: 38px;
+    margin-right: 10px;
+  }
+  .song-menu {
+    right: -8px;
+    width: min(220px, 78vw);
+  }
+}
 </style>

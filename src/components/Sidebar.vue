@@ -149,6 +149,7 @@ const handleDelete = () => {
   gap: 14px;
   border-right: 1px solid var(--hairline-soft);
   overflow-y: auto;
+  overflow-x: hidden;
 }
 
 .logo {
@@ -370,5 +371,76 @@ const handleDelete = () => {
   font-size: 11px;
   color: var(--text-faint);
   line-height: 1.4;
+}
+
+/* ===== Tablet: co lại thành dải icon (khớp với 76px ở PlayerView) ===== */
+@media (max-width: 900px) and (min-width: 641px) {
+  .sidebar {
+    padding: 22px 8px 18px;
+    align-items: center;
+  }
+
+  .logo {
+    justify-content: center;
+    padding: 0;
+  }
+
+  .premium-text,
+  .section-label,
+  .playlist-block,
+  .divider,
+  .sidebar-footer {
+    display: none;
+  }
+
+  /* Nhãn của mỗi mục là text node thô nằm cạnh .icon, không bọc trong span
+     nên thu về font-size: 0 để ẩn chữ mà vẫn giữ icon hiển thị bình thường */
+  .nav-links a {
+    justify-content: center;
+    padding: 10px;
+    font-size: 0;
+    gap: 0;
+  }
+
+  .icon {
+    width: auto;
+    font-size: 16px;
+  }
+}
+
+/* ===== Mobile: drawer trượt từ trái, phủ toàn màn hình khi mở ===== */
+@media (max-width: 640px) {
+  .sidebar {
+    position: fixed;
+    top: 0;
+    left: 0;
+    z-index: 260;
+    width: min(280px, 82vw);
+    height: 100vh;
+    background: linear-gradient(180deg, var(--panel-bg) 0%, #0a0908 100%);
+    box-shadow: 20px 0 60px rgba(0, 0, 0, 0.5);
+    transform: translateX(-100%);
+    transition: transform 0.25s ease;
+  }
+
+  .sidebar.open {
+    transform: translateX(0);
+  }
+
+  .sidebar-close {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    margin-left: auto;
+    flex-shrink: 0;
+    background: none;
+    border: 1px solid var(--hairline-soft);
+    border-radius: 8px;
+    color: var(--text-sub);
+    font-size: 13px;
+    cursor: pointer;
+  }
 }
 </style>

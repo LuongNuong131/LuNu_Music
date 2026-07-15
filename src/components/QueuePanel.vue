@@ -270,4 +270,13 @@ const emit = defineEmits(['close', 'remove', 'clear']);
   opacity: 0;
   transform: translateX(12px);
 }
+
+@media (max-width: 640px) {
+  .queue-panel {
+    width: 100%;
+    max-width: 100%;
+    padding: 18px 14px;
+    padding-bottom: max(18px, env(safe-area-inset-bottom));
+  }
+}
 </style>

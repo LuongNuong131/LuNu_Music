@@ -635,4 +635,67 @@ input[type="range"]::-webkit-slider-thumb {
     display: none;
   }
 }
+
+/* ===== Mobile: bỏ cột volume, thu gọn cover + controls để vừa 1 hàng ===== */
+@media (max-width: 640px) {
+  .player-bar {
+    padding: 0 10px;
+    gap: 8px;
+  }
+
+  .song-info {
+    width: auto;
+    flex: 1 1 auto;
+    margin-left: 0;
+    padding: 6px 4px;
+  }
+
+  .cover-wrap {
+    width: 40px;
+    height: 40px;
+    margin-right: 10px;
+  }
+
+  .details {
+    max-width: 34vw;
+  }
+
+  .player-controls {
+    width: auto;
+    flex: 0 0 auto;
+  }
+
+  .buttons {
+    gap: 14px;
+    margin-bottom: 0;
+  }
+
+  /* Trên mobile chỉ giữ nút Play/Prev/Next; ẩn thanh tua + shuffle/repeat để tránh chật,
+     người dùng vẫn tua được qua màn hình Đang phát toàn màn hình (NowPlayingView) */
+  .progress-container,
+  .shuffle-btn,
+  .repeat-btn {
+    display: none;
+  }
+
+  .volume-control {
+    width: auto;
+    flex: 0 0 auto;
+    gap: 4px;
+  }
+
+  .volume-bar {
+    display: none;
+  }
+}
+
+@media (max-width: 380px) {
+  .details {
+    max-width: 26vw;
+  }
+
+  .queue-toggle {
+    display: none;
+  }
+}
 </style>

@@ -11,7 +11,7 @@ export const songs = [
   {
     "id": 2,
     "title": "Adamn",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/adamn.mp3"
   },
@@ -53,21 +53,21 @@ export const songs = [
   {
     "id": 8,
     "title": "Anh Tên Là",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/anh_ten_la.mp3"
   },
   {
     "id": 9,
     "title": "Bcdbl",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/bcdbl.mp3"
   },
   {
     "id": 10,
     "title": "Chơi Như Tụi Mỹ",
-    "artist": "LuNu Collection",
+    "artist": "Andree Right Hand",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/choi_nhu_tui_my.mp3"
   },
@@ -102,7 +102,7 @@ export const songs = [
   {
     "id": 15,
     "title": "Công Ty 4",
-    "artist": "LuNu Collection",
+    "artist": "Andree Right Hand",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/cong_ty_4.mp3"
   },
@@ -151,14 +151,14 @@ export const songs = [
   {
     "id": 22,
     "title": "Đỉnh",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/dinh.mp3"
   },
   {
     "id": 23,
     "title": "Đổi Tư Thế",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold ft. Andree Right Hand",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/doi_tu_the.mp3"
   },
@@ -214,7 +214,7 @@ export const songs = [
   {
     "id": 31,
     "title": "Em Iu",
-    "artist": "LuNu Collection",
+    "artist": "Andree Right Hand ft. Wxrdie, Bình Gold, 2pillz",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/em_iu.mp3"
   },
@@ -361,7 +361,7 @@ export const songs = [
   {
     "id": 52,
     "title": "Lái Máy Bay",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/lai_may_bay.mp3"
   },
@@ -403,7 +403,7 @@ export const songs = [
   {
     "id": 58,
     "title": "Ngáo Ngơ Hết Ngày",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/ngao_ngo_het_ngay.mp3"
   },
@@ -431,7 +431,7 @@ export const songs = [
   {
     "id": 62,
     "title": "Ông Bà Già Tao Lo Hết",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/obgtlh.mp3"
   },
@@ -473,7 +473,7 @@ export const songs = [
   {
     "id": 68,
     "title": "Quan Hệ Rộng",
-    "artist": "LuNu Collection",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/quan_he_rong.mp3"
   },
@@ -549,8 +549,8 @@ export const songs = [
   },
   {
     "id": 79,
-    "title": "Trăng Hoa Mấy Mùa",
-    "artist": "LuNu Collection",
+    "title": "Trăng Hoa Mây Mưa",
+    "artist": "Bình Gold",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/trang_hoa_may_mua.mp3"
   },
@@ -707,5 +707,47 @@ export const songs = [
     "artist": "buitruonglinh",
     "cover": "/images/ChoCiu.jpg",
     "url": "/music/♬ Yêu Người Có Ước Mơ - buitruonglinh x CaoTri  Lofi Lyrics - CaoTri Official.mp3"
-  }
+  },
+  {
+    "id": 102,
+        "title": "Tìm Em (ft. Bảo Anh)",
+        "artist": "Hngle",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Hngle - Tìm em ft. Bảo Anh  Official Music Video - HNGLE _ hưng lê.mp3"
+    },
+    {
+        "id": 103,
+        "title": "Cự Tuyệt (Live Stage)",
+        "artist": "Bùi Anh Tuấn",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Cự Tuyệt  Cảm nhận sâu sắc 'nỗi đau xót xa' qua giọng hát Bùi Anh Tuấn  Live - Stage - TINH TÚ NHẠC VIỆT.mp3"
+    },
+    {
+        "id": 104,
+        "title": "Em (ft. SOOBIN)",
+        "artist": "Binz",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/07. Em - Binz (feat. SOOBIN)  Gặp Lại Album - Binz Da Poet.mp3"
+    },
+    {
+        "id": 105,
+        "title": "Way Back Home (Sam Feldt Edit) ft. Conor Maynard",
+        "artist": "SHAUN",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/SHAUN feat. Conor Maynard - Way Back Home (Lyrics) Sam Feldt Edit - WaveMusic.mp3"
+    },
+    {
+        "id": 106,
+        "title": "That Girl",
+        "artist": "Olly Murs",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/[Vietsub + Kara] That Girl - Olly Murs (lyrics) - Ổ Mốc Meow.mp3"
+    },
+    {
+        "id": 107,
+        "title": "Cưới Vợ Trả Góp",
+        "artist": "Masew x 24K.RIGHT x Tuấn Cry",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Album Xưa  Cưới Vợ Trả Góp - Masew x 24K.RIGHT x Tuấn Cry - Masew.mp3"
+    },
 ];

@@ -42,6 +42,7 @@ const iconFor = (type) => {
   align-items: center;
   gap: 8px;
   pointer-events: none;
+  width: min(360px, calc(100vw - 24px));
 }
 
 .toast-item {
@@ -58,7 +59,7 @@ const iconFor = (type) => {
   font-size: 13px;
   font-weight: 600;
   cursor: pointer;
-  max-width: 360px;
+  max-width: 100%;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;

@@ -76,11 +76,13 @@ const cancel = () => emit('cancel');
   display: flex;
   align-items: center;
   justify-content: center;
+  padding: 16px;
   z-index: 100;
 }
 
 .modal-card {
   width: 320px;
+  max-width: 100%;
   background: linear-gradient(180deg, var(--panel-bg) 0%, #100d08 100%);
   border: 1px solid var(--hairline);
   border-radius: 14px;

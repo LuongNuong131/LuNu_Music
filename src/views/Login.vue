@@ -74,6 +74,7 @@ const handleLogin = () => {
   display: flex;
   justify-content: center;
   align-items: center;
+  padding: 16px;
   background:
     radial-gradient(60% 50% at 50% 0%, rgba(232, 184, 109, 0.12) 0%, transparent 60%),
     var(--bg-color);
@@ -95,8 +96,18 @@ const handleLogin = () => {
   border-radius: 16px;
   border: 1px solid var(--hairline);
   width: 360px;
+  max-width: 100%;
   text-align: center;
   box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), 0 0 0 1px rgba(232, 184, 109, 0.04);
+}
+
+@media (max-width: 400px) {
+  .login-card {
+    padding: 36px 24px 28px;
+  }
+  .brand {
+    font-size: 42px;
+  }
 }
 
 .vinyl-wrap {
