@@ -757,4 +757,67 @@ export const songs = [
         "cover": "/images/ChoCiu.jpg",
         "url": "/music/Túp Lều Lý Tưởng ReMix - Hồ Quang Hiếu (DJ Bibo ReMix)  Nhạc Hot Tik Tok 2020 - Huỳnh Plus.mp3"
     },
+	{
+        "id": 109,
+        "title": "Chỉ Anh Hiểu Em",
+        "artist": "NDMT",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Chỉ Anh Hiểu Em (R_B Version) - NDMT - NDMT.mp3"
+    },
+{
+        "id": 110,
+        "title": "Người Ấy (Hychun x Đông Remix) Full Ver Hot TikTok - Nhạc Trẻ Remix Giai Điệu Siêu Cuốn 2025",
+        "artist": "Ntp Vinahouse",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Người Ấy (Hychun x Đông Remix) Full Ver Hot TikTok - Nhạc Trẻ Remix Giai Điệu Siêu Cuốn 2025 - Ntp Vinahouse.mp3"
+    },
+{
+        "id": 111,
+        "title": "Công Chúa Bong Bóng Remix",
+        "artist": "An Vũ (Duzme Remix)",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Công Chúa Bong Bóng - An Vũ (Duzme Remix) _ Audio Lyrics - Duzme Music.mp3"
+    },
+{
+        "id": 112,
+        "title": "Yêu Em Rất Nhiều (HuyD Remix)",
+        "artist": "Hoàng Tôn",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Yêu Em Rất Nhiều (HuyD Remix) - Hoàng Tôn  Người ƠI Em Có Biết Anh Đã Yêu Em Rất Nhiều - WM Music.mp3"
+    },
+{
+        "id": 113,
+        "title": "Chỉ Anh Hiểu Em (R_B Version)",
+        "artist": "NDMT",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Chỉ Anh Hiểu Em (R_B Version) - NDMT - NDMT_2.mp3"
+    },
+{
+        "id": 114,
+        "title": "Đồng thoại",
+        "artist": "Quang Lương",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/[Vietsub + Pinyin] Đồng thoại - Quang Lương  童话 (Tong Hua) - 光良  Fairy Tale - Michael Wong ♪ - Cà Chua.mp3"
+    },
+{
+        "id": 115,
+        "title": "Đường xưa ướt mưa Remix",
+        "artist": "Haozi",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Đường xưa ướt mưa Remix - Haozi - Tiktok Music Viral.mp3"
+    },
+{
+        "id": 115,
+        "title": "Dù Có Cách Xa",
+        "artist": "Đinh Mạnh Ninh",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/[Lyrics Video] Dù Có Cách Xa - Đinh Mạnh Ninh #DCCX - Đinh Mạnh Ninh.mp3"
+    },
+{
+        "id": 116,
+        "title": "Dù Có Cách Xa (Bản PEAK TikTok)",
+        "artist": "Kim Phương Anh",
+        "cover": "/images/ChoCiu.jpg",
+        "url": "/music/Dù Có Cách Xa (Bản PEAK TikTok) - Kim Phương Anh ♫ Nếu Mây Kia Mang Người Yêu Em Hot TikTok 2026 - NVT Remix.mp3"
+    },
 ];
