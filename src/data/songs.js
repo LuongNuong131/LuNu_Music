@@ -797,7 +797,7 @@ export const songs = [
         "title": "Đồng thoại",
         "artist": "Quang Lương",
         "cover": "/images/ChoCiu.jpg",
-        "url": "/music/[Vietsub + Pinyin] Đồng thoại - Quang Lương  童话 (Tong Hua) - 光良  Fairy Tale - Michael Wong ♪ - Cà Chua.mp3"
+        "url": "/music/Đồng thoại - Quang Lương.mp3"
     },
 {
         "id": 115,
@@ -811,7 +811,7 @@ export const songs = [
         "title": "Dù Có Cách Xa",
         "artist": "Đinh Mạnh Ninh",
         "cover": "/images/ChoCiu.jpg",
-        "url": "/music/[Lyrics Video] Dù Có Cách Xa - Đinh Mạnh Ninh #DCCX - Đinh Mạnh Ninh.mp3"
+        "url": "/music/Dù Có Cách Xa.mp3"
     },
 {
         "id": 117,
