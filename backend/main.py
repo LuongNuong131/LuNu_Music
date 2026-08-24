@@ -352,8 +352,10 @@ def search_query_variants(query: str) -> list[str]:
 
 
 def has_relevant_result(results: list[dict], query: str) -> bool:
-    query_tokens = set(_search_tokens(query))
-    return bool(query_tokens) and any(query_tokens.issubset(set(_search_tokens(result.get('title', '')))) for result in results)
+    query_text = ' '.join(_search_tokens(query))
+    if not query_text:
+        return False
+    return any(query_text in ' '.join(_search_tokens(result.get('title', ''))) for result in results)
 
 
 def rank_search_results(results: list[dict], query: str) -> list[dict]:
@@ -516,8 +518,10 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
                 return {'success': True, 'results': ranked[:10], 'source': f'yt-dlp:{",".join(client)}'}
     try:
         music_results = []
-        for variant in variants:
-            music_results.extend(search_youtube_music(variant))
+        for variant_index, variant in enumerate(variants):
+            attempts = 4 if variant_index == 0 else 2
+            for _ in range(attempts):
+                music_results.extend(search_youtube_music(variant))
         ranked = rank_search_results(music_results, normalized_query)
         if ranked:
             best_results = ranked
