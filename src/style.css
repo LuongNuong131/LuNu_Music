@@ -1,0 +1,227 @@
+@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+
+:root {
+  --bg-color: #090b11;
+  --bg-deep: #06080d;
+  --panel-bg: rgba(15, 18, 27, 0.9);
+  --panel-solid: #10131c;
+  --panel-bg-hover: #181c28;
+  --bg-elevated: #1a1f2b;
+  --glass: rgba(255, 255, 255, 0.055);
+  --glass-strong: rgba(255, 255, 255, 0.085);
+  --gold: #f5b97a;
+  --gold-bright: #ffd6a3;
+  --gold-dim: #aa7957;
+  --coral: #ff7e67;
+  --violet: #9b8cff;
+  --crimson: #ff6d7d;
+  --mint: #82e5c3;
+  --text-main: #f6f3ef;
+  --text-sub: #a3a7b4;
+  --text-faint: #626878;
+  --hairline: rgba(255, 255, 255, 0.11);
+  --hairline-soft: rgba(255, 255, 255, 0.065);
+  --font-display: 'Space Grotesk', 'Inter', sans-serif;
+  --font-body: 'DM Sans', 'Segoe UI', sans-serif;
+  --font-mono: 'JetBrains Mono', monospace;
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --primary-color: var(--gold);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+html, body { height: 100vh; width: 100vw; overflow: hidden; }
+body {
+  font-family: var(--font-body);
+  background: var(--bg-color);
+  color: var(--text-main);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+
+button, input { font: inherit; }
+button { -webkit-tap-highlight-color: transparent; }
+#app { height: 100%; width: 100%; }
+::selection { background: var(--gold); color: var(--bg-deep); }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(245, 185, 122, 0.24);
+  border-radius: 999px;
+  border: 2px solid transparent;
+  background-clip: padding-box;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(245, 185, 122, 0.45); background-clip: padding-box; }
+
+a:focus-visible, button:focus-visible, input:focus-visible {
+  outline: 2px solid var(--gold);
+  outline-offset: 3px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+@keyframes fade-up {
+  from { opacity: 0; transform: translateY(12px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes shimmer {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(100%); }
+}
+
+@keyframes ambient-pulse {
+  0%, 100% { opacity: 0.55; transform: scale(1); }
+  50% { opacity: 0.8; transform: scale(1.04); }
+}
+
+@keyframes eq {
+  0%, 100% { transform: scaleY(0.35); }
+  50% { transform: scaleY(1); }
+}
+
+@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+
+a { color: inherit; }
+* { scrollbar-width: thin; scrollbar-color: rgba(245, 185, 122, 0.3) transparent; }
+/* Keep the player feeling quiet when there is no active track. */
+button:disabled { cursor: not-allowed; opacity: 0.45; }
+
+@media (max-width: 640px) {
+  html, body { min-width: 320px; }
+}
+
+/* Decorative ambient lights used by the player shell. */
+.ambient-orb { position: absolute; pointer-events: none; border-radius: 999px; filter: blur(1px); animation: ambient-pulse 8s ease-in-out infinite; }
+.ambient-orb--gold { background: rgba(245, 185, 122, 0.14); }
+.ambient-orb--violet { background: rgba(155, 140, 255, 0.12); animation-delay: -3s; }
+
+/* Range inputs share the same premium fill across components. */
+input[type='range'] { accent-color: var(--gold); }
+input[type='range']::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--gold-bright); }
+
+/* Small utility for screen readers without impacting the visual system. */
+.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
+
+/* The original Login screen keeps its own component styles; these values make it inherit the refresh. */
+.login-page, .login-card { color: var(--text-main); }
+
+/* Shared brand mark treatment. */
+.logo-mark { position: relative; overflow: hidden; }
+.logo-mark::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.35), transparent 75%); transform: translateX(-100%); }
+.logo-mark:hover::after { animation: shimmer 800ms var(--ease-out); }
+
+@media (max-width: 640px) {
+  .ambient-orb { display: none; }
+}
+
+@keyframes equalizer {
+  0%, 100% { height: 4px; }
+  50% { height: 15px; }
+}
+
+.eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
+.eq i { width: 3px; border-radius: 4px; background: currentColor; animation: equalizer 850ms ease-in-out infinite; }
+.eq i:nth-child(2) { animation-delay: -250ms; }
+.eq i:nth-child(3) { animation-delay: -500ms; }
+
+@media (prefers-reduced-motion: reduce) {
+  .logo-mark:hover::after, .ambient-orb, .eq i { animation: none; }
+}
+
+/* Keep app links/buttons tactile. */
+button, a { transition: color 180ms var(--ease-out), background 180ms var(--ease-out), border-color 180ms var(--ease-out), transform 180ms var(--ease-out), box-shadow 180ms var(--ease-out); }
+button:active, a:active { transform: scale(0.97); }
+input::placeholder { color: var(--text-faint); }
+
+/* Form controls used throughout the app. */
+input { color: var(--text-main); }
+
+/* The player shell uses a subtle grid texture instead of a flat black canvas. */
+.player-layout::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.22;
+  background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
+  background-size: 56px 56px;
+  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.45), transparent 80%);
+}
+
+@media (max-width: 640px) {
+  .player-layout::before { background-size: 38px 38px; }
+}
+
+/* Route views are allowed to fill the shell. */
+.router-view, .player-layout { min-height: 0; }
+
+/* A utility that prevents overly long metadata from destabilizing grids. */
+.truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+
+/* Improve tap targets on touch devices. */
+@media (pointer: coarse) {
+  button { min-height: 36px; }
+}
+
+/* Focus styles for dark glass surfaces. */
+.glass-focus:focus-visible { box-shadow: 0 0 0 3px rgba(245, 185, 122, 0.2), 0 0 0 1px var(--gold); }
+
+/* Prevent browser overscroll glow from fighting the app background. */
+body { overscroll-behavior: none; }
+
+/* Ensure content does not hide behind the fixed player on narrow screens. */
+@media (max-width: 640px) {
+  .main-view { padding-bottom: 106px !important; }
+}
+
+/* Subtle noise without loading a binary asset. */
+.noise-overlay::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
+  mix-blend-mode: screen;
+}
+
+/* The app has a dark visual identity by default. */
+:root { color-scheme: dark; }
+
+/* Browser-safe tooltip fallback for title-bearing buttons. */
+[title] { cursor: pointer; }
+
+/* Slightly calmer text selection inside lyrics. */
+.np-lyrics-container ::selection { background: rgba(245, 185, 122, 0.4); color: white; }
+
+/* Keep SVG icons crisp on high-DPI displays. */
+svg { display: block; }
+
+/* Do not let images flash as broken white boxes while the local cover loads. */
+img { display: block; }
+
+/* Accessible hidden state for visually collapsed components. */
+[hidden] { display: none !important; }
+
+/* Shared glass border. */
+.glass-panel { background: var(--glass); border: 1px solid var(--hairline-soft); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
+
+/* The app remains usable with keyboard navigation. */
+:focus:not(:focus-visible) { outline: none; }
+
+/* Keep the layout stable on mobile browser address-bar changes. */
+@supports (height: 100dvh) {
+  html, body, #app { height: 100dvh; }
+}
+
+/* End of LuNu Music design system. */
