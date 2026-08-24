@@ -1,5 +1,5 @@
 <template>
-  <div v-if="!authState.user" id="login-container"><Login /></div>
+  <div v-if="!authState.user || !authState.token" id="login-container"><Login /></div>
   <div v-else id="app-container" class="glass-app-wrapper">
     <Sidebar />
     <main class="main-content">
