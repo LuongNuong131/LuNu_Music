@@ -353,7 +353,7 @@ def search_query_variants(query: str) -> list[str]:
 
 def music_search_query_variants(query: str) -> list[str]:
     ascii_query = ''.join(char for char in unicodedata.normalize('NFKD', query) if not unicodedata.combining(char))
-    return list(dict.fromkeys([ascii_query, f'{ascii_query} music', f'{ascii_query} official', query]))
+    return list(dict.fromkeys([ascii_query, f'{ascii_query} song', f'{ascii_query} MV', f'{ascii_query} music', f'{ascii_query} official', query]))
 
 
 def has_relevant_result(results: list[dict], query: str) -> bool:
@@ -524,7 +524,7 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
     try:
         music_results = []
         for variant_index, variant in enumerate(music_search_query_variants(normalized_query)):
-            attempts = 8 if variant_index == 0 else 2
+            attempts = 3 if variant_index < 3 else 1
             for _ in range(attempts):
                 music_results.extend(search_youtube_music(variant))
                 ranked = rank_search_results(music_results, normalized_query)
