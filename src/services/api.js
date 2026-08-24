@@ -45,10 +45,23 @@ export const searchYoutube = async (query) => {
   catch (error) { console.error('Lỗi tìm kiếm YouTube:', error); return { success: false, message: error.message }; }
 };
 
-export const addSong = async (videoId) => {
-  try { return await request('/songs/add', { method: 'POST', body: JSON.stringify({ video_id: videoId }) }); }
-  catch (error) { console.error('Lỗi thêm bài hát:', error); return { success: false, message: error.message }; }
+export const addSong = async (songData) => {
+  try {
+    const payload = typeof songData === 'string' ? { video_id: songData, title: '', artist: '' } : {
+      video_id: songData.videoId || songData.video_id,
+      title: songData.title,
+      artist: songData.artist,
+      cover: songData.cover || '',
+      lyrics: songData.lyrics || '',
+    };
+    return await request('/songs/add', { method: 'POST', body: JSON.stringify(payload) });
+  } catch (error) {
+    console.error('Lỗi thêm bài hát:', error);
+    return { success: false, message: error.message };
+  }
 };
+
+export const getImportJob = (jobId) => request(`/songs/import-jobs/${encodeURIComponent(jobId)}`);
 
 export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { method: 'DELETE' });
 

@@ -50,6 +50,8 @@ if AUTH_SECRET == 'change-this-secret-in-production':
     print('⚠️ LUNU_AUTH_SECRET chưa được cấu hình; hãy thay bằng secret dài trên Render.')
 
 supabase: Optional[Client] = None
+import_jobs: dict[str, dict] = {}
+
 if SUPABASE_URL and SUPABASE_KEY:
     try:
         supabase = create_client(SUPABASE_URL, SUPABASE_KEY)
@@ -71,6 +73,15 @@ else:
 
 class AddSongRequest(BaseModel):
     video_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
+    title: str = Field(min_length=1, max_length=240)
+    artist: str = Field(min_length=1, max_length=160)
+    cover: str = Field(default='', max_length=500)
+    lyrics: str = Field(default='', max_length=100000)
+
+    @field_validator('title', 'artist', 'cover', 'lyrics')
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
 
 
 class LoginRequest(BaseModel):
@@ -179,38 +190,56 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None) -> d
     return opts
 
 
-def process_and_upload_song(video_id: str) -> None:
-    client = require_supabase()
-    if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
-        raise RuntimeError('Cloudinary chưa được cấu hình.')
+def set_import_job(job_id: str, **updates: object) -> None:
+    if job_id in import_jobs:
+        import_jobs[job_id].update(updates)
+
+
+def process_and_upload_song(job_id: str, request_data: dict) -> None:
+    video_id = request_data['video_id']
+    client = None
     temp_dir = tempfile.mkdtemp(prefix='lunu-')
     file_path: Optional[Path] = None
+    set_import_job(job_id, status='processing', message='Đang tải audio từ YouTube...')
     try:
+        client = require_supabase()
+        if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
+            raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
         url = f'https://www.youtube.com/watch?v={video_id}'
         with yt_dlp.YoutubeDL(get_ydl_opts(True, temp_dir)) as ydl:
-            info = ydl.extract_info(url, download=True)
-        candidates = list(Path(temp_dir).glob(f'{video_id}*.mp3'))
+            ydl.extract_info(url, download=True)
+        candidates = sorted(Path(temp_dir).glob(f'{video_id}*.mp3'))
         if not candidates:
-            raise FileNotFoundError('yt-dlp không tạo được file mp3.')
+            raise FileNotFoundError('FFmpeg/yt-dlp không tạo được file MP3. Kiểm tra FFmpeg trên Render.')
         file_path = candidates[0]
+        set_import_job(job_id, message='Đã tải MP3, đang upload lên Cloudinary...')
         result = cloudinary.uploader.upload(
-            str(file_path), resource_type='video', folder='lunu_music', use_filename=True,
-            unique_filename=False, overwrite=True,
+            str(file_path), resource_type='video', public_id=f'lunu_music/{video_id}',
+            overwrite=True, unique_filename=False,
         )
         secure_url = result.get('secure_url')
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url.')
         song_data = {
             'id': str(uuid.uuid4()),
-            'title': info.get('title', 'Đang cập nhật'),
-            'artist': info.get('uploader', 'Đang cập nhật'),
+            'title': request_data['title'],
+            'artist': request_data['artist'],
             'url': secure_url,
-            'cover': info.get('thumbnail', f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'),
-            'lyrics': '',
+            'cover': request_data.get('cover') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+            'lyrics': request_data.get('lyrics', ''),
         }
-        client.table('songs').insert(song_data).execute()
+        set_import_job(job_id, message='Đã upload Cloudinary, đang ghi metadata vào Supabase...')
+        existing = client.table('songs').select('id').eq('url', secure_url).limit(1).execute()
+        if existing.data:
+            client.table('songs').update({key: value for key, value in song_data.items() if key != 'id'}).eq('id', existing.data[0]['id']).execute()
+            song_data['id'] = existing.data[0]['id']
+            set_import_job(job_id, status='completed', message='Đã cập nhật metadata bài hát trong thư viện.', song=song_data)
+        else:
+            client.table('songs').insert(song_data).execute()
+            set_import_job(job_id, status='completed', message='Đã thêm bài hát vào thư viện.', song=song_data)
         print(f'✅ Đã thêm bài hát: {song_data["title"]}')
     except Exception as error:
+        set_import_job(job_id, status='failed', message=str(error))
         print(f'❌ Lỗi xử lý video {video_id}: {error}')
     finally:
         if file_path and file_path.exists():
@@ -280,8 +309,18 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
 
 @app.post('/api/songs/add', status_code=status.HTTP_202_ACCEPTED)
 async def add_song(request: AddSongRequest, background_tasks: BackgroundTasks, _: dict = Depends(require_admin)) -> dict:
-    background_tasks.add_task(process_and_upload_song, request.video_id)
-    return {'success': True, 'status': 'queued', 'message': 'Đã đưa bài hát vào hàng đợi xử lý.'}
+    job_id = str(uuid.uuid4())
+    import_jobs[job_id] = {'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận yêu cầu import.'}
+    background_tasks.add_task(process_and_upload_song, job_id, request.model_dump())
+    return {'success': True, 'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận video. Bắt đầu tải MP3 và upload Cloudinary.'}
+
+
+@app.get('/api/songs/import-jobs/{job_id}')
+async def get_import_job(job_id: str, _: dict = Depends(require_admin)) -> dict:
+    job = import_jobs.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail='Không tìm thấy job import hoặc job đã hết hạn.')
+    return {'success': True, **job}
 
 
 @app.delete('/api/songs/{song_id}')

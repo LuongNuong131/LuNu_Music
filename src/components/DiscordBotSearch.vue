@@ -1,136 +1,30 @@
 <template>
-  <div class="glass-search-container">
-    <div class="search-wrapper">
-      <input
-        v-model="searchQuery"
-        @keyup.enter="handleSearch"
-        type="text"
-        placeholder="Nhập tên bài hát để quét YouTube..."
-        class="glass-input"
-        :disabled="isSearching || isDownloading"
-      />
-      <button @click="handleSearch" :disabled="isSearching || isDownloading || !searchQuery.trim()" class="glass-btn">
-        <span v-if="isSearching">Đang quét...</span>
-        <span v-else>Tìm Kiếm</span>
-      </button>
-    </div>
-    
-    <transition name="fade">
-      <p v-if="message" class="status-message">{{ message }}</p>
-    </transition>
+  <div class="import-console">
+    <div class="search-wrapper"><label class="search-field"><span>⌕</span><input v-model.trim="searchQuery" @keyup.enter="handleSearch" type="search" placeholder="Tìm tên bài hát trên YouTube..." :disabled="isSearching || isImporting" /></label><button @click="handleSearch" :disabled="isSearching || isImporting || !searchQuery" class="action-btn">{{ isSearching ? 'Đang tìm...' : 'Tìm kiếm' }} <span>→</span></button></div>
+    <p v-if="message" class="status-message" :class="messageType" role="status">{{ message }}</p>
 
-    <div v-if="searchResults && searchResults.length > 0" class="results-list">
-      <div v-for="video in searchResults" :key="video?.id" class="result-item">
-        <img v-if="video?.id" :src="'https://i.ytimg.com/vi/' + video.id + '/hqdefault.jpg'" alt="thumb" class="video-thumb" />
-        
-        <div class="video-info">
-          <h4 class="video-title" :title="video?.title">{{ video?.title || 'Không có tiêu đề' }}</h4>
-          <p class="video-channel">{{ video?.uploader || 'Không rõ' }}</p>
-        </div>
-        
-        <button 
-          v-if="video?.id"
-          @click="handleDownload(video)" 
-          :disabled="isDownloading" 
-          class="glass-btn download-btn"
-        >
-          <span v-if="downloadingId === video.id">Đang tải...</span>
-          <span v-else>Tải bài này</span>
-        </button>
-      </div>
-    </div>
+    <div v-if="selectedVideo" class="selected-panel"><div class="selected-heading"><div><span class="panel-kicker">SELECTED SOURCE</span><h3>Chỉnh sửa thông tin trước khi lưu</h3></div><button class="close-btn" @click="clearSelection" aria-label="Bỏ chọn video">×</button></div><div class="selected-video"><img :src="thumbnail(selectedVideo)" :alt="selectedVideo.title" class="selected-thumb" /><div><strong>{{ selectedVideo.title }}</strong><span>{{ selectedVideo.uploader || 'YouTube' }}</span><small>youtube.com/watch?v={{ selectedVideo.id }}</small></div></div><form class="metadata-form" @submit.prevent="handleImport"><label><span>TÊN BÀI HÁT</span><input v-model.trim="metadata.title" required maxlength="240" /></label><label><span>CA SĨ / NGHỆ SĨ</span><input v-model.trim="metadata.artist" required maxlength="160" /></label><div class="form-actions"><button type="button" class="cancel-btn" @click="clearSelection">Chọn video khác</button><button type="submit" class="action-btn" :disabled="isImporting || !metadata.title || !metadata.artist">{{ isImporting ? importLabel : 'Tải MP3 & thêm vào thư viện' }} <span>↗</span></button></div></form></div>
+
+    <div v-if="!selectedVideo && searchResults.length" class="results-heading"><span>{{ searchResults.length }} kết quả</span><small>Chọn đúng video để tiếp tục</small></div><div v-if="!selectedVideo && searchResults.length" class="results-list"><article v-for="video in searchResults" :key="video.id" class="result-item"><img :src="thumbnail(video)" :alt="video.title" class="video-thumb" loading="lazy" /><div class="video-info"><h4 :title="video.title">{{ video.title }}</h4><p>{{ video.uploader || 'Không rõ kênh' }}</p></div><button @click="selectVideo(video)" class="select-btn">Chọn <span>→</span></button></article></div>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { searchYoutube, addSong } from '../services/api';
-
-const searchQuery = ref('');
-const searchResults = ref([]);
-const isSearching = ref(false);
-const isDownloading = ref(false);
-const downloadingId = ref(null);
-const message = ref('');
+import { onBeforeUnmount, reactive, ref } from 'vue';
+import { addSong, getImportJob, searchYoutube } from '../services/api';
 
 const emit = defineEmits(['song-added']);
-
-const handleSearch = async () => {
-  if (!searchQuery.value.trim()) return;
-
-  isSearching.value = true;
-  message.value = 'Đang quét danh sách trên YouTube, chờ xíu nha...';
-  searchResults.value = [];
-
-  try {
-    const res = await searchYoutube(searchQuery.value);
-    if (res && res.success) {
-      searchResults.value = res.results || [];
-      message.value = `Tìm thấy ${searchResults.value.length} kết quả. Ông chọn bài chuẩn để tải đi!`;
-    } else {
-      message.value = res?.message || 'Không tìm thấy kết quả hoặc bị YouTube chặn.';
-    }
-  } catch (error) {
-    message.value = 'Có lỗi xảy ra khi gọi server!';
-  } finally {
-    isSearching.value = false;
-  }
-};
-
-const handleDownload = async (video) => {
-  if (!video || !video.id) return;
-  
-  isDownloading.value = true;
-  downloadingId.value = video.id;
-    message.value = `Đang đưa bài "${video.title}" vào hàng đợi xử lý...`;
-
-  try {
-    const res = await addSong(video.id);
-    if (!res?.success) throw new Error(res?.message || 'Không thể xếp hàng tải bài hát.');
-    message.value = 'Đã xếp hàng thành công. Server sẽ tải và lưu bài hát ở chế độ nền.';
-    emit('song-added');
-    searchResults.value = [];
-    searchQuery.value = '';
-    window.setTimeout(() => { isDownloading.value = false; downloadingId.value = null; }, 900);
-  } catch (error) {
-    message.value = error.message || 'Có lỗi khi gọi lệnh tải!';
-    isDownloading.value = false;
-    downloadingId.value = null;
-  }
-};
+const searchQuery = ref(''); const searchResults = ref([]); const selectedVideo = ref(null); const isSearching = ref(false); const isImporting = ref(false); const message = ref(''); const messageType = ref(''); const importLabel = ref('Đang xử lý...'); let pollTimer = null;
+const metadata = reactive({ title: '', artist: '', cover: '', lyrics: '' });
+const thumbnail = (video) => video?.thumbnail || `https://i.ytimg.com/vi/${video?.id}/hqdefault.jpg`;
+const selectVideo = (video) => { selectedVideo.value = video; metadata.title = video.title || ''; metadata.artist = video.uploader || ''; metadata.cover = thumbnail(video); metadata.lyrics = ''; message.value = 'Bạn có thể chỉnh lại tên bài và ca sĩ trước khi tải.'; messageType.value = ''; };
+const clearSelection = () => { selectedVideo.value = null; metadata.title = ''; metadata.artist = ''; metadata.cover = ''; metadata.lyrics = ''; };
+const handleSearch = async () => { if (!searchQuery.value) return; isSearching.value = true; message.value = 'Đang tìm các video tương tự trên YouTube...'; messageType.value = ''; searchResults.value = []; clearSelection(); try { const response = await searchYoutube(searchQuery.value); if (!response?.success) throw new Error(response?.message || 'Không tìm thấy video.'); searchResults.value = response.results || []; message.value = searchResults.value.length ? `Tìm thấy ${searchResults.value.length} video. Hãy chọn đúng bản bạn muốn lưu.` : 'Không có kết quả phù hợp.'; } catch (error) { message.value = error.message || 'Không thể tìm kiếm YouTube.'; messageType.value = 'error'; } finally { isSearching.value = false; } };
+const pollImport = async (jobId) => { try { const response = await getImportJob(jobId); importLabel.value = response.message || 'Đang xử lý...'; if (response.status === 'completed') { message.value = `Đã thêm “${response.song?.title || metadata.title}” vào thư viện.`; messageType.value = 'success'; isImporting.value = false; emit('song-added', response.song); clearSelection(); searchResults.value = []; searchQuery.value = ''; return; } if (response.status === 'failed') throw new Error(response.message || 'Import thất bại.'); pollTimer = window.setTimeout(() => pollImport(jobId), 2200); } catch (error) { isImporting.value = false; message.value = error.message || 'Không thể kiểm tra trạng thái import.'; messageType.value = 'error'; } };
+const handleImport = async () => { if (!selectedVideo.value || !metadata.title || !metadata.artist) return; isImporting.value = true; messageType.value = ''; importLabel.value = 'Đang xếp hàng...'; message.value = 'Đang gửi video và metadata lên Render...'; try { const response = await addSong({ videoId: selectedVideo.value.id, title: metadata.title, artist: metadata.artist, cover: metadata.cover, lyrics: metadata.lyrics }); if (!response?.success || !response.job_id) throw new Error(response?.message || 'Backend không nhận được yêu cầu.'); message.value = 'Đã nhận. Đang tải MP3, upload Cloudinary và ghi Supabase...'; importLabel.value = 'Đang tải MP3...'; await pollImport(response.job_id); } catch (error) { isImporting.value = false; message.value = error.message || 'Không thể bắt đầu import.'; messageType.value = 'error'; } };
+onBeforeUnmount(() => { if (pollTimer) window.clearTimeout(pollTimer); });
 </script>
 
 <style scoped>
-.glass-search-container {
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  padding: 24px;
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 16px;
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
-  margin-bottom: 24px;
-}
-.search-wrapper { display: flex; gap: 15px; }
-.glass-input { flex: 1; padding: 12px 20px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.2); background: rgba(0, 0, 0, 0.3); color: #fff; font-size: 1rem; outline: none; transition: all 0.3s ease; }
-.glass-input:focus { border-color: #1db954; box-shadow: 0 0 10px rgba(29, 185, 84, 0.3); }
-.glass-btn { padding: 12px 24px; border-radius: 12px; border: 1px solid rgba(29, 185, 84, 0.5); background: rgba(29, 185, 84, 0.2); color: #1db954; font-weight: bold; font-size: 1rem; cursor: pointer; transition: all 0.3s ease; white-space: nowrap; }
-.glass-btn:hover:not(:disabled) { background: rgba(29, 185, 84, 0.8); color: white; box-shadow: 0 0 15px rgba(29, 185, 84, 0.5); }
-.glass-btn:disabled { border-color: rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.05); color: rgba(255, 255, 255, 0.3); cursor: not-allowed; }
-.status-message { font-size: 0.95rem; color: #1db954; margin: 0; }
-.results-list { display: flex; flex-direction: column; gap: 12px; max-height: 400px; overflow-y: auto; padding-right: 10px; }
-.results-list::-webkit-scrollbar { width: 6px; }
-.results-list::-webkit-scrollbar-thumb { background: rgba(29, 185, 84, 0.5); border-radius: 6px; }
-.result-item { display: flex; align-items: center; gap: 15px; background: rgba(0, 0, 0, 0.3); padding: 12px; border-radius: 12px; border: 1px solid rgba(255, 255, 255, 0.05); transition: all 0.3s ease; }
-.result-item:hover { background: rgba(0, 0, 0, 0.5); border-color: rgba(29, 185, 84, 0.3); }
-.video-thumb { width: 100px; height: 56px; border-radius: 8px; object-fit: cover; box-shadow: 0 2px 8px rgba(0,0,0,0.5); }
-.video-info { flex: 1; min-width: 0; }
-.video-title { margin: 0 0 4px 0; font-size: 1rem; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-.video-channel { margin: 0; font-size: 0.85rem; color: #b3b3b3; }
-.download-btn { padding: 8px 16px; font-size: 0.9rem; }
-.fade-enter-active, .fade-leave-active { transition: opacity 0.5s ease; }
-.fade-enter-from, .fade-leave-to { opacity: 0; }
+.import-console { display: flex; flex-direction: column; gap: 15px; padding: 18px; border: 1px solid var(--hairline-soft); border-radius: 15px; background: rgba(255,255,255,.025); }.search-wrapper { display: flex; gap: 9px; }.search-field { display: flex; align-items: center; flex: 1; gap: 10px; padding: 12px 13px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(3,5,9,.34); }.search-field:focus-within { border-color: rgba(245,185,122,.6); box-shadow: 0 0 0 3px rgba(245,185,122,.07); }.search-field span { color: var(--gold); font-size: 18px; }.search-field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-main); font-size: 11px; }.action-btn, .select-btn, .cancel-btn { border-radius: 9px; padding: 11px 13px; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }.action-btn { border: 0; background: linear-gradient(135deg,var(--gold-bright),var(--gold)); color: #171218; }.action-btn:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(245,185,122,.2); transform: translateY(-1px); }.action-btn:disabled { cursor: progress; opacity: .55; }.action-btn span, .select-btn span { margin-left: 8px; font-size: 14px; }.status-message { margin: 0; color: var(--text-sub); font-size: 10px; line-height: 1.5; }.status-message.success { color: var(--mint); }.status-message.error { color: var(--crimson); }.selected-panel { padding: 18px; border: 1px solid rgba(245,185,122,.28); border-radius: 13px; background: linear-gradient(110deg,rgba(245,185,122,.08),rgba(155,140,255,.05)); }.selected-heading, .results-heading { display: flex; align-items: center; justify-content: space-between; }.panel-kicker { color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1.5px; }.selected-heading h3 { margin-top: 6px; font: 500 18px var(--font-display); }.close-btn { width: 29px; height: 29px; border: 1px solid var(--hairline); border-radius: 8px; background: transparent; color: var(--text-sub); cursor: pointer; font-size: 18px; }.selected-video { display: flex; align-items: center; gap: 12px; margin: 18px 0; }.selected-thumb { width: 110px; height: 62px; border-radius: 9px; object-fit: cover; }.selected-video div { display: flex; flex-direction: column; min-width: 0; }.selected-video strong { overflow: hidden; color: var(--text-main); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.selected-video span, .selected-video small { margin-top: 5px; color: var(--text-sub); font-size: 9px; }.selected-video small { color: var(--text-faint); font-family: var(--font-mono); }.metadata-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.metadata-form label { display: grid; gap: 6px; }.metadata-form label span { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1px; }.metadata-form input { padding: 11px 12px; border: 1px solid var(--hairline); border-radius: 9px; outline: 0; background: rgba(3,5,9,.3); color: var(--text-main); font-size: 11px; }.metadata-form input:focus { border-color: var(--gold); }.form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 7px; }.cancel-btn { border: 1px solid var(--hairline); background: transparent; color: var(--text-sub); }.cancel-btn:hover { color: var(--gold); }.results-heading { padding: 2px 2px 0; color: var(--text-main); font-size: 11px; }.results-heading small { color: var(--text-faint); font-size: 9px; }.results-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto; }.result-item { display: flex; align-items: center; gap: 12px; padding: 9px; border: 1px solid transparent; border-radius: 10px; background: rgba(3,5,9,.23); }.result-item:hover { border-color: var(--hairline); background: rgba(255,255,255,.045); }.video-thumb { width: 100px; height: 56px; border-radius: 7px; object-fit: cover; }.video-info { flex: 1; min-width: 0; }.video-info h4, .video-info p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.video-info h4 { color: var(--text-main); font-size: 11px; font-weight: 700; }.video-info p { margin-top: 5px; color: var(--text-sub); font-size: 9px; }.select-btn { border: 1px solid rgba(245,185,122,.32); background: rgba(245,185,122,.08); color: var(--gold); }.select-btn:hover { background: rgba(245,185,122,.15); }@media (max-width: 600px) { .search-wrapper, .metadata-form { grid-template-columns: 1fr; display: grid; }.metadata-form .form-actions { grid-column: 1; flex-wrap: wrap; }.form-actions > * { flex: 1; }.selected-thumb { width: 86px; height: 50px; }.result-item { align-items: flex-start; flex-wrap: wrap; }.video-info { width: calc(100% - 115px); }.select-btn { width: 100%; } }
 </style>
