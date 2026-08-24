@@ -524,14 +524,15 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
     try:
         music_results = []
         for variant_index, variant in enumerate(music_search_query_variants(normalized_query)):
-            attempts = 2 if variant_index < 3 else 1
+            attempts = 8 if variant_index == 0 else 2
             for _ in range(attempts):
                 music_results.extend(search_youtube_music(variant))
+                ranked = rank_search_results(music_results, normalized_query)
+                if ranked and has_relevant_result(ranked, normalized_query):
+                    return {'success': True, 'results': ranked[:10], 'source': 'youtube-music'}
         ranked = rank_search_results(music_results, normalized_query)
         if ranked:
             best_results = ranked
-            if has_relevant_result(ranked, normalized_query):
-                return {'success': True, 'results': ranked[:10], 'source': 'youtube-music'}
     except Exception as error:
         errors.append(f'youtube-music: {error}')
     try:
