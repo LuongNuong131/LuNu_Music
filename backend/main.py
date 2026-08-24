@@ -294,10 +294,8 @@ def _search_tokens(value: str) -> list[str]:
 
 
 def search_query_variants(query: str) -> list[str]:
-    variants = [query]
     ascii_query = ''.join(char for char in unicodedata.normalize('NFKD', query) if not unicodedata.combining(char))
-    if ascii_query.casefold() != query.casefold():
-        variants.append(ascii_query)
+    variants = [ascii_query, query] if ascii_query.casefold() != query.casefold() else [query]
     return list(dict.fromkeys(variant.strip() for variant in variants if variant.strip()))
 
 
