@@ -82,24 +82,18 @@ const handleDownload = async (video) => {
   
   isDownloading.value = true;
   downloadingId.value = video.id;
-  message.value = `Đang bắt đầu tải và đưa bài "${video.title}" lên mây...`;
+    message.value = `Đang đưa bài "${video.title}" vào hàng đợi xử lý...`;
 
   try {
     const res = await addSong(video.id);
-    message.value = res?.message || 'Đã đưa vào hàng chờ xử lý!';
-    
-    setTimeout(() => {
-      emit('song-added');
-      message.value = 'Danh sách nhạc đã được làm mới!';
-      searchResults.value = [];
-      searchQuery.value = '';
-      isDownloading.value = false;
-      downloadingId.value = null;
-      setTimeout(() => { message.value = ''; }, 3000);
-    }, 15000);
-
+    if (!res?.success) throw new Error(res?.message || 'Không thể xếp hàng tải bài hát.');
+    message.value = 'Đã xếp hàng thành công. Server sẽ tải và lưu bài hát ở chế độ nền.';
+    emit('song-added');
+    searchResults.value = [];
+    searchQuery.value = '';
+    window.setTimeout(() => { isDownloading.value = false; downloadingId.value = null; }, 900);
   } catch (error) {
-    message.value = 'Có lỗi khi gọi lệnh tải!';
+    message.value = error.message || 'Có lỗi khi gọi lệnh tải!';
     isDownloading.value = false;
     downloadingId.value = null;
   }

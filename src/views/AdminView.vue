@@ -1,176 +1,28 @@
 <template>
-  <div class="admin-container">
-    <div class="admin-header">
-      <h2>Trung Tâm Điều Khiển LuNu</h2>
-      <div class="tab-buttons">
-        <button :class="{ active: activeTab === 'songs' }" @click="activeTab = 'songs'">Quản lý Bài Hát</button>
-        <button :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">Quản lý Tài Khoản</button>
-      </div>
-    </div>
-
-    <!-- TAB QUẢN LÝ BÀI HÁT -->
-    <div v-if="activeTab === 'songs'" class="admin-panel glass-panel">
-      <h3>Thêm Nhạc Bằng Bot</h3>
-      <!-- Bot tải nhạc chỉ xuất hiện ở đây -->
-      <DiscordBotSearch @song-added="refreshSongs" />
-      
-      <h3 style="margin-top: 30px;">Danh sách nhạc hệ thống</h3>
-      <div class="list-wrapper">
-        <div v-for="song in songsList" :key="song.id" class="list-item">
-          <div class="info">
-            <img :src="song.cover" alt="cover" class="tiny-cover" />
-            <span>{{ song.title }} - {{ song.artist }}</span>
-          </div>
-          <button @click="handleDeleteSong(song.id)" class="delete-btn">Xóa</button>
-        </div>
-      </div>
-    </div>
-
-    <!-- TAB QUẢN LÝ TÀI KHOẢN -->
-    <div v-if="activeTab === 'users'" class="admin-panel glass-panel">
-      <h3>Cấp tài khoản mới</h3>
-      <form @submit.prevent="handleAddUser" class="add-user-form">
-        <input v-model="newUser.username" placeholder="Tên đăng nhập" required class="glass-input"/>
-        <input v-model="newUser.password" placeholder="Mật khẩu" required class="glass-input"/>
-        <select v-model="newUser.role" class="glass-input">
-          <option value="user">User thường</option>
-          <option value="admin">Admin</option>
-        </select>
-        <button type="submit" class="glass-btn">Cấp Quyền</button>
-      </form>
-      <p class="msg">{{ userMsg }}</p>
-
-      <h3 style="margin-top: 30px;">Danh sách Tài khoản</h3>
-      <div class="list-wrapper">
-        <div v-for="u in usersList" :key="u.id" class="list-item">
-          <div class="info">
-            <strong>{{ u.username }}</strong> <span class="badge">{{ u.role }}</span>
-          </div>
-          <button v-if="u.username !== 'admin'" @click="handleDeleteUser(u.id)" class="delete-btn">Thu hồi</button>
-        </div>
-      </div>
-    </div>
-  </div>
+  <section class="admin-container"><header class="admin-header"><div><p class="eyebrow">CONTROL ROOM / ADMIN</p><h1>Quản trị <em>LuNu.</em></h1><p>Quản lý kho nhạc Cloudinary, nội dung Supabase và quyền truy cập của thành viên.</p></div><div class="tab-buttons"><button :class="{ active: activeTab === 'songs' }" @click="activeTab = 'songs'">Kho nhạc <b>{{ songsList.length }}</b></button><button :class="{ active: activeTab === 'users' }" @click="activeTab = 'users'">Tài khoản <b>{{ usersList.length }}</b></button></div></header>
+    <div v-if="errorMsg" class="admin-alert">{{ errorMsg }}</div>
+    <div v-if="activeTab === 'songs'" class="admin-panel glass-panel"><div class="panel-heading"><div><span class="panel-kicker">IMPORT PIPELINE</span><h2>Thêm nhạc từ YouTube</h2></div><span class="status-dot">● ONLINE</span></div><DiscordBotSearch @song-added="refreshSongs" /><div class="panel-heading list-heading"><div><span class="panel-kicker">LIBRARY INDEX</span><h2>Danh sách nhạc hệ thống</h2></div><button class="refresh-btn" @click="refreshSongs">↻ Làm mới</button></div><div v-if="songsLoading" class="inline-state">Đang tải thư viện...</div><div v-else-if="!songsList.length" class="inline-state">Chưa có bài hát nào trong kho.</div><div v-else class="list-wrapper"><div v-for="song in songsList" :key="song.id" class="list-item"><div class="info"><img :src="song.cover || '/images/ChoCiu.jpg'" :alt="song.title" class="tiny-cover" /><div><strong>{{ song.title }}</strong><span>{{ song.artist || 'Unknown artist' }}</span></div></div><button @click="handleDeleteSong(song.id)" class="delete-btn">Xóa</button></div></div></div>
+    <div v-else class="admin-panel glass-panel"><div class="panel-heading"><div><span class="panel-kicker">ACCESS MANAGEMENT</span><h2>Cấp tài khoản mới</h2></div></div><form @submit.prevent="handleAddUser" class="add-user-form"><label><span>TÊN ĐĂNG NHẬP</span><input v-model.trim="newUser.username" placeholder="member.name" required minlength="2" /></label><label><span>MẬT KHẨU</span><input v-model="newUser.password" type="password" placeholder="Tối thiểu 8 ký tự" required minlength="8" /></label><label><span>VAI TRÒ</span><select v-model="newUser.role"><option value="user">Member</option><option value="admin">Admin</option></select></label><button type="submit" class="primary-btn" :disabled="isSubmitting">{{ isSubmitting ? 'Đang lưu...' : 'Cấp quyền →' }}</button></form><p v-if="userMsg" class="success-msg">{{ userMsg }}</p><div class="panel-heading list-heading"><div><span class="panel-kicker">MEMBERS DIRECTORY</span><h2>Danh sách tài khoản</h2></div><button class="refresh-btn" @click="refreshUsers">↻ Làm mới</button></div><div class="list-wrapper"><div v-for="user in usersList" :key="user.id" class="list-item"><div class="user-row"><div class="avatar">{{ user.username.slice(0,1).toUpperCase() }}</div><div><strong>{{ user.username }}</strong><span>{{ user.role === 'admin' ? 'Administrator' : 'Member' }}</span></div></div><button v-if="user.username !== 'admin'" @click="handleDeleteUser(user.id)" class="delete-btn">Thu hồi</button></div></div></div>
+  </section>
 </template>
 
 <script setup>
-import { ref, onMounted } from 'vue';
+import { onMounted, ref } from 'vue';
 import DiscordBotSearch from '../components/DiscordBotSearch.vue';
 import { getUsers, addUser, deleteUser, getSongs, deleteSong } from '../services/api';
 import { loadSongs } from '../data/songs';
 
 const activeTab = ref('songs');
-const songsList = ref([]);
-const usersList = ref([]);
-const userMsg = ref('');
-
+const songsList = ref([]); const usersList = ref([]); const userMsg = ref(''); const errorMsg = ref(''); const isSubmitting = ref(false); const songsLoading = ref(false);
 const newUser = ref({ username: '', password: '', role: 'user' });
-
-const refreshSongs = async () => {
-  songsList.value = await getSongs();
-  loadSongs(); // Update store chung cho app
-};
-
-const refreshUsers = async () => {
-  usersList.value = await getUsers();
-};
-
-const handleDeleteSong = async (id) => {
-  if(confirm("Ông có chắc muốn xóa bài này khỏi hệ thống không?")) {
-    await deleteSong(id);
-    await refreshSongs();
-  }
-};
-
-const handleAddUser = async () => {
-  const res = await addUser(newUser.value.username, newUser.value.password, newUser.value.role);
-  userMsg.value = res.message;
-  newUser.value = { username: '', password: '', role: 'user' };
-  refreshUsers();
-  setTimeout(() => userMsg.value = '', 3000);
-};
-
-const handleDeleteUser = async (id) => {
-  if(confirm("Chắc chắn muốn thu hồi tài khoản này?")) {
-    await deleteUser(id);
-    await refreshUsers();
-  }
-};
-
-onMounted(() => {
-  refreshSongs();
-  refreshUsers();
-});
+const refreshSongs = async () => { songsLoading.value = true; errorMsg.value = ''; try { songsList.value = await getSongs(); await loadSongs(); } catch (error) { errorMsg.value = error.message; } finally { songsLoading.value = false; } };
+const refreshUsers = async () => { errorMsg.value = ''; try { usersList.value = await getUsers(); } catch (error) { errorMsg.value = error.message; } };
+const handleDeleteSong = async (id) => { if (!window.confirm('Xóa bài hát này khỏi thư viện?')) return; try { await deleteSong(id); await refreshSongs(); } catch (error) { errorMsg.value = error.message; } };
+const handleAddUser = async () => { isSubmitting.value = true; errorMsg.value = ''; try { const response = await addUser(newUser.value.username, newUser.value.password, newUser.value.role); if (!response.success) throw new Error(response.message); userMsg.value = response.message; newUser.value = { username: '', password: '', role: 'user' }; await refreshUsers(); window.setTimeout(() => { userMsg.value = ''; }, 3000); } catch (error) { errorMsg.value = error.message; } finally { isSubmitting.value = false; } };
+const handleDeleteUser = async (id) => { if (!window.confirm('Thu hồi tài khoản này?')) return; try { await deleteUser(id); await refreshUsers(); } catch (error) { errorMsg.value = error.message; } };
+onMounted(() => { refreshSongs(); refreshUsers(); });
 </script>
 
 <style scoped>
-.admin-container {
-  padding: 20px;
-  color: white;
-}
-.admin-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-}
-.tab-buttons button {
-  background: transparent;
-  border: none;
-  color: rgba(255,255,255,0.5);
-  font-size: 1.1rem;
-  margin-left: 20px;
-  cursor: pointer;
-  padding-bottom: 5px;
-}
-.tab-buttons button.active {
-  color: #1db954;
-  border-bottom: 2px solid #1db954;
-}
-.glass-panel {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 16px;
-  padding: 24px;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-.add-user-form {
-  display: flex;
-  gap: 10px;
-  margin-top: 15px;
-}
-.glass-input {
-  flex: 1;
-  padding: 10px 15px;
-  border-radius: 8px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-}
-.glass-btn {
-  padding: 10px 20px;
-  border-radius: 8px;
-  background: rgba(29, 185, 84, 0.2);
-  border: 1px solid rgba(29, 185, 84, 0.5);
-  color: #1db954;
-  cursor: pointer;
-}
-.list-wrapper {
-  margin-top: 15px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-.list-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  background: rgba(0,0,0,0.3);
-  padding: 10px 15px;
-  border-radius: 8px;
-}
-.tiny-cover { width: 30px; height: 30px; border-radius: 4px; margin-right: 10px; object-fit: cover;}
-.info { display: flex; align-items: center; }
-.badge { background: #1db954; padding: 2px 6px; border-radius: 10px; font-size: 0.7rem; color: black; margin-left: 10px;}
-.delete-btn { background: #ff4d4f; border: none; color: white; padding: 6px 12px; border-radius: 6px; cursor: pointer;}
-.msg { color: #1db954; margin-top: 10px; font-size: 0.9rem;}
+.admin-container { max-width: 1180px; margin: 0 auto; padding: 18px 0 60px; }.admin-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 25px; padding: 32px 0 34px; }.eyebrow, .panel-kicker { color: var(--gold); font: 9px var(--font-mono); letter-spacing: 1.8px; }.admin-header h1 { margin-top: 12px; font: 500 clamp(40px, 5vw, 62px)/.95 var(--font-display); letter-spacing: -2px; }.admin-header h1 em { color: var(--gold); font-style: italic; }.admin-header p:last-child { max-width: 520px; margin-top: 15px; color: var(--text-sub); font-size: 12px; line-height: 1.6; }.tab-buttons { display: flex; gap: 5px; padding: 5px; border: 1px solid var(--hairline-soft); border-radius: 12px; background: var(--glass); }.tab-buttons button { border: 0; border-radius: 8px; padding: 10px 12px; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 10px; }.tab-buttons button.active { background: rgba(245,185,122,.13); color: var(--gold-bright); }.tab-buttons b { margin-left: 5px; color: var(--text-faint); font: 9px var(--font-mono); }.admin-alert { padding: 12px 14px; margin-bottom: 15px; border: 1px solid rgba(255,109,125,.3); border-radius: 10px; background: rgba(255,109,125,.08); color: var(--crimson); font-size: 11px; }.admin-panel { padding: clamp(18px, 3vw, 28px); border-radius: 18px; }.panel-heading { display: flex; align-items: center; justify-content: space-between; gap: 14px; margin-bottom: 18px; }.panel-heading h2 { margin-top: 7px; color: var(--text-main); font: 500 23px var(--font-display); }.status-dot { color: var(--mint); font: 8px var(--font-mono); letter-spacing: 1px; }.list-heading { margin-top: 36px; padding-top: 28px; border-top: 1px solid var(--hairline-soft); }.refresh-btn { border: 1px solid var(--hairline); border-radius: 9px; padding: 8px 10px; background: transparent; color: var(--text-sub); cursor: pointer; font-size: 10px; }.refresh-btn:hover { border-color: rgba(245,185,122,.4); color: var(--gold); }.list-wrapper { display: flex; flex-direction: column; gap: 5px; }.list-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px; border: 1px solid transparent; border-radius: 11px; background: rgba(255,255,255,.025); }.list-item:hover { border-color: var(--hairline-soft); background: rgba(255,255,255,.045); }.info, .user-row { display: flex; align-items: center; gap: 11px; min-width: 0; }.info > div, .user-row > div:last-child { display: flex; flex-direction: column; min-width: 0; }.info strong, .user-row strong { overflow: hidden; color: var(--text-main); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.info span, .user-row span { margin-top: 4px; color: var(--text-sub); font-size: 9px; }.tiny-cover { width: 42px; height: 42px; border-radius: 8px; object-fit: cover; }.avatar { display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: linear-gradient(135deg, var(--violet), var(--gold)); color: #16121a; font: 800 11px var(--font-mono); }.delete-btn { border: 1px solid rgba(255,109,125,.22); border-radius: 8px; padding: 7px 9px; background: transparent; color: var(--crimson); cursor: pointer; font-size: 10px; }.delete-btn:hover { background: rgba(255,109,125,.1); }.inline-state { padding: 30px; color: var(--text-sub); text-align: center; font-size: 11px; }.add-user-form { display: grid; grid-template-columns: 1.1fr 1.1fr .7fr auto; align-items: end; gap: 10px; }.add-user-form label { display: grid; gap: 7px; }.add-user-form label span { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1px; }.add-user-form input, .add-user-form select { min-width: 0; padding: 11px 12px; border: 1px solid var(--hairline); border-radius: 9px; outline: 0; background: rgba(3,5,9,.35); color: var(--text-main); font-size: 11px; }.add-user-form input:focus { border-color: var(--gold); }.primary-btn { border: 0; border-radius: 9px; padding: 11px 13px; background: var(--gold); color: #171218; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }.primary-btn:disabled { opacity: .5; cursor: progress; }.success-msg { margin-top: 12px; color: var(--mint); font-size: 10px; }@media (max-width: 760px) { .admin-header { align-items: flex-start; flex-direction: column; }.tab-buttons { align-self: stretch; }.tab-buttons button { flex: 1; }.add-user-form { grid-template-columns: 1fr; }.admin-container { padding-bottom: 95px; } }
 </style>

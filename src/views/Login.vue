@@ -1,27 +1,5 @@
 <template>
-  <div class="login-wrapper">
-    <div class="glass-login-box">
-      <div class="logo-area">
-        <h2>LuNu Music</h2>
-        <p>Vui lòng đăng nhập để nghe nhạc</p>
-      </div>
-
-      <form @submit.prevent="handleLogin" class="login-form">
-        <div class="input-group">
-          <input type="text" v-model="username" placeholder="Tài khoản" required />
-        </div>
-        <div class="input-group">
-          <input type="password" v-model="password" placeholder="Mật khẩu" required />
-        </div>
-        <p v-if="errorMsg" class="error-text">{{ errorMsg }}</p>
-        
-        <button type="submit" class="glass-btn login-btn" :disabled="isLoading">
-          {{ isLoading ? 'Đang xác thực...' : 'Vào Giao Diện' }}
-        </button>
-      </form>
-      <p class="footer-text">Hệ thống cấp quyền kín. Liên hệ Admin để nhận tài khoản.</p>
-    </div>
-  </div>
+  <main class="login-wrapper"><div class="login-orbit orbit-one"></div><div class="login-orbit orbit-two"></div><section class="glass-login-box"><div class="login-brand"><span class="brand-mark">LN</span><div><strong>LuNu</strong><small>Music library</small></div></div><div class="logo-area"><p class="eyebrow">A QUIET PLACE TO LISTEN</p><h1>Âm thanh<br /><em>ở lại.</em></h1><p>Đăng nhập để tiếp tục hành trình nghe nhạc được tuyển chọn cho riêng bạn.</p></div><form @submit.prevent="handleLogin" class="login-form"><label class="input-group"><span>TÀI KHOẢN</span><input v-model.trim="username" type="text" autocomplete="username" placeholder="your.name" required /></label><label class="input-group"><span>MẬT KHẨU</span><input v-model="password" type="password" autocomplete="current-password" placeholder="••••••••" required /></label><p v-if="errorMsg" class="error-text" role="alert">{{ errorMsg }}</p><button type="submit" class="login-btn" :disabled="isLoading">{{ isLoading ? 'Đang xác thực...' : 'Mở thư viện' }} <span>→</span></button></form><p class="footer-text">Hệ thống riêng tư · Kết nối an toàn</p></section></main>
 </template>
 
 <script setup>
@@ -37,108 +15,16 @@ const isLoading = ref(false);
 const handleLogin = async () => {
   errorMsg.value = '';
   isLoading.value = true;
-  
   try {
-    const res = await login(username.value, password.value);
-    if (res.success) {
-      loginUser(res.user);
-    } else {
-      errorMsg.value = res.message;
-    }
+    const response = await login(username.value, password.value);
+    if (response.success) loginUser(response);
+    else errorMsg.value = response.message || 'Thông tin đăng nhập chưa chính xác.';
   } catch (error) {
-    errorMsg.value = 'Lỗi kết nối đến máy chủ!';
-  } finally {
-    isLoading.value = false;
-  }
+    errorMsg.value = error.message || 'Không thể kết nối đến máy chủ.';
+  } finally { isLoading.value = false; }
 };
 </script>
 
 <style scoped>
-.login-wrapper {
-  display: flex;
-  justify-content: center;
-  align-items: center;
-  height: 100vh;
-  width: 100vw;
-  background: linear-gradient(135deg, #0f2027, #203a43, #2c5364);
-  color: white;
-}
-
-.glass-login-box {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 20px;
-  padding: 40px;
-  width: 100%;
-  max-width: 400px;
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 15px 35px rgba(0,0,0,0.5);
-  text-align: center;
-}
-
-.logo-area h2 {
-  font-size: 2rem;
-  margin-bottom: 5px;
-  color: #1db954;
-}
-
-.logo-area p {
-  color: rgba(255,255,255,0.6);
-  margin-bottom: 30px;
-  font-size: 0.9rem;
-}
-
-.input-group {
-  margin-bottom: 20px;
-}
-
-.input-group input {
-  width: 100%;
-  padding: 15px 20px;
-  border-radius: 12px;
-  border: 1px solid rgba(255, 255, 255, 0.2);
-  background: rgba(0, 0, 0, 0.3);
-  color: #fff;
-  font-size: 1rem;
-  outline: none;
-  transition: all 0.3s ease;
-  box-sizing: border-box;
-}
-
-.input-group input:focus {
-  border-color: #1db954;
-  box-shadow: 0 0 10px rgba(29, 185, 84, 0.3);
-}
-
-.error-text {
-  color: #ff4d4f;
-  margin-bottom: 15px;
-  font-size: 0.9rem;
-}
-
-.login-btn {
-  width: 100%;
-  padding: 15px;
-  border-radius: 12px;
-  border: 1px solid rgba(29, 185, 84, 0.5);
-  background: rgba(29, 185, 84, 0.2);
-  color: #1db954;
-  font-weight: bold;
-  font-size: 1.1rem;
-  cursor: pointer;
-  transition: all 0.3s ease;
-}
-
-.login-btn:hover {
-  background: rgba(29, 185, 84, 0.8);
-  color: white;
-  box-shadow: 0 0 15px rgba(29, 185, 84, 0.5);
-}
-
-.footer-text {
-  margin-top: 25px;
-  font-size: 0.8rem;
-  color: rgba(255,255,255,0.4);
-}
+.login-wrapper { position: relative; display: grid; place-items: center; min-height: 100vh; overflow: hidden; background: radial-gradient(circle at 70% 10%, rgba(245,185,122,.16), transparent 27%), radial-gradient(circle at 15% 90%, rgba(116,107,255,.14), transparent 34%), #0b0d13; color: var(--text-main); }.login-orbit { position: absolute; border: 1px solid rgba(245,185,122,.11); border-radius: 50%; }.orbit-one { width: min(70vw, 720px); height: min(70vw, 720px); transform: translate(35%, -30%); }.orbit-two { width: min(55vw, 560px); height: min(55vw, 560px); transform: translate(-55%, 35%); border-color: rgba(155,140,255,.1); }.glass-login-box { position: relative; z-index: 1; width: min(430px, calc(100% - 34px)); padding: 28px clamp(25px, 5vw, 48px) 25px; border: 1px solid rgba(255,255,255,.1); border-radius: 25px; background: linear-gradient(145deg, rgba(27,31,43,.9), rgba(13,16,24,.87)); box-shadow: 0 35px 100px rgba(0,0,0,.42); backdrop-filter: blur(22px); }.login-brand { display: flex; align-items: center; gap: 10px; }.brand-mark { display: grid; place-items: center; width: 34px; height: 34px; border-radius: 10px; background: linear-gradient(135deg, var(--gold), var(--coral)); color: #171218; font: 800 10px var(--font-mono); }.login-brand strong { display: block; font: 600 18px var(--font-display); }.login-brand small { display: block; margin-top: 2px; color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; }.logo-area { padding: 66px 0 30px; }.eyebrow { color: var(--gold); font: 9px var(--font-mono); letter-spacing: 2px; }.logo-area h1 { margin-top: 14px; font: 500 54px/.92 var(--font-display); letter-spacing: -2px; }.logo-area h1 em { color: var(--gold); font-style: italic; }.logo-area p:last-child { max-width: 320px; margin-top: 19px; color: var(--text-sub); font-size: 12px; line-height: 1.65; }.login-form { display: grid; gap: 14px; }.input-group { display: grid; gap: 7px; }.input-group span { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1.5px; }.input-group input { width: 100%; box-sizing: border-box; padding: 13px 14px; border: 1px solid var(--hairline); border-radius: 10px; outline: 0; background: rgba(3,5,9,.3); color: var(--text-main); font-size: 12px; transition: .2s ease; }.input-group input:focus { border-color: rgba(245,185,122,.65); box-shadow: 0 0 0 3px rgba(245,185,122,.08); }.input-group input::placeholder { color: #555965; }.error-text { margin: 0; color: var(--crimson); font-size: 11px; }.login-btn { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; padding: 14px 16px; border: 0; border-radius: 11px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: #171218; cursor: pointer; font-weight: 800; }.login-btn:hover:not(:disabled) { box-shadow: 0 10px 28px rgba(245,185,122,.23); transform: translateY(-1px); }.login-btn:disabled { opacity: .55; cursor: progress; }.login-btn span { font-size: 18px; }.footer-text { margin-top: 32px; color: var(--text-faint); text-align: center; font: 8px var(--font-mono); letter-spacing: .8px; text-transform: uppercase; }
 </style>

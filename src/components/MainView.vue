@@ -1,151 +1,47 @@
 <template>
-  <div class="main-view glass-panel">
-    <h1 class="page-title">Khám Phá Âm Nhạc</h1>
-    
-    <div class="songs-grid">
-      <div v-for="song in songs" :key="song.id" class="song-card">
-        <div class="cover-wrapper">
-          <img :src="song.cover" alt="Cover" class="song-cover" />
-          <button class="play-btn" @click="handlePlay(song)">▶</button>
-        </div>
-        <div class="song-info">
-          <h3 class="song-title">{{ song.title }}</h3>
-          <p class="song-artist">{{ song.artist }}</p>
-        </div>
-      </div>
-    </div>
+  <section class="main-view">
+    <header class="view-header">
+      <div><p class="eyebrow">LU NU MUSIC / PERSONAL LIBRARY</p><h1 v-if="!onlyLiked">Những giai điệu<br /><em>của riêng bạn.</em></h1><h1 v-else>Những bài hát<br /><em>được yêu thích.</em></h1><p class="lede">{{ onlyLiked ? 'Những ca khúc bạn đã đánh dấu, được giữ lại trong một không gian riêng tư trên thiết bị này.' : 'Một không gian nghe nhạc tinh gọn, sâu lắng và được thiết kế để bạn ở lại lâu hơn.' }}</p></div>
+      <div class="header-actions"><button class="ghost-btn" @click="state.queueVisible = true">☷ <span>Hàng đợi</span></button><button class="primary-btn" :disabled="!filteredSongs.length" @click="playAll">▶ Phát tất cả</button></div>
+    </header>
 
-    <div v-if="songs.length === 0" class="empty-state">
-      <p>Hệ thống chưa có bài hát nào, hãy nhờ Admin tải thêm nhé!</p>
-    </div>
-  </div>
+    <div class="stats-row"><div><span class="stat-value">{{ songs.length }}</span><span class="stat-label">BÀI HÁT</span></div><div><span class="stat-value">{{ likedCount }}</span><span class="stat-label">YÊU THÍCH</span></div><div><span class="stat-value">{{ history.length }}</span><span class="stat-label">ĐÃ NGHE</span></div><div class="status-note"><i></i> Đồng bộ thư viện cá nhân</div></div>
+
+    <div class="library-toolbar"><div class="section-heading"><p class="eyebrow">YOUR COLLECTION</p><h2>Thư viện âm nhạc</h2></div><label class="search-box"><span>⌕</span><input v-model="query" type="search" placeholder="Tìm bài hát hoặc nghệ sĩ..." aria-label="Tìm bài hát hoặc nghệ sĩ" /></label><select v-model="sortBy" aria-label="Sắp xếp thư viện"><option value="recent">Mới cập nhật</option><option value="title">Tên bài hát</option><option value="artist">Nghệ sĩ</option></select></div>
+
+    <div v-if="loading" class="skeleton-grid"><div v-for="n in 6" :key="n" class="skeleton-card"><div></div><span></span><small></small></div></div>
+    <div v-else-if="error" class="state-card error-state"><span>!</span><h3>Không thể tải thư viện</h3><p>{{ error }}</p><button class="ghost-btn" @click="$emit('retry')">Thử lại</button></div>
+    <div v-else-if="!songs.length" class="state-card"><span>✦</span><h3>Thư viện đang chờ bản nhạc đầu tiên</h3><p>Hãy mở khu vực quản trị để thêm nhạc vào Cloudinary và Supabase.</p></div>
+    <div v-else-if="!filteredSongs.length" class="state-card"><span>⌕</span><h3>Không tìm thấy kết quả</h3><p>Thử một từ khóa khác hoặc xóa bộ lọc tìm kiếm.</p></div>
+    <div v-else class="songs-grid"><article v-for="(song, index) in filteredSongs" :key="song.id" class="song-card" :class="{ active: state.currentSong?.id === song.id }"><div class="cover-wrapper"><img :src="song.cover || fallbackCover" :alt="`Bìa ${song.title}`" class="song-cover" loading="lazy" /><div class="cover-shade"></div><button class="card-play" @click="play(song)" :aria-label="`Phát ${song.title}`">{{ state.currentSong?.id === song.id && state.isPlaying ? 'Ⅱ' : '▶' }}</button><span class="card-index">{{ String(index + 1).padStart(2, '0') }}</span></div><div class="song-info"><div class="song-topline"><h3 class="song-title">{{ song.title }}</h3><button class="like-btn" :class="{ liked: isLiked(song.id) }" @click="toggleLike(song)" :aria-label="isLiked(song.id) ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'">{{ isLiked(song.id) ? '♥' : '♡' }}</button></div><p class="song-artist">{{ song.artist || 'Unknown artist' }}</p><div class="card-meta"><span>{{ song.album || 'SINGLE' }}</span><button @click="addToQueue(song)">+ Hàng đợi</button></div></div></article></div>
+
+    <section v-if="history.length" class="recent-section"><div class="section-heading"><p class="eyebrow">LISTENING HISTORY</p><h2>Nghe gần đây</h2></div><div class="recent-list"><button v-for="item in history.slice(0, 4)" :key="item.id" class="recent-item" @click="play(item.song)"><img :src="item.song.cover || fallbackCover" :alt="item.song.title" /><span><strong>{{ item.song.title }}</strong><small>{{ item.song.artist }}</small></span><b>▶</b></button></div></section>
+  </section>
 </template>
 
 <script setup>
-// ĐÃ FIX: Xóa bỏ ngoặc nhọn {} ở chữ songs
+import { computed, ref } from 'vue';
 import songs from '../data/songs';
+import { useLibrary } from '../composables/useLibrary';
+import { addToQueue, playSong, playerState } from '../store/playerState';
 
-// Logic phát nhạc (Ông có thể link hàm này với Player store của ông)
-const handlePlay = (song) => {
-  console.log("Đang phát bài:", song.title);
-  // Ví dụ: playSong(song);
-};
+const props = defineProps({ songs: { type: Array, default: () => songs }, loading: Boolean, error: { type: String, default: '' }, onlyLiked: Boolean });
+defineEmits(['retry']);
+const query = ref('');
+const sortBy = ref('recent');
+const fallbackCover = '/images/ChoCiu.jpg';
+const state = playerState;
+const { isLiked, toggleLike: changeLike, history, likedCount, recordPlay } = useLibrary();
+const filteredSongs = computed(() => {
+  const normalized = query.value.trim().toLowerCase();
+  const list = props.songs.filter((song) => (!props.onlyLiked || isLiked(song.id)) && (!normalized || `${song.title} ${song.artist}`.toLowerCase().includes(normalized)));
+  return [...list].sort((a, b) => sortBy.value === 'title' ? a.title.localeCompare(b.title) : sortBy.value === 'artist' ? (a.artist || '').localeCompare(b.artist || '') : 0);
+});
+const play = (song) => { playSong(song, props.songs); recordPlay(song); };
+const playAll = () => { if (filteredSongs.value[0]) play(filteredSongs.value[0]); };
+const toggleLike = (song) => changeLike(song);
 </script>
 
 <style scoped>
-.main-view {
-  padding: 24px;
-  height: 100%;
-  overflow-y: auto;
-  box-sizing: border-box;
-}
-
-.glass-panel {
-  background: rgba(255, 255, 255, 0.02);
-  border-radius: 16px;
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.page-title {
-  font-size: 2rem;
-  margin-bottom: 24px;
-  color: #fff;
-  font-weight: 700;
-  text-shadow: 0 2px 10px rgba(0,0,0,0.5);
-}
-
-.songs-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 24px;
-}
-
-.song-card {
-  background: rgba(0, 0, 0, 0.2);
-  border-radius: 12px;
-  padding: 16px;
-  transition: all 0.3s ease;
-  border: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.song-card:hover {
-  background: rgba(255, 255, 255, 0.1);
-  transform: translateY(-5px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.3);
-}
-
-.cover-wrapper {
-  position: relative;
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  border-radius: 8px;
-  overflow: hidden;
-  margin-bottom: 16px;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-}
-
-.song-cover {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-}
-
-.play-btn {
-  position: absolute;
-  bottom: 10px;
-  right: 10px;
-  width: 45px;
-  height: 45px;
-  border-radius: 50%;
-  background: #1db954;
-  color: black;
-  border: none;
-  font-size: 1.2rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  opacity: 0;
-  transform: translateY(10px);
-  transition: all 0.3s ease;
-  cursor: pointer;
-  box-shadow: 0 4px 10px rgba(0,0,0,0.3);
-}
-
-.song-card:hover .play-btn {
-  opacity: 1;
-  transform: translateY(0);
-}
-
-.play-btn:hover {
-  transform: scale(1.05);
-  background: #1ed760;
-}
-
-.song-title {
-  color: #fff;
-  font-size: 1rem;
-  font-weight: 600;
-  margin: 0 0 8px 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.song-artist {
-  color: #b3b3b3;
-  font-size: 0.875rem;
-  margin: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.empty-state {
-  text-align: center;
-  padding: 40px;
-  color: #b3b3b3;
-  font-size: 1.1rem;
-}
+.main-view { max-width: 1440px; margin: 0 auto; }.view-header { display: flex; align-items: flex-end; justify-content: space-between; gap: 24px; min-height: 240px; padding: clamp(28px, 5vw, 62px); border: 1px solid rgba(255,255,255,.08); border-radius: 28px; background: linear-gradient(118deg, rgba(38,42,55,.95), rgba(16,19,27,.7)), radial-gradient(circle at 85% 15%, rgba(245,185,122,.3), transparent 34%); box-shadow: 0 24px 70px rgba(0,0,0,.2); overflow: hidden; position: relative; }.view-header::after { content: ''; position: absolute; right: 8%; bottom: -55px; width: 190px; height: 190px; border: 1px solid rgba(245,185,122,.22); border-radius: 50%; box-shadow: 0 0 0 20px rgba(245,185,122,.03), 0 0 0 42px rgba(245,185,122,.025); }.eyebrow { margin: 0 0 12px; color: var(--gold); font: 9px var(--font-mono); letter-spacing: 2.2px; }.view-header h1 { position: relative; z-index: 1; margin: 0; color: #f8f5ef; font: 500 clamp(35px, 5vw, 64px)/.98 var(--font-display); letter-spacing: -2px; }.view-header h1 em { color: var(--gold); font-style: italic; }.lede { max-width: 490px; margin: 20px 0 0; color: #a9abb7; font-size: 13px; line-height: 1.7; }.header-actions { display: flex; gap: 10px; position: relative; z-index: 2; }.primary-btn, .ghost-btn { border: 1px solid var(--hairline); border-radius: 11px; padding: 11px 15px; color: var(--text-main); background: rgba(255,255,255,.06); cursor: pointer; font: 600 11px var(--font-body); }.primary-btn { border-color: transparent; background: var(--gold); color: #171218; box-shadow: 0 8px 24px rgba(245,185,122,.18); }.primary-btn:hover { background: var(--gold-bright); transform: translateY(-1px); }.ghost-btn:hover { border-color: rgba(245,185,122,.4); color: var(--gold); }.primary-btn:disabled { opacity: .45; cursor: not-allowed; }.stats-row { display: flex; align-items: center; gap: clamp(22px, 5vw, 78px); padding: 25px 8px 38px; border-bottom: 1px solid var(--hairline-soft); }.stats-row > div:not(.status-note) { display: flex; align-items: baseline; gap: 8px; }.stat-value { color: var(--text-main); font: 500 24px var(--font-display); }.stat-label { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1.3px; }.status-note { display: flex; align-items: center; gap: 8px; margin-left: auto; color: var(--mint); font-size: 10px; }.status-note i { width: 6px; height: 6px; border-radius: 50%; background: currentColor; box-shadow: 0 0 12px currentColor; }.library-toolbar { display: flex; align-items: flex-end; gap: 15px; padding: 35px 0 22px; }.section-heading { flex: 1; }.section-heading .eyebrow { margin-bottom: 6px; color: var(--text-faint); }.section-heading h2 { margin: 0; color: var(--text-main); font: 500 26px var(--font-display); }.search-box { display: flex; align-items: center; gap: 8px; width: min(275px, 30vw); padding: 10px 13px; border: 1px solid var(--hairline); border-radius: 11px; background: rgba(255,255,255,.035); color: var(--gold); }.search-box input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-main); font: 11px var(--font-body); }.search-box input::placeholder { color: var(--text-faint); }.library-toolbar select { border: 1px solid var(--hairline); border-radius: 11px; padding: 10px; background: #151924; color: var(--text-sub); font-size: 10px; }.songs-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }.song-card { min-width: 0; padding: 10px; border: 1px solid transparent; border-radius: 17px; background: rgba(255,255,255,.025); transition: .25s ease; }.song-card:hover, .song-card.active { border-color: rgba(245,185,122,.2); background: rgba(255,255,255,.06); transform: translateY(-4px); }.cover-wrapper { position: relative; aspect-ratio: 1; overflow: hidden; border-radius: 13px; background: #202330; }.song-cover { width: 100%; height: 100%; object-fit: cover; transition: transform .45s ease; }.song-card:hover .song-cover { transform: scale(1.06); }.cover-shade { position: absolute; inset: 0; background: linear-gradient(180deg, transparent 45%, rgba(6,7,10,.65)); }.card-play { position: absolute; right: 12px; bottom: 12px; display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: var(--gold); color: #19151a; cursor: pointer; opacity: 0; transform: translateY(6px); transition: .2s ease; }.song-card:hover .card-play, .song-card.active .card-play { opacity: 1; transform: translateY(0); }.card-index { position: absolute; left: 12px; bottom: 13px; color: rgba(255,255,255,.68); font: 9px var(--font-mono); }.song-info { padding: 12px 3px 4px; }.song-topline { display: flex; gap: 8px; align-items: flex-start; }.song-title { flex: 1; min-width: 0; margin: 0; overflow: hidden; color: var(--text-main); text-overflow: ellipsis; white-space: nowrap; font-size: 13px; }.like-btn { padding: 0; border: 0; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 18px; line-height: 1; }.like-btn:hover, .like-btn.liked { color: var(--crimson); }.song-artist { margin: 6px 0 13px; overflow: hidden; color: var(--text-sub); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.card-meta { display: flex; align-items: center; justify-content: space-between; color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: .7px; }.card-meta button { border: 0; background: transparent; color: var(--gold-dim); cursor: pointer; font: inherit; }.card-meta button:hover { color: var(--gold); }.state-card { display: grid; justify-items: center; padding: 70px 20px; border: 1px dashed var(--hairline); border-radius: 18px; text-align: center; }.state-card > span { color: var(--gold); font-size: 26px; }.state-card h3 { margin: 12px 0 6px; font: 500 20px var(--font-display); }.state-card p { max-width: 400px; margin: 0 0 18px; color: var(--text-sub); font-size: 12px; line-height: 1.6; }.error-state > span { color: var(--crimson); }.skeleton-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 18px; }.skeleton-card { padding: 10px; border-radius: 17px; background: rgba(255,255,255,.035); }.skeleton-card div { aspect-ratio: 1; border-radius: 13px; background: linear-gradient(100deg, #171b25, #252938, #171b25); background-size: 200% 100%; animation: shimmer 1.4s infinite; }.skeleton-card span, .skeleton-card small { display: block; height: 11px; margin: 14px 4px 0; border-radius: 99px; background: #222633; }.skeleton-card small { width: 55%; margin-top: 8px; }.recent-section { margin: 58px 0 25px; }.recent-list { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 16px; }.recent-item { display: flex; align-items: center; gap: 10px; min-width: 0; padding: 9px; border: 1px solid var(--hairline-soft); border-radius: 12px; background: rgba(255,255,255,.025); color: var(--text-main); text-align: left; cursor: pointer; }.recent-item:hover { border-color: rgba(245,185,122,.3); }.recent-item img { width: 38px; height: 38px; border-radius: 8px; object-fit: cover; }.recent-item span { display: flex; flex: 1; flex-direction: column; min-width: 0; }.recent-item strong, .recent-item small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.recent-item strong { font-size: 10px; }.recent-item small { margin-top: 4px; color: var(--text-sub); font-size: 9px; }.recent-item b { color: var(--gold); font-size: 11px; }@keyframes shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }@media (max-width: 760px) { .view-header { align-items: flex-start; flex-direction: column; min-height: 0; padding: 28px 22px; }.header-actions { width: 100%; }.header-actions button { flex: 1; }.stats-row { gap: 15px; padding-bottom: 25px; }.status-note { display: none; }.library-toolbar { align-items: stretch; flex-wrap: wrap; }.section-heading { flex-basis: 100%; }.search-box { width: auto; flex: 1; }.recent-list { grid-template-columns: repeat(2, minmax(0, 1fr)); }}@media (max-width: 420px) { .songs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 9px; }.song-card { padding: 7px; }.song-title { font-size: 11px; }.song-artist { font-size: 9px; }.card-meta { display: none; }.stats-row { justify-content: space-between; }.stat-value { font-size: 20px; }.recent-list { grid-template-columns: 1fr; }}
 </style>

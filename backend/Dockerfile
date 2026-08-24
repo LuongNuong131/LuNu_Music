@@ -2,7 +2,9 @@
 FROM python:3.11-slim
 
 # Cập nhật và cài đặt FFmpeg
-RUN apt-get update && apt-get install -y ffmpeg
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ffmpeg \
+    && rm -rf /var/lib/apt/lists/*
 
 # Thiết lập thư mục làm việc
 WORKDIR /app

@@ -7,7 +7,7 @@
           <div class="queue-header"><div><p class="queue-kicker">PLAYBACK</p><h3>Hàng đợi</h3></div><button class="close-btn" @click="emit('close')" aria-label="Đóng hàng đợi">×</button></div>
           <div class="queue-summary"><span><strong>{{ queue.length + (currentSong ? 1 : 0) }}</strong> bài trong phiên</span><span class="queue-live"><i></i> LIVE</span></div>
           <div class="queue-section" v-if="currentSong"><p class="section-label">ĐANG PHÁT</p><div class="queue-item now-playing"><div class="q-art active-art"><img :src="currentSong.cover" :alt="currentSong.title" /><span>▶</span></div><div class="q-info"><div class="q-title">{{ currentSong.title }}</div><div class="q-artist">{{ currentSong.artist }}</div></div><div class="playing-bars"><i></i><i></i><i></i></div></div></div>
-          <div class="queue-section next-section"><div class="section-head"><p class="section-label">TIẾP THEO <span>· {{ queue.length }}</span></p><button v-if="queue.length" class="clear-btn" @click="emit('clear')">Xoá hết</button></div><TransitionGroup name="list" tag="div" class="queue-list" v-if="queue.length"><div class="queue-item" v-for="(song, index) in queue" :key="song.id + '-' + index"><span class="q-index">{{ String(index + 1).padStart(2, '0') }}</span><div class="q-art"><img :src="song.cover" :alt="song.title" /></div><div class="q-info"><div class="q-title">{{ song.title }}</div><div class="q-artist">{{ song.artist }}</div></div><button class="q-remove" @click="emit('remove', index)" aria-label="Xóa khỏi hàng đợi">×</button></div></TransitionGroup><div v-else class="empty-queue"><div>⌁</div><p>Hàng đợi đang trống</p><span>Thêm bài hát từ menu tuỳ chọn.</span></div></div>
+          <div class="queue-section next-section"><div class="section-head"><p class="section-label">TIẾP THEO <span>· {{ queue.length }}</span></p><button v-if="queue.length" class="clear-btn" @click="emit('clear')">Xoá hết</button></div><TransitionGroup name="list" tag="div" class="queue-list" v-if="queue.length"><div class="queue-item" v-for="(song, index) in queue" :key="song.id + '-' + index" role="button" tabindex="0" @click="emit('play', song)" @keydown.enter="emit('play', song)"><span class="q-index">{{ String(index + 1).padStart(2, '0') }}</span><div class="q-art"><img :src="song.cover" :alt="song.title" /></div><div class="q-info"><div class="q-title">{{ song.title }}</div><div class="q-artist">{{ song.artist }}</div></div><button class="q-remove" @click.stop="emit('remove', index)" aria-label="Xóa khỏi hàng đợi">×</button></div></TransitionGroup><div v-else class="empty-queue"><div>⌁</div><p>Hàng đợi đang trống</p><span>Thêm bài hát từ menu tuỳ chọn.</span></div></div>
           <div class="queue-footer">Mọi thay đổi chỉ lưu trên thiết bị này.</div>
         </aside>
       </div>
@@ -17,7 +17,7 @@
 
 <script setup>
 defineProps({ visible: Boolean, currentSong: Object, queue: Array });
-const emit = defineEmits(['close', 'remove', 'clear']);
+const emit = defineEmits(['close', 'remove', 'clear', 'play']);
 </script>
 
 <style scoped>

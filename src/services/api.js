@@ -1,89 +1,58 @@
-const API_BASE_URL = import.meta.env.VITE_API_URL || 'http://localhost:8000/api';
+const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '');
 
-export const login = async (username, password) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/login`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password })
-    });
-    return await res.json();
-  } catch (error) {
-    return { success: false, message: "Lỗi kết nối Server" };
+const readToken = () => localStorage.getItem('lunu_access_token');
+
+const request = async (path, options = {}) => {
+  const headers = new Headers(options.headers || {});
+  if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
+  const token = readToken();
+  if (token) headers.set('Authorization', `Bearer ${token}`);
+  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  const contentType = response.headers.get('content-type') || '';
+  const payload = contentType.includes('application/json') ? await response.json() : await response.text();
+  if (!response.ok) {
+    const message = typeof payload === 'object' && payload?.detail ? payload.detail : 'Yêu cầu không thành công.';
+    const error = new Error(message);
+    error.status = response.status;
+    throw error;
   }
+  return payload;
 };
+
+export const getApiBaseUrl = () => API_BASE_URL;
+
+export const login = (username, password) => request('/login', {
+  method: 'POST',
+  body: JSON.stringify({ username, password }),
+});
 
 export const getUsers = async () => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/users`);
-    return await res.json();
-  } catch (error) {
-    return [];
-  }
+  try { return await request('/users'); }
+  catch (error) { console.error('Lỗi lấy users:', error); return []; }
 };
 
-export const addUser = async (username, password, role) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/users/add`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username, password, role })
-    });
-    return await res.json();
-  } catch (error) {
-    return { success: false, message: "Lỗi thêm User" };
-  }
-};
+export const addUser = (username, password, role = 'user') => request('/users/add', {
+  method: 'POST',
+  body: JSON.stringify({ username, password, role }),
+});
 
-export const deleteUser = async (id) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/users/${id}`, { method: 'DELETE' });
-    return await res.json();
-  } catch (error) {
-    return { success: false, message: "Lỗi xoá User" };
-  }
-};
+export const deleteUser = (id) => request(`/users/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export const getSongs = async () => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/songs`);
-    if (!response.ok) throw new Error('Network error');
-    return await response.json();
-  } catch (error) {
-    console.error("Lỗi lấy danh sách nhạc:", error);
-    return [];
-  }
+  try { return await request('/songs'); }
+  catch (error) { console.error('Lỗi lấy danh sách nhạc:', error); return []; }
 };
 
 export const searchYoutube = async (query) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/songs/search_youtube?query=${encodeURIComponent(query)}`);
-    return await response.json();
-  } catch (error) {
-    console.error("Lỗi tìm kiếm YouTube:", error);
-    return { success: false, message: "Lỗi kết nối server!" };
-  }
+  try { return await request(`/songs/search_youtube?query=${encodeURIComponent(query)}`); }
+  catch (error) { console.error('Lỗi tìm kiếm YouTube:', error); return { success: false, message: error.message }; }
 };
 
 export const addSong = async (videoId) => {
-  try {
-    const response = await fetch(`${API_BASE_URL}/songs/add`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ video_id: videoId }),
-    });
-    return await response.json();
-  } catch (error) {
-    console.error("Lỗi khi thêm bài hát:", error);
-    return { success: false, message: "Lỗi kết nối server khi tải!" };
-  }
+  try { return await request('/songs/add', { method: 'POST', body: JSON.stringify({ video_id: videoId }) }); }
+  catch (error) { console.error('Lỗi thêm bài hát:', error); return { success: false, message: error.message }; }
 };
 
-export const deleteSong = async (id) => {
-  try {
-    const res = await fetch(`${API_BASE_URL}/songs/${id}`, { method: 'DELETE' });
-    return await res.json();
-  } catch (error) {
-    return { success: false, message: "Lỗi xoá bài hát" };
-  }
-};
+export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+export const getHealth = () => request('/health');
