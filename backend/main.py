@@ -1,13 +1,17 @@
 import base64
 import hashlib
+import html
 import hmac
 import json
 import os
+import re
 import secrets
 import shutil
 import tempfile
 import time
 import uuid
+import urllib.parse
+import urllib.request
 from pathlib import Path
 from typing import Optional
 
@@ -190,6 +194,71 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None) -> d
     return opts
 
 
+def _decode_json_text(value: str) -> str:
+    try:
+        return json.loads(f'"{value}"')
+    except json.JSONDecodeError:
+        return html.unescape(value).replace('\\"', '"')
+
+
+def search_youtube_html(query: str) -> list[dict]:
+    search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}&hl=vi&gl=VN"
+    request = urllib.request.Request(search_url, headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    })
+    with urllib.request.urlopen(request, timeout=25) as response:
+        page = response.read().decode('utf-8', errors='replace')
+    starts = [match.start() for match in re.finditer(r'"videoRenderer":\{', page)]
+    results = []
+    seen = set()
+    for index, start in enumerate(starts):
+        end = starts[index + 1] if index + 1 < len(starts) else min(start + 18000, len(page))
+        block = page[start:end]
+        video_match = re.search(r'"videoId":"([A-Za-z0-9_-]{6,})"', block)
+        title_match = re.search(r'"title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"', block)
+        if not title_match:
+            title_match = re.search(r'"title":\{"simpleText":"((?:\\.|[^"\\])*)"', block)
+        uploader_match = re.search(r'"ownerText":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"', block)
+        if not video_match or not title_match:
+            continue
+        video_id = video_match.group(1)
+        if video_id in seen:
+            continue
+        seen.add(video_id)
+        results.append({
+            'id': video_id,
+            'title': _decode_json_text(title_match.group(1)),
+            'uploader': _decode_json_text(uploader_match.group(1)) if uploader_match else 'YouTube',
+            'thumbnail': f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+        })
+        if len(results) >= 10:
+            break
+    return results
+
+
+def normalize_search_entries(entries: list[dict]) -> list[dict]:
+    results = []
+    seen = set()
+    for entry in entries:
+        if not entry:
+            continue
+        video_id = entry.get('id') or entry.get('videoId')
+        title = entry.get('title') or entry.get('name')
+        if not video_id or not title or video_id in seen:
+            continue
+        seen.add(video_id)
+        results.append({
+            'id': video_id,
+            'title': title,
+            'uploader': entry.get('uploader') or entry.get('channel') or entry.get('uploader_id') or 'YouTube',
+            'thumbnail': entry.get('thumbnail') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+        })
+        if len(results) >= 10:
+            break
+    return results
+
+
 def set_import_job(job_id: str, **updates: object) -> None:
     if job_id in import_jobs:
         import_jobs[job_id].update(updates)
@@ -294,17 +363,27 @@ async def import_legacy_songs(client: Client = Depends(require_supabase), _: dic
 
 @app.get('/api/songs/search_youtube')
 async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> dict:
+    normalized_query = query.strip()
+    errors = []
+    for client in (['android', 'web'], ['web'], ['tv']):
+        try:
+            options = get_ydl_opts(False)
+            options['extractor_args'] = {'youtube': {'player_client': client}}
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(f'ytsearch10:{normalized_query}', download=False)
+            results = normalize_search_entries(info.get('entries') or [])
+            if results:
+                return {'success': True, 'results': results, 'source': f'yt-dlp:{",".join(client)}'}
+        except Exception as error:
+            errors.append(f'yt-dlp {client}: {error}')
     try:
-        with yt_dlp.YoutubeDL(get_ydl_opts(False)) as ydl:
-            info = ydl.extract_info(f'ytsearch10:{query.strip()}', download=False)
-        results = [
-            {'id': entry.get('id'), 'title': entry.get('title'), 'uploader': entry.get('uploader', entry.get('channel', 'YouTube'))}
-            for entry in info.get('entries', []) if entry and entry.get('id')
-        ]
-        return {'success': True, 'results': results}
+        results = search_youtube_html(normalized_query)
+        if results:
+            return {'success': True, 'results': results, 'source': 'youtube-html'}
     except Exception as error:
-        print('❌ Lỗi tìm kiếm YouTube:', error)
-        return {'success': False, 'results': [], 'message': 'YouTube tạm thời không phản hồi.'}
+        errors.append(f'youtube-html: {error}')
+    print(f'❌ Không có kết quả YouTube cho {normalized_query!r}: {" | ".join(errors[-3:])}')
+    return {'success': False, 'results': [], 'message': 'YouTube không trả kết quả cho từ khóa này. Thử gõ ngắn hơn hoặc bỏ ký tự đặc biệt.'}
 
 
 @app.post('/api/songs/add', status_code=status.HTTP_202_ACCEPTED)
