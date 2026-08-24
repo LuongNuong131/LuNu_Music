@@ -58,8 +58,6 @@ class UserRequest(BaseModel):
 
 def process_and_upload_song(video_id: str):
     url = f"https://www.youtube.com/watch?v={video_id}"
-    
-    # Sử dụng thư mục tạm của hệ điều hành (chạy ngon cả trên Windows local lẫn Linux Render)
     temp_dir = tempfile.gettempdir()
     
     ydl_opts = {
@@ -71,10 +69,19 @@ def process_and_upload_song(video_id: str):
             'preferredcodec': 'mp3',
             'preferredquality': '192',
         }],
+        # Vũ khí bí mật: Ngụy trang thành thiết bị Android để lách luật bot-check
+        'extractor_args': {
+            'youtube': {
+                'player_client': ['android', 'web']
+            }
+        },
+        'http_headers': {
+            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
+        }
     }
 
     try:
-        print(f"⏳ Đang tải MP3 từ YouTube: {url}")
+        print(f"⏳ Đang tải MP3 từ YouTube (chế độ ngụy trang): {url}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
@@ -82,7 +89,6 @@ def process_and_upload_song(video_id: str):
             artist = info.get('uploader', 'Đang cập nhật')
             thumbnail = info.get('thumbnail', f"https://i.ytimg.com/vi/{video_id}/hqdefault.jpg")
             
-            # Trỏ đúng đường dẫn file vừa ép ra mp3 ở thư mục tạm
             file_name = os.path.join(temp_dir, f"{video_id}.mp3")
 
             print(f"⏳ Đang đẩy lên mây Cloudinary: {file_name}...")
@@ -113,7 +119,6 @@ def process_and_upload_song(video_id: str):
             else:
                 print("❌ Lỗi: Chưa kết nối được Supabase, không thể lưu bài hát!")
 
-            # Dọn rác
             if os.path.exists(file_name):
                 os.remove(file_name)
 
@@ -135,7 +140,10 @@ async def get_songs():
 async def search_youtube(query: str):
     ydl_opts = {
         'extract_flat': True,
-        'quiet': True
+        'quiet': True,
+        # Thêm ngụy trang nhẹ cho vòng tìm kiếm luôn
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'}
     }
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
