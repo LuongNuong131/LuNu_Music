@@ -10,6 +10,7 @@ import shutil
 import tempfile
 import time
 import uuid
+import unicodedata
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -232,9 +233,26 @@ def search_youtube_html(query: str) -> list[dict]:
             'uploader': _decode_json_text(uploader_match.group(1)) if uploader_match else 'YouTube',
             'thumbnail': f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
         })
-        if len(results) >= 10:
-            break
     return results
+
+
+def _search_tokens(value: str) -> list[str]:
+    normalized = unicodedata.normalize('NFKD', value.casefold())
+    normalized = ''.join(char for char in normalized if not unicodedata.combining(char))
+    return re.findall(r'[\w]+', normalized, flags=re.UNICODE)
+
+
+def rank_search_results(results: list[dict], query: str) -> list[dict]:
+    query_tokens = _search_tokens(query)
+    query_text = ' '.join(query_tokens)
+
+    def score(result: dict) -> tuple[int, str]:
+        title_text = ' '.join(_search_tokens(result.get('title', '')))
+        token_hits = sum(token in title_text.split() for token in query_tokens)
+        phrase_hit = bool(query_text and query_text in title_text)
+        return (int(phrase_hit) * 100 + token_hits * 10, title_text)
+
+    return sorted(results, key=score, reverse=True)
 
 
 def normalize_search_entries(entries: list[dict]) -> list[dict]:
@@ -254,8 +272,6 @@ def normalize_search_entries(entries: list[dict]) -> list[dict]:
             'uploader': entry.get('uploader') or entry.get('channel') or entry.get('uploader_id') or 'YouTube',
             'thumbnail': entry.get('thumbnail') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
         })
-        if len(results) >= 10:
-            break
     return results
 
 
@@ -377,9 +393,9 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
         except Exception as error:
             errors.append(f'yt-dlp {client}: {error}')
     try:
-        results = search_youtube_html(normalized_query)
+        results = rank_search_results(search_youtube_html(normalized_query), normalized_query)
         if results:
-            return {'success': True, 'results': results, 'source': 'youtube-html'}
+            return {'success': True, 'results': results[:10], 'source': 'youtube-html'}
     except Exception as error:
         errors.append(f'youtube-html: {error}')
     print(f'❌ Không có kết quả YouTube cho {normalized_query!r}: {" | ".join(errors[-3:])}')
