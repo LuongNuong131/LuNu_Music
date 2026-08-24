@@ -176,7 +176,7 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None) -> d
     opts = {
         'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
         'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 Chrome/120 Mobile Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
         },
     }
     if is_download:
@@ -200,6 +200,58 @@ def _decode_json_text(value: str) -> str:
         return json.loads(f'"{value}"')
     except json.JSONDecodeError:
         return html.unescape(value).replace('\\"', '"')
+
+
+def search_youtube_music(query: str) -> list[dict]:
+    user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
+    page_url = f"https://music.youtube.com/search?q={urllib.parse.quote_plus(query)}"
+    page_request = urllib.request.Request(page_url, headers={'User-Agent': user_agent, 'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8'})
+    with urllib.request.urlopen(page_request, timeout=25) as response:
+        page = response.read().decode('utf-8', errors='replace')
+    key_match = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', page)
+    version_match = re.search(r'"INNERTUBE_CLIENT_VERSION":"([^"]+)"', page)
+    if not key_match or not version_match:
+        return []
+    body = json.dumps({'context': {'client': {'clientName': 'WEB_REMIX', 'clientVersion': version_match.group(1), 'hl': 'vi', 'gl': 'VN'}}, 'query': query}).encode('utf-8')
+    api_request = urllib.request.Request(
+        f"https://music.youtube.com/youtubei/v1/search?key={key_match.group(1)}", data=body,
+        headers={'User-Agent': user_agent, 'Content-Type': 'application/json', 'Origin': 'https://music.youtube.com'}, method='POST')
+    with urllib.request.urlopen(api_request, timeout=25) as response:
+        payload = json.loads(response.read().decode('utf-8'))
+    results = []
+
+    def text_from_column(column: dict) -> str:
+        text = column.get('text', {}) if isinstance(column, dict) else {}
+        runs = text.get('runs', []) if isinstance(text, dict) else []
+        return ''.join(run.get('text', '') for run in runs if isinstance(run, dict)) or (text.get('simpleText', '') if isinstance(text, dict) else '')
+
+    def collect(node: object) -> None:
+        if isinstance(node, dict):
+            renderer = node.get('musicResponsiveListItemRenderer')
+            if isinstance(renderer, dict):
+                playlist_data = renderer.get('playlistItemData') or {}
+                video_id = playlist_data.get('videoId') or renderer.get('videoId')
+                columns = renderer.get('flexColumns') or []
+                title = text_from_column((columns[0].get('musicResponsiveListItemFlexColumnRenderer') or {}) if columns else {})
+                artist = text_from_column((columns[1].get('musicResponsiveListItemFlexColumnRenderer') or {}) if len(columns) > 1 else {})
+                thumbnails = renderer.get('thumbnail', {}).get('musicThumbnailRenderer', {}).get('thumbnail', {}).get('thumbnails', [])
+                if video_id and title:
+                    results.append({'id': video_id, 'title': title, 'uploader': artist or 'YouTube', 'thumbnail': thumbnails[-1].get('url') if thumbnails else f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'})
+            music_video = node.get('musicVideoRenderer')
+            if isinstance(music_video, dict):
+                video_id = music_video.get('videoId')
+                title = text_from_column(music_video.get('title') or {})
+                artist = text_from_column(music_video.get('shortDescription') or {})
+                if video_id and title:
+                    results.append({'id': video_id, 'title': title, 'uploader': artist or 'YouTube', 'thumbnail': f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'})
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(payload)
+    return normalize_search_entries(results)
 
 
 def search_youtube_internal(query: str) -> list[dict]:
@@ -462,6 +514,17 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
             best_results = ranked
             if has_relevant_result(ranked, normalized_query):
                 return {'success': True, 'results': ranked[:10], 'source': f'yt-dlp:{",".join(client)}'}
+    try:
+        music_results = []
+        for variant in variants:
+            music_results.extend(search_youtube_music(variant))
+        ranked = rank_search_results(music_results, normalized_query)
+        if ranked:
+            best_results = ranked
+            if has_relevant_result(ranked, normalized_query):
+                return {'success': True, 'results': ranked[:10], 'source': 'youtube-music'}
+    except Exception as error:
+        errors.append(f'youtube-music: {error}')
     try:
         internal_results = []
         for variant_index, variant in enumerate(variants):
