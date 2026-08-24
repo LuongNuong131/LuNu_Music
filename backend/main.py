@@ -202,6 +202,57 @@ def _decode_json_text(value: str) -> str:
         return html.unescape(value).replace('\\"', '"')
 
 
+def search_youtube_internal(query: str) -> list[dict]:
+    page_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}&hl=vi&gl=VN"
+    page_request = urllib.request.Request(page_url, headers={
+        'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/124 Safari/537.36',
+        'Accept-Language': 'vi-VN,vi;q=0.9,en;q=0.8',
+    })
+    with urllib.request.urlopen(page_request, timeout=25) as response:
+        page = response.read().decode('utf-8', errors='replace')
+    key_match = re.search(r'"INNERTUBE_API_KEY":"([^"]+)"', page)
+    version_match = re.search(r'"INNERTUBE_CLIENT_VERSION":"([^"]+)"', page)
+    if not key_match or not version_match:
+        return []
+    request_body = json.dumps({
+        'context': {'client': {'clientName': 'WEB', 'clientVersion': version_match.group(1), 'hl': 'vi', 'gl': 'VN'}},
+        'query': query,
+    }).encode('utf-8')
+    api_request = urllib.request.Request(
+        f"https://www.youtube.com/youtubei/v1/search?key={key_match.group(1)}",
+        data=request_body,
+        headers={'User-Agent': 'Mozilla/5.0', 'Content-Type': 'application/json', 'Origin': 'https://www.youtube.com'},
+        method='POST',
+    )
+    with urllib.request.urlopen(api_request, timeout=25) as response:
+        payload = json.loads(response.read().decode('utf-8'))
+    results = []
+
+    def collect(node: object) -> None:
+        if isinstance(node, dict):
+            renderer = node.get('videoRenderer')
+            if isinstance(renderer, dict):
+                video_id = renderer.get('videoId')
+                title = renderer.get('title', {})
+                title_runs = title.get('runs') if isinstance(title, dict) else []
+                title_text = ''.join(item.get('text', '') for item in title_runs if isinstance(item, dict)) if title_runs else title.get('simpleText', '') if isinstance(title, dict) else ''
+                owner = renderer.get('ownerText', {})
+                owner_runs = owner.get('runs') if isinstance(owner, dict) else []
+                owner_text = ''.join(item.get('text', '') for item in owner_runs if isinstance(item, dict)) if owner_runs else 'YouTube'
+                thumbnails = renderer.get('thumbnail', {}).get('thumbnails', [])
+                thumbnail = thumbnails[-1].get('url') if thumbnails else ''
+                if video_id and title_text:
+                    results.append({'id': video_id, 'title': title_text, 'uploader': owner_text or 'YouTube', 'thumbnail': thumbnail or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'})
+            for value in node.values():
+                collect(value)
+        elif isinstance(node, list):
+            for value in node:
+                collect(value)
+
+    collect(payload)
+    return normalize_search_entries(results)
+
+
 def search_youtube_html(query: str) -> list[dict]:
     search_url = f"https://www.youtube.com/results?search_query={urllib.parse.quote_plus(query)}&hl=vi&gl=VN"
     request = urllib.request.Request(search_url, headers={
@@ -392,6 +443,12 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
                 return {'success': True, 'results': results, 'source': f'yt-dlp:{",".join(client)}'}
         except Exception as error:
             errors.append(f'yt-dlp {client}: {error}')
+    try:
+        results = rank_search_results(search_youtube_internal(normalized_query), normalized_query)
+        if results:
+            return {'success': True, 'results': results[:10], 'source': 'youtube-internal'}
+    except Exception as error:
+        errors.append(f'youtube-internal: {error}')
     try:
         results = rank_search_results(search_youtube_html(normalized_query), normalized_query)
         if results:
