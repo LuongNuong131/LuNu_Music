@@ -26,10 +26,7 @@ export const login = (username, password) => request('/login', {
   body: JSON.stringify({ username, password }),
 });
 
-export const getUsers = async () => {
-  try { return await request('/users'); }
-  catch (error) { console.error('Lỗi lấy users:', error); return []; }
-};
+export const getUsers = () => request('/users');
 
 export const addUser = (username, password, role = 'user') => request('/users/add', {
   method: 'POST',
@@ -54,5 +51,7 @@ export const addSong = async (videoId) => {
 };
 
 export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
+export const importLegacySongs = () => request('/songs/import-legacy', { method: 'POST' });
 
 export const getHealth = () => request('/health');

@@ -24,14 +24,17 @@ load_dotenv()
 
 app = FastAPI(title="LuNu Music API", version="2.0.0")
 
-allowed_origins = [
+configured_origins = [
     origin.strip().rstrip('/')
-    for origin in os.getenv(
-        'CORS_ORIGINS',
-        'http://localhost:5173,http://localhost:4173'
-    ).split(',')
+    for origin in os.getenv('CORS_ORIGINS', '').split(',')
     if origin.strip()
 ]
+allowed_origins = list(dict.fromkeys([
+    'https://lunu-music.vercel.app',
+    'http://localhost:5173',
+    'http://localhost:4173',
+    *configured_origins,
+]))
 app.add_middleware(
     CORSMiddleware,
     allow_origins=allowed_origins,
@@ -229,6 +232,37 @@ async def get_songs(client: Client = Depends(require_supabase)) -> list:
         raise HTTPException(status_code=502, detail=f'Không thể tải thư viện nhạc: {error}')
 
 
+def load_legacy_catalog() -> list[dict]:
+    catalog_path = Path(__file__).with_name('legacy_catalog.json')
+    if not catalog_path.exists():
+        raise HTTPException(status_code=503, detail='Chưa có file catalog legacy trên server.')
+    try:
+        catalog = json.loads(catalog_path.read_text(encoding='utf-8'))
+    except (OSError, json.JSONDecodeError) as error:
+        raise HTTPException(status_code=500, detail=f'Không đọc được catalog legacy: {error}')
+    if not isinstance(catalog, list) or len(catalog) != 188:
+        raise HTTPException(status_code=500, detail='Catalog legacy phải có đúng 188 bài hát.')
+    return catalog
+
+
+@app.post('/api/songs/import-legacy')
+async def import_legacy_songs(client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    catalog = load_legacy_catalog()
+    try:
+        existing_response = client.table('songs').select('url').execute()
+        existing_urls = {str(row.get('url')) for row in (existing_response.data or []) if row.get('url')}
+        pending = [song for song in catalog if song.get('url') not in existing_urls]
+        if pending:
+            try:
+                client.table('songs').insert(pending).execute()
+            except Exception as uuid_column_error:
+                print('⚠️ Không insert được id UUID; thử để Supabase tự sinh id:', uuid_column_error)
+                client.table('songs').insert([{key: value for key, value in song.items() if key != 'id'} for song in pending]).execute()
+        return {'success': True, 'imported': len(pending), 'skipped': len(catalog) - len(pending), 'total': len(catalog), 'message': f'Đã khôi phục {len(pending)} bài, bỏ qua {len(catalog) - len(pending)} bài đã có.'}
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể import catalog vào Supabase: {error}')
+
+
 @app.get('/api/songs/search_youtube')
 async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> dict:
     try:
@@ -270,7 +304,10 @@ async def login(req: LoginRequest, client: Client = Depends(require_supabase)) -
         if not verify_password(req.password, stored_password):
             return {'success': False, 'message': 'Sai tên tài khoản hoặc mật khẩu.'}
         if record.get('password') and not record.get('password_hash'):
-            client.table('users').update({'password_hash': password_hash(req.password)}).eq('id', record['id']).execute()
+            try:
+                client.table('users').update({'password_hash': password_hash(req.password)}).eq('id', record['id']).execute()
+            except Exception as migration_error:
+                print('⚠️ Không thể ghi password_hash; tiếp tục tương thích schema cũ:', migration_error)
         user = {'id': record['id'], 'username': record['username'], 'role': record.get('role', 'user')}
         return {'success': True, 'user': user, 'access_token': issue_token(str(user['id']), user['role'])}
     except HTTPException:
@@ -290,7 +327,12 @@ async def get_users(client: Client = Depends(require_supabase), _: dict = Depend
 @app.post('/api/users/add')
 async def add_user(req: UserRequest, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
     try:
-        client.table('users').insert({'username': req.username, 'password_hash': password_hash(req.password), 'role': req.role}).execute()
+        hashed = password_hash(req.password)
+        try:
+            client.table('users').insert({'username': req.username, 'password_hash': hashed, 'role': req.role}).execute()
+        except Exception as hash_column_error:
+            print('⚠️ Schema chưa có password_hash, dùng cột password để lưu hash:', hash_column_error)
+            client.table('users').insert({'username': req.username, 'password': hashed, 'role': req.role}).execute()
         return {'success': True, 'message': 'Đã cấp tài khoản thành công.'}
     except Exception as error:
         raise HTTPException(status_code=409, detail=f'Không thể tạo tài khoản: {error}')
