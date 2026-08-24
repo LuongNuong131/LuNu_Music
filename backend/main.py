@@ -210,21 +210,21 @@ def search_youtube_html(query: str) -> list[dict]:
     })
     with urllib.request.urlopen(request, timeout=25) as response:
         page = response.read().decode('utf-8', errors='replace')
-    starts = [match.start() for match in re.finditer(r'"videoRenderer":\{', page)]
     results = []
     seen = set()
-    for index, start in enumerate(starts):
-        end = starts[index + 1] if index + 1 < len(starts) else min(start + 18000, len(page))
+    video_matches = list(re.finditer(r'"videoId":"([A-Za-z0-9_-]{6,})"', page))
+    for video_match in video_matches:
+        video_id = video_match.group(1)
+        if video_id in seen:
+            continue
+        start = max(0, video_match.start() - 2200)
+        end = min(len(page), video_match.end() + 7000)
         block = page[start:end]
-        video_match = re.search(r'"videoId":"([A-Za-z0-9_-]{6,})"', block)
         title_match = re.search(r'"title":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"', block)
         if not title_match:
             title_match = re.search(r'"title":\{"simpleText":"((?:\\.|[^"\\])*)"', block)
         uploader_match = re.search(r'"ownerText":\{"runs":\[\{"text":"((?:\\.|[^"\\])*)"', block)
-        if not video_match or not title_match:
-            continue
-        video_id = video_match.group(1)
-        if video_id in seen:
+        if not title_match:
             continue
         seen.add(video_id)
         results.append({
