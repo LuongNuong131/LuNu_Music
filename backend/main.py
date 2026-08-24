@@ -56,32 +56,48 @@ class UserRequest(BaseModel):
     role: str = "user"
 
 
+def get_ydl_opts(is_download=False, temp_dir=None):
+    """Hàm tạo cấu hình yt-dlp tích hợp sẵn Cookie nếu có"""
+    opts = {
+        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'}
+    }
+    
+    # Kiểm tra xem có file cookies.txt do Render truyền vào không
+    cookie_path = os.path.join(os.getcwd(), 'cookies.txt')
+    if os.path.exists(cookie_path):
+        opts['cookiefile'] = cookie_path
+        print("✅ Đã nạp thành công Giấy thông hành (cookies.txt)!")
+    else:
+        print("⚠️ Không tìm thấy cookies.txt, quá trình tải có thể bị YouTube chặn.")
+
+    if is_download and temp_dir:
+        opts.update({
+            'format': 'bestaudio/best',
+            'noplaylist': True,
+            'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+            'postprocessors': [{
+                'key': 'FFmpegExtractAudio',
+                'preferredcodec': 'mp3',
+                'preferredquality': '192',
+            }]
+        })
+    else:
+        opts.update({
+            'extract_flat': True,
+            'quiet': True
+        })
+        
+    return opts
+
+
 def process_and_upload_song(video_id: str):
     url = f"https://www.youtube.com/watch?v={video_id}"
     temp_dir = tempfile.gettempdir()
-    
-    ydl_opts = {
-        'format': 'bestaudio/best',
-        'noplaylist': True,
-        'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
-        'postprocessors': [{
-            'key': 'FFmpegExtractAudio',
-            'preferredcodec': 'mp3',
-            'preferredquality': '192',
-        }],
-        # Vũ khí bí mật: Ngụy trang thành thiết bị Android để lách luật bot-check
-        'extractor_args': {
-            'youtube': {
-                'player_client': ['android', 'web']
-            }
-        },
-        'http_headers': {
-            'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'
-        }
-    }
+    ydl_opts = get_ydl_opts(is_download=True, temp_dir=temp_dir)
 
     try:
-        print(f"⏳ Đang tải MP3 từ YouTube (chế độ ngụy trang): {url}")
+        print(f"⏳ Đang tải MP3 từ YouTube (Có Cookie): {url}")
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(url, download=True)
 
@@ -117,7 +133,7 @@ def process_and_upload_song(video_id: str):
                 supabase.table("songs").insert(song_data).execute()
                 print("🎉 HOÀN TẤT!")
             else:
-                print("❌ Lỗi: Chưa kết nối được Supabase, không thể lưu bài hát!")
+                print("❌ Lỗi: Chưa kết nối được Supabase!")
 
             if os.path.exists(file_name):
                 os.remove(file_name)
@@ -138,13 +154,7 @@ async def get_songs():
 
 @app.get("/api/songs/search_youtube")
 async def search_youtube(query: str):
-    ydl_opts = {
-        'extract_flat': True,
-        'quiet': True,
-        # Thêm ngụy trang nhẹ cho vòng tìm kiếm luôn
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
-        'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36'}
-    }
+    ydl_opts = get_ydl_opts(is_download=False)
     try:
         with yt_dlp.YoutubeDL(ydl_opts) as ydl:
             info = ydl.extract_info(f"ytsearch10:{query}", download=False)
@@ -159,7 +169,7 @@ async def search_youtube(query: str):
             return {"success": True, "results": results}
     except Exception as e:
         print("❌ Lỗi tìm kiếm YouTube:", str(e))
-        return {"success": False, "message": "Lỗi khi tìm kiếm trên YouTube."}
+        return {"success": False, "message": "Lỗi khi tìm kiếm. Có thể do YouTube chặn."}
 
 @app.post("/api/songs/add")
 async def add_song(request: AddSongRequest, background_tasks: BackgroundTasks):
