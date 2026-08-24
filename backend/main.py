@@ -63,26 +63,29 @@ def get_ydl_opts(is_download=False, temp_dir=None):
         'http_headers': {'User-Agent': 'Mozilla/5.0 (Linux; Android 10; K) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36'}
     }
     
-    # Kiểm tra xem có file cookies.txt do Render truyền vào không
-    cookie_path = os.path.join(os.getcwd(), 'cookies.txt')
-    if os.path.exists(cookie_path):
-        opts['cookiefile'] = cookie_path
-        print("✅ Đã nạp thành công Giấy thông hành (cookies.txt)!")
-    else:
-        print("⚠️ Không tìm thấy cookies.txt, quá trình tải có thể bị YouTube chặn.")
+    # CHỈ NẠP COOKIE KHI BẮT ĐẦU TẢI NHẠC
+    if is_download:
+        cookie_path = os.path.join(os.getcwd(), 'cookies.txt')
+        if os.path.exists(cookie_path):
+            opts['cookiefile'] = cookie_path
+            print("✅ Đã nạp thành công Giấy thông hành (cookies.txt) để TẢI NHẠC!")
+        else:
+            print("⚠️ Không tìm thấy cookies.txt, quá trình tải có thể bị YouTube chặn.")
 
-    if is_download and temp_dir:
-        opts.update({
-            'format': 'bestaudio/best',
-            'noplaylist': True,
-            'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
-            'postprocessors': [{
-                'key': 'FFmpegExtractAudio',
-                'preferredcodec': 'mp3',
-                'preferredquality': '192',
-            }]
-        })
+        if temp_dir:
+            opts.update({
+                'format': 'bestaudio/best',
+                'noplaylist': True,
+                'outtmpl': os.path.join(temp_dir, '%(id)s.%(ext)s'),
+                'postprocessors': [{
+                    'key': 'FFmpegExtractAudio',
+                    'preferredcodec': 'mp3',
+                    'preferredquality': '192',
+                }]
+            })
+    # KHI TÌM KIẾM SẼ KHÔNG DÙNG COOKIE ĐỂ TRÁNH LỖI HTML
     else:
+        print("🔎 Đang quét tìm kiếm YouTube (Chế độ ẩn danh)...")
         opts.update({
             'extract_flat': True,
             'quiet': True
