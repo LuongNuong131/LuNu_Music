@@ -202,6 +202,25 @@ def _decode_json_text(value: str) -> str:
         return html.unescape(value).replace('\\"', '"')
 
 
+def search_youtube_data_api(query: str) -> list[dict]:
+    api_key = os.getenv('YOUTUBE_API_KEY', '').strip()
+    if not api_key:
+        return []
+    params = urllib.parse.urlencode({'part': 'snippet', 'type': 'video', 'maxResults': 10, 'q': query, 'regionCode': 'VN', 'relevanceLanguage': 'vi', 'key': api_key})
+    request = urllib.request.Request(f'https://www.googleapis.com/youtube/v3/search?{params}', headers={'User-Agent': 'LuNu Music API/1.0'})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode('utf-8'))
+    results = []
+    for item in payload.get('items', []):
+        video_id = (item.get('id') or {}).get('videoId')
+        snippet = item.get('snippet') or {}
+        if video_id and snippet.get('title'):
+            thumbnails = snippet.get('thumbnails') or {}
+            thumbnail = (thumbnails.get('high') or thumbnails.get('medium') or thumbnails.get('default') or {}).get('url')
+            results.append({'id': video_id, 'title': html.unescape(snippet['title']), 'uploader': snippet.get('channelTitle') or 'YouTube', 'thumbnail': thumbnail or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'})
+    return normalize_search_entries(results)
+
+
 def search_youtube_music(query: str) -> list[dict]:
     user_agent = 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
     page_url = f"https://music.youtube.com/search?q={urllib.parse.quote_plus(query)}"
@@ -505,6 +524,12 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
     errors = []
     variants = search_query_variants(normalized_query)
     best_results = []
+    try:
+        api_results = rank_search_results(search_youtube_data_api(normalized_query), normalized_query)
+        if api_results:
+            return {'success': True, 'results': api_results[:10], 'source': 'youtube-data-api'}
+    except Exception as error:
+        errors.append(f'youtube-data-api: {error}')
     for client in (['android', 'web'], ['web'], ['tv']):
         client_results = []
         for variant in variants:
@@ -562,7 +587,7 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
     if best_results:
         return {'success': True, 'results': best_results[:10], 'source': 'youtube-fallback'}
     print(f'❌ Không có kết quả YouTube cho {normalized_query!r}: {" | ".join(errors[-3:])}')
-    return {'success': False, 'results': [], 'message': 'YouTube không trả kết quả cho từ khóa này. Thử gõ ngắn hơn hoặc bỏ ký tự đặc biệt.'}
+    return {'success': False, 'results': [], 'message': 'YouTube không trả kết quả ổn định. Hãy thêm YOUTUBE_API_KEY trên Render hoặc thử thêm tên ca sĩ vào từ khóa.'}
 
 
 @app.post('/api/songs/add', status_code=status.HTTP_202_ACCEPTED)
