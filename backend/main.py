@@ -293,6 +293,19 @@ def _search_tokens(value: str) -> list[str]:
     return re.findall(r'[\w]+', normalized, flags=re.UNICODE)
 
 
+def search_query_variants(query: str) -> list[str]:
+    variants = [query]
+    ascii_query = ''.join(char for char in unicodedata.normalize('NFKD', query) if not unicodedata.combining(char))
+    if ascii_query.casefold() != query.casefold():
+        variants.append(ascii_query)
+    return list(dict.fromkeys(variant.strip() for variant in variants if variant.strip()))
+
+
+def has_relevant_result(results: list[dict], query: str) -> bool:
+    query_tokens = set(_search_tokens(query))
+    return bool(query_tokens) and any(query_tokens.issubset(set(_search_tokens(result.get('title', '')))) for result in results)
+
+
 def rank_search_results(results: list[dict], query: str) -> list[dict]:
     query_tokens = _search_tokens(query)
     query_text = ' '.join(query_tokens)
@@ -432,29 +445,48 @@ async def import_legacy_songs(client: Client = Depends(require_supabase), _: dic
 async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> dict:
     normalized_query = query.strip()
     errors = []
+    variants = search_query_variants(normalized_query)
+    best_results = []
     for client in (['android', 'web'], ['web'], ['tv']):
-        try:
-            options = get_ydl_opts(False)
-            options['extractor_args'] = {'youtube': {'player_client': client}}
-            with yt_dlp.YoutubeDL(options) as ydl:
-                info = ydl.extract_info(f'ytsearch10:{normalized_query}', download=False)
-            results = normalize_search_entries(info.get('entries') or [])
-            if results:
-                return {'success': True, 'results': results, 'source': f'yt-dlp:{",".join(client)}'}
-        except Exception as error:
-            errors.append(f'yt-dlp {client}: {error}')
+        client_results = []
+        for variant in variants:
+            try:
+                options = get_ydl_opts(False)
+                options['extractor_args'] = {'youtube': {'player_client': client}}
+                with yt_dlp.YoutubeDL(options) as ydl:
+                    info = ydl.extract_info(f'ytsearch10:{variant}', download=False)
+                client_results.extend(normalize_search_entries(info.get('entries') or []))
+            except Exception as error:
+                errors.append(f'yt-dlp {client}/{variant}: {error}')
+        ranked = rank_search_results(client_results, normalized_query)
+        if ranked:
+            best_results = ranked
+            if has_relevant_result(ranked, normalized_query):
+                return {'success': True, 'results': ranked[:10], 'source': f'yt-dlp:{",".join(client)}'}
     try:
-        results = rank_search_results(search_youtube_internal(normalized_query), normalized_query)
-        if results:
-            return {'success': True, 'results': results[:10], 'source': 'youtube-internal'}
+        internal_results = []
+        for variant in variants:
+            internal_results.extend(search_youtube_internal(variant))
+        ranked = rank_search_results(internal_results, normalized_query)
+        if ranked:
+            best_results = ranked
+            if has_relevant_result(ranked, normalized_query):
+                return {'success': True, 'results': ranked[:10], 'source': 'youtube-internal'}
     except Exception as error:
         errors.append(f'youtube-internal: {error}')
     try:
-        results = rank_search_results(search_youtube_html(normalized_query), normalized_query)
-        if results:
-            return {'success': True, 'results': results[:10], 'source': 'youtube-html'}
+        html_results = []
+        for variant in variants:
+            html_results.extend(search_youtube_html(variant))
+        ranked = rank_search_results(html_results, normalized_query)
+        if ranked:
+            best_results = ranked
+            if has_relevant_result(ranked, normalized_query):
+                return {'success': True, 'results': ranked[:10], 'source': 'youtube-html'}
     except Exception as error:
         errors.append(f'youtube-html: {error}')
+    if best_results:
+        return {'success': True, 'results': best_results[:10], 'source': 'youtube-fallback'}
     print(f'❌ Không có kết quả YouTube cho {normalized_query!r}: {" | ".join(errors[-3:])}')
     return {'success': False, 'results': [], 'message': 'YouTube không trả kết quả cho từ khóa này. Thử gõ ngắn hơn hoặc bỏ ký tự đặc biệt.'}
 
