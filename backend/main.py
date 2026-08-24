@@ -307,6 +307,7 @@ def has_relevant_result(results: list[dict], query: str) -> bool:
 def rank_search_results(results: list[dict], query: str) -> list[dict]:
     query_tokens = _search_tokens(query)
     query_text = ' '.join(query_tokens)
+    unique_results = list({result.get('id'): result for result in results if result.get('id')}.values())
 
     def score(result: dict) -> tuple[int, str]:
         title_text = ' '.join(_search_tokens(result.get('title', '')))
@@ -314,7 +315,7 @@ def rank_search_results(results: list[dict], query: str) -> list[dict]:
         phrase_hit = bool(query_text and query_text in title_text)
         return (int(phrase_hit) * 100 + token_hits * 10, title_text)
 
-    return sorted(results, key=score, reverse=True)
+    return sorted(unique_results, key=score, reverse=True)
 
 
 def normalize_search_entries(entries: list[dict]) -> list[dict]:
@@ -463,8 +464,10 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
                 return {'success': True, 'results': ranked[:10], 'source': f'yt-dlp:{",".join(client)}'}
     try:
         internal_results = []
-        for variant in variants:
-            internal_results.extend(search_youtube_internal(variant))
+        for variant_index, variant in enumerate(variants):
+            attempts = 3 if variant_index == 0 else 1
+            for _ in range(attempts):
+                internal_results.extend(search_youtube_internal(variant))
         ranked = rank_search_results(internal_results, normalized_query)
         if ranked:
             best_results = ranked
