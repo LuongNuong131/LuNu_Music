@@ -56,6 +56,7 @@ DEFAULT_COVER = '/images/ChoCiu.jpg'
 CLOUDINARY_PLAN_LIMIT_BYTES = 100 * 1024 * 1024
 CLOUDINARY_SAFE_VIDEO_BYTES = 92 * 1024 * 1024
 VIDEO_TRANSCODE_TIMEOUT_SECONDS = int(os.getenv('LUNU_VIDEO_TRANSCODE_TIMEOUT_SECONDS', '900'))
+RENDER_MAX_DOWNLOAD_BYTES = int(os.getenv('LUNU_RENDER_MAX_DOWNLOAD_BYTES', str(450 * 1024 * 1024)))
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', '').strip()
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', '').strip()
@@ -117,6 +118,10 @@ async def stop_periodic_cleanup() -> None:
         except asyncio.CancelledError:
             pass
         _cleanup_task = None
+
+
+class MediaTooLargeError(RuntimeError):
+    pass
 
 
 class AddSongRequest(BaseModel):
@@ -280,7 +285,7 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
-def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'web', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None) -> dict:
+def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'web', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None) -> dict:
     opts = {
         'extractor_args': {'youtube': {'player_client': [client]}},
         'js_runtimes': {'node': {}},
@@ -313,6 +318,8 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
                 'fragment_retries': 3,
                 'continuedl': True,
             })
+            if max_filesize:
+                opts['max_filesize'] = max_filesize
     else:
         opts.update({'extract_flat': True, 'quiet': True, 'skip_download': True})
     return opts
@@ -846,18 +853,36 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
         ('tv', 'best[acodec!=none]/best'),
         ('ios', 'best[acodec!=none]/best'),
     ] if mode == 'song' else [
-        ('web', 'bestvideo[height<=1080]+bestaudio/best[ext=mp4][height<=1080]/best[ext=webm]/best'),
-        ('tv', 'best[height<=1080]/best'),
-        ('ios', 'best[height<=1080]/best'),
+        ('web', 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'),
+        ('tv', 'best[height<=360][filesize<450M]/best[height<=360]'),
+        ('ios', 'best[height<=360][filesize<450M]/best[height<=360]'),
     ]
     errors = []
     for profile_index, (client, selector) in enumerate(profiles):
         if profile_index:
             time.sleep(min(6, 1.5 * (2 ** (profile_index - 1))))
         try:
-            options = get_ydl_opts(True, temp_dir, client=client, format_selector=selector, postprocessors=[] if mode == 'video' else None)
+            options = get_ydl_opts(
+                True,
+                temp_dir,
+                client=client,
+                format_selector=selector,
+                postprocessors=[] if mode == 'video' else None,
+                max_filesize=RENDER_MAX_DOWNLOAD_BYTES if mode == 'video' else None,
+            )
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
+                if mode == 'video':
+                    selected_formats = info.get('requested_formats') or [info]
+                    estimated_size = sum(
+                        int(item.get('filesize') or item.get('filesize_approx') or 0)
+                        for item in selected_formats if isinstance(item, dict)
+                    )
+                    if estimated_size > RENDER_MAX_DOWNLOAD_BYTES:
+                        raise MediaTooLargeError(
+                            f'Video nguồn khoảng {estimated_size} bytes, vượt giới hạn an toàn của Render '
+                            f'{RENDER_MAX_DOWNLOAD_BYTES} bytes (mặc định 450 MiB). Hãy chọn video/chất lượng thấp hơn hoặc upload file từ máy cá nhân.'
+                        )
                 if mode == 'song':
                     formats = info.get('formats') or []
                     has_audio = any(item.get('acodec') not in (None, 'none') for item in formats)
@@ -884,6 +909,8 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
             output = Path(temp_dir) / f'{video_id}.mp4'
             run_ffmpeg(source, output, 'video')
             return output
+        except MediaTooLargeError:
+            raise
         except Exception as error:
             error_text = str(error)
             if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
@@ -1026,7 +1053,12 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
 
 @app.get('/api/health')
 async def health() -> dict:
-    return {'ok': True, 'supabase_configured': supabase is not None}
+    return {
+        'ok': True,
+        'supabase_configured': supabase is not None,
+        'video_pipeline': 'preflight-450mb-chunked',
+        'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
+    }
 
 
 @app.post('/api/media-proposals', status_code=status.HTTP_201_CREATED)

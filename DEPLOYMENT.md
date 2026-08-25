@@ -53,7 +53,7 @@ Mở Supabase SQL Editor và chạy toàn bộ `supabase/media_upgrade.sql`, sau
 
 ## Kiểm tra sau deploy
 
-Mở `https://<render-domain>/api/health`; response cần có `ok: true`. Sau đó mở Vercel app, đăng nhập, kiểm tra tải library, phát một bài, mở queue, Lyrics Lab và thử command palette bằng `Ctrl/Cmd + K`. Khi thêm bài từ YouTube, UI phải hiển thị “Đã xếp hàng thành công” thay vì chờ cứng 15 giây.
+Mở `https://<render-domain>/api/health`; response cần có `ok: true`. Sau đó mở Vercel app, đăng nhập, kiểm tra tải library, phát một bài, mở queue, Lyrics Lab và thử command palette bằng `Ctrl/Cmd + K`. Khi thêm bài từ YouTube, UI phải hiển thị “Đã xếp hàng thành công” thay vì chờ cứng 15 giây. Với Cinema, hãy thử trước video ngắn hoặc chất lượng thấp; nếu nguồn vượt policy, UI sẽ nhận lỗi rõ ràng ngay từ bước preflight và backend không tiếp tục tải file hàng GiB.
 
 ## Khôi phục 188 bài hát từ catalog legacy
 
@@ -90,6 +90,8 @@ Trước khi bật workflow này, chạy `supabase/media_requests_notifications.
 Để tìm theo tên kênh YouTube ổn định, đặt `YOUTUBE_API_KEY` ở Render. Luồng tìm video vẫn có các fallback hiện có. Backend `backend/Dockerfile` dùng Node 22 vì phiên bản yt-dlp-ejs hiện tại yêu cầu Node tối thiểu 22; Render phải build đúng Dockerfile backend sau commit mới.
 
 Nếu yt-dlp vẫn báo `Only images are available`, nguyên nhân là YouTube đã trả về metadata hình ảnh nhưng không cấp audio/video stream cho IP hoặc phiên làm việc của Render. Đổi format selector không thể tạo stream bị thiếu. Chỉ dùng cookies Netscape của tài khoản có quyền truy cập nội dung khi cần, không commit cookies và không gửi cookies qua chat. Với nội dung do bạn sở hữu, lựa chọn ổn định hơn là upload file MP3/MP4 trực tiếp qua một kênh server-side được kiểm soát, thay vì phụ thuộc extractor YouTube.
+
+Để bảo vệ Render khỏi bị restart khi gặp video hàng GiB, Cinema chỉ chọn video tối đa 480p/360p và áp dụng preflight mặc định 450 MiB (`LUNU_RENDER_MAX_DOWNLOAD_BYTES`). Nếu nguồn vượt mức này, job sẽ dừng có chủ đích với hướng dẫn chọn chất lượng thấp hơn hoặc upload file từ máy cá nhân, thay vì tải gần xong rồi làm đầy tài nguyên của instance. Có thể kiểm tra policy sau deploy tại `/api/health`; response phải có `video_pipeline: preflight-450mb-chunked`.
 
 ### Video import và cover mặc định
 
