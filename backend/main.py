@@ -104,6 +104,20 @@ class UpdateSongRequest(BaseModel):
         return value.strip()
 
 
+class BulkLyricsItem(BaseModel):
+    id: str = Field(min_length=1, max_length=80)
+    lyrics: str = Field(min_length=1, max_length=100000)
+
+    @field_validator('id', 'lyrics')
+    @classmethod
+    def strip_bulk_lyrics_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class BulkLyricsRequest(BaseModel):
+    items: list[BulkLyricsItem] = Field(min_length=1, max_length=500)
+
+
 class AddVideoRequest(BaseModel):
     video_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
     title: str = Field(min_length=1, max_length=240)
@@ -807,6 +821,34 @@ async def get_import_job(job_id: str, _: dict = Depends(require_admin)) -> dict:
     if not job:
         raise HTTPException(status_code=404, detail='Không tìm thấy job import hoặc job đã hết hạn.')
     return {'success': True, **job}
+
+
+@app.patch('/api/songs/lyrics/bulk')
+async def update_song_lyrics_bulk(request: BulkLyricsRequest, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    updated = []
+    failed = []
+    seen_ids = set()
+    for item in request.items:
+        if item.id in seen_ids:
+            failed.append({'id': item.id, 'message': 'ID bị lặp trong danh sách import.'})
+            continue
+        seen_ids.add(item.id)
+        try:
+            response = client.table('songs').update({'lyrics': item.lyrics}).eq('id', item.id).select('id,title,artist,url,lyrics').execute()
+            if response.data:
+                updated.append(response.data[0])
+            else:
+                failed.append({'id': item.id, 'message': 'Không tìm thấy bài hát.'})
+        except Exception as error:
+            failed.append({'id': item.id, 'message': str(error)})
+    return {
+        'success': not failed,
+        'updated_count': len(updated),
+        'failed_count': len(failed),
+        'updated': updated,
+        'failed': failed,
+        'message': f'Đã cập nhật {len(updated)} bài; link audio Cloudinary không thay đổi.' if not failed else f'Đã cập nhật {len(updated)} bài, có {len(failed)} mục lỗi.',
+    }
 
 
 @app.patch('/api/songs/{song_id}')

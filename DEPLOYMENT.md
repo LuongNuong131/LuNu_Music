@@ -64,3 +64,11 @@ Nếu không muốn dùng giao diện, có thể chạy `supabase/import_legacy_
 Trong **Quản trị → Kho nhạc**, nút **Sửa** cho phép đổi tên, ca sĩ, ảnh bìa và lyrics của mọi bài, bao gồm 188 bài legacy. API `PATCH /api/songs/{id}` không nhận trường `url`, nên link audio Cloudinary không bị thay đổi. Nút **Xóa** sẽ xóa asset Cloudinary trước rồi xóa row Supabase.
 
 CORS đã được bổ sung cố định cho `https://lunu-music.vercel.app`, đồng thời vẫn nhận thêm các domain trong `CORS_ORIGINS`. Vì vậy lỗi `No 'Access-Control-Allow-Origin' header` trong console sẽ hết sau khi Render chạy đúng commit mới; nếu vẫn còn, kiểm tra Render đã redeploy và domain Vercel có đúng chính tả hay chưa.
+
+## Nhập lyrics hàng loạt cho 188 bài
+
+Trong **Quản trị → Kho nhạc**, khu vực **Nhập lyrics hàng loạt** có nút **Tải mẫu 188 bài**. Mẫu JSON chứa đúng UUID, tên và nghệ sĩ của từng row Supabase. Điền lyrics plain text vào trường `lyrics`, sau đó dán toàn bộ JSON vào ô nhập và bấm **Cập nhật lyrics**. Backend chỉ cập nhật cột `lyrics`; không nhận `url`, `media_key`, `source_id` hay Cloudinary public ID trong thao tác này.
+
+Có thể dùng `supabase/lyrics_bulk_import_template.sql` thay cho giao diện. File này mặc định kết thúc bằng `ROLLBACK`; chỉ đổi thành `COMMIT` sau khi đã điền nội dung lyrics, chạy câu `SELECT COUNT(*)`, và kiểm tra kết quả. Không chạy file mẫu khi các trường lyrics vẫn rỗng vì nó sẽ không cập nhật dòng nào.
+
+Lyrics phải là nội dung mà chủ dự án có quyền sử dụng, do người dùng cung cấp, hoặc thuộc phạm vi public domain/licensed. Hệ thống không tự động sao chép nguyên văn lyrics có bản quyền từ website bên thứ ba.
