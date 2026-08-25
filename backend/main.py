@@ -51,6 +51,8 @@ app.add_middleware(
     allow_headers=['Authorization', 'Content-Type'],
 )
 
+DEFAULT_COVER = '/images/ChoCiu.jpg'
+
 SUPABASE_URL = os.getenv('SUPABASE_URL', '').strip()
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', '').strip()
 AUTH_SECRET = os.getenv('LUNU_AUTH_SECRET', '').strip() or 'change-this-secret-in-production'
@@ -258,7 +260,7 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
                 'format': format_selector or 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best',
                 'noplaylist': True,
                 'outtmpl': output_template or str(Path(temp_dir) / '%(id)s.%(ext)s'),
-                'postprocessors': postprocessors or [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+                'postprocessors': postprocessors if postprocessors is not None else [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                 'merge_output_format': 'mp4',
                 'retries': 3,
                 'fragment_retries': 3,
@@ -685,7 +687,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
     errors = []
     for client, selector in profiles:
         try:
-            options = get_ydl_opts(True, temp_dir, client=client, format_selector=selector)
+            options = get_ydl_opts(True, temp_dir, client=client, format_selector=selector, postprocessors=[] if mode == 'video' else None)
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
                 if mode == 'song':
@@ -746,7 +748,7 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
         song_data = {
             'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': video_id,
             'cloudinary_public_id': public_id, 'title': request_data['title'], 'artist': request_data['artist'],
-            'url': secure_url, 'cover': request_data.get('cover') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+            'url': secure_url, 'cover': DEFAULT_COVER,
             'lyrics': request_data.get('lyrics', ''),
         }
         set_import_job(job_id, message='Đã upload Cloudinary, đang ghi metadata vào Supabase...')
@@ -806,7 +808,7 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
         video_data = {
             'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': video_id,
             'cloudinary_public_id': public_id, 'title': request_data['title'], 'uploader': request_data.get('uploader') or 'YouTube',
-            'url': secure_url, 'cover': request_data.get('cover') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+            'url': secure_url, 'cover': DEFAULT_COVER,
             'description': request_data.get('description', ''),
         }
         set_import_job(job_id, message='Đã upload Cloudinary, đang ghi video vào Supabase...')

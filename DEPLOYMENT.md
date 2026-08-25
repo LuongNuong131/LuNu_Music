@@ -90,3 +90,9 @@ Trước khi bật workflow này, chạy `supabase/media_requests_notifications.
 Để tìm theo tên kênh YouTube ổn định, đặt `YOUTUBE_API_KEY` ở Render. Luồng tìm video vẫn có các fallback hiện có. Backend `backend/Dockerfile` dùng Node 22 vì phiên bản yt-dlp-ejs hiện tại yêu cầu Node tối thiểu 22; Render phải build đúng Dockerfile backend sau commit mới.
 
 Nếu yt-dlp vẫn báo `Only images are available`, nguyên nhân là YouTube đã trả về metadata hình ảnh nhưng không cấp audio/video stream cho IP hoặc phiên làm việc của Render. Đổi format selector không thể tạo stream bị thiếu. Chỉ dùng cookies Netscape của tài khoản có quyền truy cập nội dung khi cần, không commit cookies và không gửi cookies qua chat. Với nội dung do bạn sở hữu, lựa chọn ổn định hơn là upload file MP3/MP4 trực tiếp qua một kênh server-side được kiểm soát, thay vì phụ thuộc extractor YouTube.
+
+### Video import và cover mặc định
+
+Cinema video import truyền `postprocessors=[]` cho yt-dlp để không chạy hậu xử lý `FFmpegExtractAudio` của luồng bài hát. Video được giữ ở dạng MP4 sau khi tải và chỉ được chuyển đổi bằng FFmpeg nếu cần. Media mới được ghi với cover mặc định `/images/ChoCiu.jpg`; thumbnail YouTube chỉ dùng để xem trước trong giao diện tìm kiếm. Sau thay đổi này, Render cần build lại từ `backend/Dockerfile` mới.
+
+Nếu Supabase chưa có bảng `media_proposals` hoặc `notifications`, hãy chạy `supabase/media_requests_notifications.sql` một lần. Frontend hiện xử lý graceful fallback và không spam lỗi khi migration chưa sẵn sàng.

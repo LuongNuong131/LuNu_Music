@@ -51,7 +51,7 @@ export const addSong = async (songData) => {
       video_id: songData.videoId || songData.video_id,
       title: songData.title,
       artist: songData.artist,
-      cover: songData.cover || '',
+      cover: songData.cover || '/images/ChoCiu.jpg',
       lyrics: songData.lyrics || '',
     };
     return await request('/songs/add', { method: 'POST', body: JSON.stringify(payload) });
@@ -76,7 +76,7 @@ export const addCinemaVideo = async (videoData) => {
       video_id: videoData.videoId || videoData.video_id,
       title: videoData.title,
       uploader: videoData.uploader || 'YouTube',
-      cover: videoData.cover || '',
+      cover: videoData.cover || '/images/ChoCiu.jpg',
       description: videoData.description || '',
     }) });
   } catch (error) {
@@ -96,14 +96,14 @@ export const updateSongLyricsBulk = (items) => request('/songs/lyrics/bulk', {
 
 export const updateSong = (id, metadata) => request(`/songs/${encodeURIComponent(id)}`, {
   method: 'PATCH',
-  body: JSON.stringify({ title: metadata.title, artist: metadata.artist, cover: metadata.cover || '', lyrics: metadata.lyrics || '' }),
+  body: JSON.stringify({ title: metadata.title, artist: metadata.artist, cover: metadata.cover || '/images/ChoCiu.jpg', lyrics: metadata.lyrics || '' }),
 });
 
 export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export const importLegacySongs = () => request('/songs/import-legacy', { method: 'POST' });
 
-export const createMediaProposal = (proposal) => request('/media-proposals', { method: 'POST', body: JSON.stringify({ kind: proposal.kind, source_id: proposal.sourceId || proposal.source_id, title: proposal.title, artist: proposal.artist || '', uploader: proposal.uploader || 'YouTube', cover: proposal.cover || '', description: proposal.description || '' }) });
+export const createMediaProposal = (proposal) => request('/media-proposals', { method: 'POST', body: JSON.stringify({ kind: proposal.kind, source_id: proposal.sourceId || proposal.source_id, title: proposal.title, artist: proposal.artist || '', uploader: proposal.uploader || 'YouTube', cover: proposal.cover || '/images/ChoCiu.jpg', description: proposal.description || '' }) });
 export const getMyMediaProposals = () => request('/media-proposals/mine');
 export const getMediaProposals = (status = '') => request(`/media-proposals${status ? `?status=${encodeURIComponent(status)}` : ''}`);
 export const approveMediaProposal = (id) => request(`/media-proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({}) });
