@@ -4,6 +4,7 @@
     <Sidebar />
     <main class="main-content">
       <AdminView v-if="currentView === 'admin'" />
+      <CinemaView v-else-if="currentView === 'cinema'" />
       <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
       <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
     </main>
@@ -48,6 +49,7 @@ import { playSong, usePlayer } from './store/playerState';
 import { usePlaylists } from './composables/usePlaylists';
 import Login from './views/Login.vue';
 import AdminView from './views/AdminView.vue';
+import CinemaView from './views/CinemaView.vue';
 import Sidebar from './components/Sidebar.vue';
 import MainView from './components/MainView.vue';
 import LyricsManager from './components/LyricsManager.vue';

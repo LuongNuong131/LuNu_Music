@@ -7,10 +7,13 @@ import os
 import re
 import secrets
 import shutil
+import subprocess
 import tempfile
 import time
 import uuid
 import unicodedata
+from datetime import datetime
+from zoneinfo import ZoneInfo
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -84,6 +87,19 @@ class AddSongRequest(BaseModel):
     lyrics: str = Field(default='', max_length=100000)
 
     @field_validator('title', 'artist', 'cover', 'lyrics')
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class AddVideoRequest(BaseModel):
+    video_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
+    title: str = Field(min_length=1, max_length=240)
+    uploader: str = Field(default='YouTube', max_length=160)
+    cover: str = Field(default='', max_length=500)
+    description: str = Field(default='', max_length=5000)
+
+    @field_validator('title', 'uploader', 'cover', 'description')
     @classmethod
     def strip_text(cls, value: str) -> str:
         return value.strip()
@@ -172,27 +188,87 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     return current_user
 
 
-def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None) -> dict:
+def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'web', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None) -> dict:
     opts = {
-        'extractor_args': {'youtube': {'player_client': ['android', 'web']}},
+        'extractor_args': {'youtube': {'player_client': [client]}},
+        'js_runtimes': {'node': {}},
+        'remote_components': ['ejs:github'],
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
         },
     }
     if is_download:
-        cookie_path = Path.cwd() / 'cookies.txt'
+        cookie_path = Path(os.getenv('YOUTUBE_COOKIES_PATH', '')).expanduser() if os.getenv('YOUTUBE_COOKIES_PATH', '').strip() else Path.cwd() / 'cookies.txt'
+        cookies_b64 = os.getenv('YOUTUBE_COOKIES_B64', '').strip()
+        if cookies_b64:
+            cookie_path = Path(tempfile.gettempdir()) / 'lunu-youtube-cookies.txt'
+            try:
+                cookie_path.write_bytes(base64.b64decode(cookies_b64))
+            except Exception as error:
+                raise RuntimeError(f'YOUTUBE_COOKIES_B64 không hợp lệ: {error}')
         if cookie_path.exists():
             opts['cookiefile'] = str(cookie_path)
         if temp_dir:
             opts.update({
-                'format': 'bestaudio/best',
+                'format': format_selector or 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best',
                 'noplaylist': True,
-                'outtmpl': str(Path(temp_dir) / '%(id)s.%(ext)s'),
-                'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+                'outtmpl': output_template or str(Path(temp_dir) / '%(id)s.%(ext)s'),
+                'postprocessors': postprocessors or [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
+                'merge_output_format': 'mp4',
+                'retries': 3,
+                'fragment_retries': 3,
+                'continuedl': True,
             })
     else:
         opts.update({'extract_flat': True, 'quiet': True, 'skip_download': True})
     return opts
+
+
+def today_stamp() -> str:
+    return datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%d%m%Y')
+
+
+def next_media_key(client: Client, table: str, prefix: str = '') -> str:
+    try:
+        rows = client.table(table).select('media_key').execute().data or []
+    except Exception:
+        rows = []
+    used = set()
+    width = 2 if prefix else 3
+    pattern = re.compile(rf'^{re.escape(prefix)}(\d{{{width}}})')
+    for row in rows:
+        match = pattern.match(str(row.get('media_key') or ''))
+        if match:
+            used.add(int(match.group(1)))
+    default_start = int(os.getenv('LUNU_SONG_START_SEQUENCE', '199')) - 1 if not prefix else 0
+    sequence = max(used or {default_start}) + 1
+    return f'{prefix}{sequence:02d}{today_stamp()}' if prefix else f'{sequence:03d}{today_stamp()}'
+
+
+def cloudinary_public_id_from_url(url: str) -> Optional[str]:
+    if not url:
+        return None
+    if not url.startswith(('http://', 'https://')):
+        return url.strip()
+    match = re.search(r'/(?:upload|raw)/(.+)$', url)
+    if not match:
+        return None
+    public_id = match.group(1).split('?', 1)[0]
+    public_id = re.sub(r'^v\d+/', '', public_id)
+    return re.sub(r'\.[A-Za-z0-9]+$', '', public_id)
+
+
+
+def delete_cloudinary_asset(url: str, resource_type: str = 'video') -> None:
+    public_id = cloudinary_public_id_from_url(url)
+    if not public_id:
+        return
+    cloudinary.uploader.destroy(public_id, resource_type=resource_type, invalidate=True)
+
+
+def strip_legacy_song_fields(song: dict) -> dict:
+    allowed = {'id', 'title', 'artist', 'url', 'cover', 'lyrics'}
+    return {key: value for key, value in song.items() if key in allowed}
 
 
 def _decode_json_text(value: str) -> str:
@@ -421,49 +497,164 @@ def set_import_job(job_id: str, **updates: object) -> None:
         import_jobs[job_id].update(updates)
 
 
+def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
+    image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.vtt', '.part', '.ytdl'}
+    return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
+
+
+def run_ffmpeg(input_path: Path, output_path: Path, mode: str) -> None:
+    if mode == 'song':
+        command = ['ffmpeg', '-y', '-i', str(input_path), '-vn', '-codec:a', 'libmp3lame', '-b:a', '192k', str(output_path)]
+    else:
+        command = ['ffmpeg', '-y', '-i', str(input_path), '-c:v', 'libx264', '-c:a', 'aac', '-movflags', '+faststart', str(output_path)]
+    completed = subprocess.run(command, capture_output=True, text=True, timeout=240)
+    if completed.returncode != 0:
+        if mode == 'video':
+            fallback = ['ffmpeg', '-y', '-i', str(input_path), '-c:v', 'libx264', '-an', '-movflags', '+faststart', str(output_path)]
+            completed = subprocess.run(fallback, capture_output=True, text=True, timeout=240)
+        if completed.returncode != 0:
+            raise RuntimeError(f'FFmpeg không thể chuyển đổi file: {completed.stderr[-600:]}')
+
+
+def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
+    url = f'https://www.youtube.com/watch?v={video_id}'
+    profiles = [
+        ('web', 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best'),
+        ('tv', 'best[acodec!=none]/best'),
+        ('ios', 'best[acodec!=none]/best'),
+    ] if mode == 'song' else [
+        ('web', 'bestvideo[height<=1080]+bestaudio/best[ext=mp4][height<=1080]/best[ext=webm]/best'),
+        ('tv', 'best[height<=1080]/best'),
+        ('ios', 'best[height<=1080]/best'),
+    ]
+    errors = []
+    for client, selector in profiles:
+        try:
+            options = get_ydl_opts(True, temp_dir, client=client, format_selector=selector)
+            with yt_dlp.YoutubeDL(options) as ydl:
+                info = ydl.extract_info(url, download=False)
+                if mode == 'song':
+                    formats = info.get('formats') or []
+                    has_audio = any(item.get('acodec') not in (None, 'none') for item in formats)
+                    if not has_audio:
+                        raise RuntimeError('YouTube chỉ trả thumbnail/hình ảnh cho video này, không có audio stream để tải.')
+                ydl.download([url])
+            files = available_media_files(temp_dir, video_id)
+            if mode == 'song':
+                mp3_files = sorted(Path(temp_dir).glob(f'{video_id}*.mp3'))
+                if mp3_files:
+                    return mp3_files[0]
+                source = next((item for item in files if item.suffix.lower() in {'.m4a', '.webm', '.mp4', '.opus', '.aac'}), None)
+                if not source:
+                    raise FileNotFoundError('yt-dlp không tạo được file audio.')
+                output = Path(temp_dir) / f'{video_id}.mp3'
+                run_ffmpeg(source, output, 'song')
+                return output
+            mp4_files = sorted(Path(temp_dir).glob(f'{video_id}*.mp4'))
+            if mp4_files:
+                return mp4_files[0]
+            source = next((item for item in files if item.suffix.lower() in {'.webm', '.mkv', '.mov', '.m4v'}), None)
+            if not source:
+                raise FileNotFoundError('yt-dlp không tạo được file video.')
+            output = Path(temp_dir) / f'{video_id}.mp4'
+            run_ffmpeg(source, output, 'video')
+            return output
+        except Exception as error:
+            errors.append(f'{client}: {error}')
+            for item in available_media_files(temp_dir, video_id):
+                item.unlink(missing_ok=True)
+    raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-3:]))
+
+
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
     video_id = request_data['video_id']
-    client = None
-    temp_dir = tempfile.mkdtemp(prefix='lunu-')
+    temp_dir = tempfile.mkdtemp(prefix='lunu-song-')
     file_path: Optional[Path] = None
     set_import_job(job_id, status='processing', message='Đang tải audio từ YouTube...')
     try:
         client = require_supabase()
         if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
             raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
-        url = f'https://www.youtube.com/watch?v={video_id}'
-        with yt_dlp.YoutubeDL(get_ydl_opts(True, temp_dir)) as ydl:
-            ydl.extract_info(url, download=True)
-        candidates = sorted(Path(temp_dir).glob(f'{video_id}*.mp3'))
-        if not candidates:
-            raise FileNotFoundError('FFmpeg/yt-dlp không tạo được file MP3. Kiểm tra FFmpeg trên Render.')
-        file_path = candidates[0]
-        set_import_job(job_id, message='Đã tải MP3, đang upload lên Cloudinary...')
-        result = cloudinary.uploader.upload(
-            str(file_path), resource_type='video', public_id=f'lunu_music/{video_id}',
-            overwrite=True, unique_filename=False,
-        )
+        media_key = next_media_key(client, 'songs')
+        file_path = download_media(video_id, temp_dir, 'song')
+        set_import_job(job_id, message=f'Đã tải MP3, đang upload Cloudinary với mã {media_key}...')
+        public_id = f'lunu_music/{media_key}'
+        result = cloudinary.uploader.upload(str(file_path), resource_type='video', public_id=public_id, overwrite=False, unique_filename=False)
         secure_url = result.get('secure_url')
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url.')
         song_data = {
-            'id': str(uuid.uuid4()),
-            'title': request_data['title'],
-            'artist': request_data['artist'],
-            'url': secure_url,
-            'cover': request_data.get('cover') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+            'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': video_id,
+            'cloudinary_public_id': public_id, 'title': request_data['title'], 'artist': request_data['artist'],
+            'url': secure_url, 'cover': request_data.get('cover') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
             'lyrics': request_data.get('lyrics', ''),
         }
         set_import_job(job_id, message='Đã upload Cloudinary, đang ghi metadata vào Supabase...')
-        existing = client.table('songs').select('id').eq('url', secure_url).limit(1).execute()
+        existing = client.table('songs').select('id,url,cloudinary_public_id').eq('source_id', video_id).limit(1).execute()
         if existing.data:
-            client.table('songs').update({key: value for key, value in song_data.items() if key != 'id'}).eq('id', existing.data[0]['id']).execute()
-            song_data['id'] = existing.data[0]['id']
-            set_import_job(job_id, status='completed', message='Đã cập nhật metadata bài hát trong thư viện.', song=song_data)
+            old = existing.data[0]
+            client.table('songs').update({key: value for key, value in song_data.items() if key != 'id'}).eq('id', old['id']).execute()
+            song_data['id'] = old['id']
+            if old.get('url') and old.get('url') != secure_url:
+                try:
+                    delete_cloudinary_asset(old['url'])
+                except Exception as cleanup_error:
+                    print(f'⚠️ Không xóa được asset cũ: {cleanup_error}')
+            message = 'Đã cập nhật bài hát và thay file Cloudinary thành công.'
         else:
             client.table('songs').insert(song_data).execute()
-            set_import_job(job_id, status='completed', message='Đã thêm bài hát vào thư viện.', song=song_data)
-        print(f'✅ Đã thêm bài hát: {song_data["title"]}')
+            message = 'Đã thêm bài hát và file MP3 vào thư viện.'
+        set_import_job(job_id, status='completed', message=message, song=song_data)
+        print(f'✅ Đã thêm bài hát {media_key}: {song_data["title"]}')
+    except Exception as error:
+        set_import_job(job_id, status='failed', message=str(error))
+        print(f'❌ Lỗi xử lý audio {video_id}: {error}')
+    finally:
+        if file_path and file_path.exists():
+            file_path.unlink(missing_ok=True)
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def process_and_upload_video(job_id: str, request_data: dict) -> None:
+    video_id = request_data['video_id']
+    temp_dir = tempfile.mkdtemp(prefix='lunu-cinema-')
+    file_path: Optional[Path] = None
+    set_import_job(job_id, status='processing', message='Đang tải video từ YouTube...')
+    try:
+        client = require_supabase()
+        if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
+            raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
+        media_key = next_media_key(client, 'cinema_videos', 'VD')
+        file_path = download_media(video_id, temp_dir, 'video')
+        set_import_job(job_id, message=f'Đã tải video, đang upload Cloudinary với mã {media_key}...')
+        public_id = f'lunu_cinema/{media_key}'
+        result = cloudinary.uploader.upload(str(file_path), resource_type='video', public_id=public_id, overwrite=False, unique_filename=False)
+        secure_url = result.get('secure_url')
+        if not secure_url:
+            raise RuntimeError('Cloudinary không trả về secure_url cho video.')
+        video_data = {
+            'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': video_id,
+            'cloudinary_public_id': public_id, 'title': request_data['title'], 'uploader': request_data.get('uploader') or 'YouTube',
+            'url': secure_url, 'cover': request_data.get('cover') or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg',
+            'description': request_data.get('description', ''),
+        }
+        set_import_job(job_id, message='Đã upload Cloudinary, đang ghi video vào Supabase...')
+        existing = client.table('cinema_videos').select('id,url').eq('source_id', video_id).limit(1).execute()
+        if existing.data:
+            old = existing.data[0]
+            client.table('cinema_videos').update({key: value for key, value in video_data.items() if key != 'id'}).eq('id', old['id']).execute()
+            video_data['id'] = old['id']
+            if old.get('url') and old.get('url') != secure_url:
+                try:
+                    delete_cloudinary_asset(old['url'])
+                except Exception as cleanup_error:
+                    print(f'⚠️ Không xóa được video Cloudinary cũ: {cleanup_error}')
+            message = 'Đã cập nhật video trong LuNu Cinema.'
+        else:
+            client.table('cinema_videos').insert(video_data).execute()
+            message = 'Đã thêm video vào LuNu Cinema.'
+        set_import_job(job_id, status='completed', message=message, video=video_data)
+        print(f'✅ Đã thêm video {media_key}: {video_data["title"]}')
     except Exception as error:
         set_import_job(job_id, status='failed', message=str(error))
         print(f'❌ Lỗi xử lý video {video_id}: {error}')
@@ -506,7 +697,7 @@ async def import_legacy_songs(client: Client = Depends(require_supabase), _: dic
     try:
         existing_response = client.table('songs').select('url').execute()
         existing_urls = {str(row.get('url')) for row in (existing_response.data or []) if row.get('url')}
-        pending = [song for song in catalog if song.get('url') not in existing_urls]
+        pending = [strip_legacy_song_fields(song) for song in catalog if song.get('url') not in existing_urls]
         if pending:
             try:
                 client.table('songs').insert(pending).execute()
@@ -609,10 +800,63 @@ async def get_import_job(job_id: str, _: dict = Depends(require_admin)) -> dict:
 @app.delete('/api/songs/{song_id}')
 async def delete_song(song_id: str, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
     try:
+        response = client.table('songs').select('id,url,cloudinary_public_id').eq('id', song_id).limit(1).execute()
+        row = (response.data or [None])[0]
+        if not row:
+            raise HTTPException(status_code=404, detail='Không tìm thấy bài hát.')
+        if row.get('url') or row.get('cloudinary_public_id'):
+            try:
+                delete_cloudinary_asset(row.get('url') or row.get('cloudinary_public_id'))
+            except Exception as cloudinary_error:
+                raise HTTPException(status_code=502, detail=f'Không thể xóa file âm thanh trên Cloudinary: {cloudinary_error}')
         client.table('songs').delete().eq('id', song_id).execute()
-        return {'success': True, 'message': 'Đã xóa bài hát khỏi hệ thống.'}
+        return {'success': True, 'message': 'Đã xóa bài hát và file âm thanh trên Cloudinary.'}
+    except HTTPException:
+        raise
     except Exception as error:
         raise HTTPException(status_code=502, detail=f'Không thể xóa bài hát: {error}')
+
+
+@app.get('/api/cinema/videos')
+async def get_cinema_videos(client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> list:
+    try:
+        response = client.table('cinema_videos').select('*').order('created_at', desc=True).execute()
+        return response.data or []
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể tải kho LuNu Cinema. Hãy chạy migration Supabase: {error}')
+
+
+@app.get('/api/cinema/search_youtube')
+async def search_cinema_youtube(query: str = Query(min_length=2, max_length=120)) -> dict:
+    return await search_youtube(query)
+
+
+@app.post('/api/cinema/videos/add', status_code=status.HTTP_202_ACCEPTED)
+async def add_cinema_video(request: AddVideoRequest, background_tasks: BackgroundTasks, _: dict = Depends(require_admin)) -> dict:
+    job_id = str(uuid.uuid4())
+    import_jobs[job_id] = {'job_id': job_id, 'kind': 'video', 'status': 'queued', 'message': 'Đã nhận yêu cầu tải video.'}
+    background_tasks.add_task(process_and_upload_video, job_id, request.model_dump())
+    return {'success': True, 'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận video. Bắt đầu tải và upload LuNu Cinema.'}
+
+
+@app.delete('/api/cinema/videos/{video_id}')
+async def delete_cinema_video(video_id: str, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    try:
+        response = client.table('cinema_videos').select('id,url,cloudinary_public_id').eq('id', video_id).limit(1).execute()
+        row = (response.data or [None])[0]
+        if not row:
+            raise HTTPException(status_code=404, detail='Không tìm thấy video trong LuNu Cinema.')
+        if row.get('url') or row.get('cloudinary_public_id'):
+            try:
+                delete_cloudinary_asset(row.get('url') or row.get('cloudinary_public_id'))
+            except Exception as cloudinary_error:
+                raise HTTPException(status_code=502, detail=f'Không thể xóa video trên Cloudinary: {cloudinary_error}')
+        client.table('cinema_videos').delete().eq('id', video_id).execute()
+        return {'success': True, 'message': 'Đã xóa video và file trên Cloudinary.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể xóa video: {error}')
 
 
 @app.post('/api/login')

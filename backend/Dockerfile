@@ -3,7 +3,7 @@ FROM python:3.11-slim
 
 # Cập nhật và cài đặt FFmpeg
 RUN apt-get update \
-    && apt-get install -y --no-install-recommends ffmpeg \
+    && apt-get install -y --no-install-recommends ffmpeg nodejs \
     && rm -rf /var/lib/apt/lists/*
 
 # Thiết lập thư mục làm việc

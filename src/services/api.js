@@ -63,6 +63,30 @@ export const addSong = async (songData) => {
 
 export const getImportJob = (jobId) => request(`/songs/import-jobs/${encodeURIComponent(jobId)}`);
 
+export const getCinemaVideos = () => request('/cinema/videos');
+
+export const searchCinema = async (query) => {
+  try { return await request(`/cinema/search_youtube?query=${encodeURIComponent(query)}`); }
+  catch (error) { console.error('Lỗi tìm kiếm LuNu Cinema:', error); return { success: false, message: error.message }; }
+};
+
+export const addCinemaVideo = async (videoData) => {
+  try {
+    return await request('/cinema/videos/add', { method: 'POST', body: JSON.stringify({
+      video_id: videoData.videoId || videoData.video_id,
+      title: videoData.title,
+      uploader: videoData.uploader || 'YouTube',
+      cover: videoData.cover || '',
+      description: videoData.description || '',
+    }) });
+  } catch (error) {
+    console.error('Lỗi thêm video Cinema:', error);
+    return { success: false, message: error.message };
+  }
+};
+
+export const deleteCinemaVideo = (id) => request(`/cinema/videos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
 export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export const importLegacySongs = () => request('/songs/import-legacy', { method: 'POST' });
