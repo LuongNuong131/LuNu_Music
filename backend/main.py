@@ -667,6 +667,26 @@ def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
     return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
 
 
+def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str) -> dict:
+    file_size = file_path.stat().st_size if file_path.exists() else 0
+    if resource_type == 'video' and file_size >= 100 * 1024 * 1024:
+        return cloudinary.uploader.upload_large(
+            str(file_path),
+            resource_type='video',
+            public_id=public_id,
+            overwrite=False,
+            unique_filename=False,
+            chunk_size=20 * 1024 * 1024,
+        )
+    return cloudinary.uploader.upload(
+        str(file_path),
+        resource_type=resource_type,
+        public_id=public_id,
+        overwrite=False,
+        unique_filename=False,
+    )
+
+
 def run_ffmpeg(input_path: Path, output_path: Path, mode: str) -> None:
     if mode == 'song':
         command = ['ffmpeg', '-y', '-i', str(input_path), '-vn', '-codec:a', 'libmp3lame', '-b:a', '192k', str(output_path)]
@@ -815,7 +835,7 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
             update_proposal(client, proposal_id, {'file_size_bytes': file_size_bytes})
         set_import_job(job_id, message=f'Đã tải video ({file_size_bytes or 0} bytes), đang upload Cloudinary với mã {media_key}...')
         public_id = f'lunu_cinema/{media_key}'
-        result = cloudinary.uploader.upload(str(file_path), resource_type='video', public_id=public_id, overwrite=False, unique_filename=False)
+        result = upload_cloudinary_media(file_path, public_id, 'video')
         secure_url = result.get('secure_url')
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url cho video.')
