@@ -93,6 +93,10 @@ Nếu yt-dlp vẫn báo `Only images are available`, nguyên nhân là YouTube �
 
 ### Video import và cover mặc định
 
-Cinema video import truyền `postprocessors=[]` cho yt-dlp để không chạy hậu xử lý `FFmpegExtractAudio` của luồng bài hát. Video được giữ ở dạng MP4 sau khi tải và chỉ được chuyển đổi bằng FFmpeg nếu cần. Media mới được ghi với cover mặc định `/images/ChoCiu.jpg`; thumbnail YouTube chỉ dùng để xem trước trong giao diện tìm kiếm. Sau thay đổi này, Render cần build lại từ `backend/Dockerfile` mới.
+Cinema video import truyền `postprocessors=[]` cho yt-dlp để không chạy hậu xử lý `FFmpegExtractAudio` của luồng bài hát. Video được giữ ở dạng MP4 sau khi tải. Backend luôn dùng `upload_large()` theo chunk 20 MiB cho video. Nếu Cloudinary trả lỗi giới hạn chính xác 100 MiB của plan, backend tự dùng FFmpeg tạo bản MP4 tương thích dưới khoảng 92 MiB rồi upload bản đó; job sẽ hiển thị rõ các trạng thái `đang nén` và `đang upload bản tương thích`. Vì vậy tài khoản Cloudinary chưa hỗ trợ file gốc trên 100 MiB vẫn có thể lưu video sau khi giảm bitrate, còn tài khoản hỗ trợ giới hạn cao hơn sẽ giữ luồng upload chunk cho file gốc. Media mới được ghi với cover mặc định `/images/ChoCiu.jpg`; thumbnail YouTube chỉ dùng để xem trước trong giao diện tìm kiếm. Sau thay đổi này, Render cần build lại từ `backend/Dockerfile` mới và phải có gói `ffmpeg` (Dockerfile hiện đã cài).
 
 Nếu Supabase chưa có bảng `media_proposals` hoặc `notifications`, hãy chạy `supabase/media_requests_notifications.sql` một lần. Frontend hiện xử lý graceful fallback và không spam lỗi khi migration chưa sẵn sàng.
+
+### Chẩn đoán lỗi `Maximum is 104857600`
+
+Nếu log hiển thị `File size too large. Got ... Maximum is 104857600`, đó là giới hạn 100 MiB của Cloudinary plan hoặc endpoint upload thường. Bản backend mới sẽ thử upload chunk, nhận diện lỗi này, nén video xuống dưới giới hạn rồi upload lại. Log thành công phải có các bước sau theo thứ tự: video tải xong, `đang upload ... theo chunk`, nếu plan từ chối thì `đang nén video`, sau đó `đang upload bản tương thích` và cuối cùng ghi metadata Supabase. Nếu sau deploy không thấy các câu trạng thái mới mà vẫn lỗi ngay ở 100 MiB, Render chưa chạy đúng commit hoặc đang dùng sai Root Directory/Dockerfile; hãy kiểm tra commit deploy là commit mới nhất trên `master` và dùng **Clear build cache & deploy**.

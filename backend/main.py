@@ -52,6 +52,9 @@ app.add_middleware(
 )
 
 DEFAULT_COVER = '/images/ChoCiu.jpg'
+CLOUDINARY_PLAN_LIMIT_BYTES = 100 * 1024 * 1024
+CLOUDINARY_SAFE_VIDEO_BYTES = 92 * 1024 * 1024
+VIDEO_TRANSCODE_TIMEOUT_SECONDS = int(os.getenv('LUNU_VIDEO_TRANSCODE_TIMEOUT_SECONDS', '900'))
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', '').strip()
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', '').strip()
@@ -667,16 +670,84 @@ def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
     return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
 
 
-def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str) -> dict:
-    if resource_type == 'video':
-        return cloudinary.uploader.upload_large(
-            str(file_path),
-            resource_type='video',
-            public_id=public_id,
-            overwrite=False,
-            unique_filename=False,
-            chunk_size=20 * 1024 * 1024,
+def cloudinary_rejects_large_file(error: Exception) -> bool:
+    message = str(error).lower()
+    return (
+        ('file size too large' in message or 'maximum is' in message or 'maximum file size' in message)
+        and ('104857600' in message or '100 mb' in message or '100mb' in message)
+    )
+
+
+def transcode_video_for_cloudinary(input_path: Path, output_path: Path) -> None:
+    probe = subprocess.run(
+        [
+            'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
+            '-of', 'default=noprint_wrappers=1:nokey=1', str(input_path),
+        ], capture_output=True, text=True, timeout=60,
+    )
+    try:
+        duration = float(probe.stdout.strip())
+    except (TypeError, ValueError):
+        duration = 0
+    if duration <= 0:
+        raise RuntimeError('Không xác định được thời lượng video để nén tương thích Cloudinary.')
+
+    target_bits_per_second = int((CLOUDINARY_SAFE_VIDEO_BYTES * 8 * 0.88) / duration)
+    audio_bitrate = 64_000
+    video_bitrate = max(180_000, target_bits_per_second - audio_bitrate)
+    command = [
+        'ffmpeg', '-y', '-i', str(input_path),
+        '-vf', "scale='min(1280,iw)':-2",
+        '-c:v', 'libx264', '-preset', 'veryfast', '-b:v', str(video_bitrate),
+        '-maxrate', str(video_bitrate), '-bufsize', str(video_bitrate * 2),
+        '-c:a', 'aac', '-b:a', str(audio_bitrate), '-ac', '2',
+        '-movflags', '+faststart', '-threads', '2', str(output_path),
+    ]
+    completed = subprocess.run(
+        command, capture_output=True, text=True, timeout=VIDEO_TRANSCODE_TIMEOUT_SECONDS,
+    )
+    if completed.returncode != 0 or not output_path.exists():
+        raise RuntimeError(f'FFmpeg không thể nén video để upload: {completed.stderr[-800:]}')
+    compressed_size = output_path.stat().st_size
+    if compressed_size >= CLOUDINARY_PLAN_LIMIT_BYTES:
+        output_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f'Video sau khi nén vẫn vượt giới hạn Cloudinary ({compressed_size} bytes >= {CLOUDINARY_PLAN_LIMIT_BYTES}).'
         )
+
+
+def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str, status_callback=None) -> dict:
+    if resource_type == 'video':
+        try:
+            if status_callback:
+                status_callback('Đang upload video Cloudinary theo chunk 20 MiB...')
+            return cloudinary.uploader.upload_large(
+                str(file_path),
+                resource_type='video',
+                public_id=public_id,
+                overwrite=False,
+                unique_filename=False,
+                chunk_size=20 * 1024 * 1024,
+            )
+        except Exception as error:
+            if not cloudinary_rejects_large_file(error):
+                raise
+            compressed_path = file_path.with_name(f'{file_path.stem}-cloudinary.mp4')
+            if status_callback:
+                status_callback('Cloudinary plan giới hạn 100 MiB; đang nén video xuống bản tương thích...')
+            try:
+                transcode_video_for_cloudinary(file_path, compressed_path)
+                if status_callback:
+                    status_callback(f'Đã nén video còn {compressed_path.stat().st_size} bytes; đang upload bản tương thích...')
+                return cloudinary.uploader.upload(
+                    str(compressed_path),
+                    resource_type='video',
+                    public_id=public_id,
+                    overwrite=False,
+                    unique_filename=False,
+                )
+            finally:
+                compressed_path.unlink(missing_ok=True)
     return cloudinary.uploader.upload(
         str(file_path),
         resource_type=resource_type,
@@ -835,7 +906,12 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
         set_import_job(job_id, message=f'Đã tải video ({file_size_bytes or 0} bytes), đang upload Cloudinary với mã {media_key}...')
         public_id = f'lunu_cinema/{media_key}'
         set_import_job(job_id, message=f'Đã tải video ({file_size_bytes or 0} bytes), đang upload Cloudinary theo chunk 20 MiB với mã {media_key}...')
-        result = upload_cloudinary_media(file_path, public_id, 'video')
+        result = upload_cloudinary_media(
+            file_path,
+            public_id,
+            'video',
+            status_callback=lambda message: set_import_job(job_id, message=f'{message} Mã {media_key}.'),
+        )
         secure_url = result.get('secure_url')
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url cho video.')
