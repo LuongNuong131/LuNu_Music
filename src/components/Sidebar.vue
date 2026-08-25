@@ -5,6 +5,7 @@
     <nav class="nav-menu" aria-label="Điều hướng chính">
       <button :class="{ active: currentView === 'home' }" @click="currentView = 'home'"><span>⌂</span> Tổng quan</button>
       <button :class="{ active: currentView === 'liked' }" @click="currentView = 'liked'"><span>♥</span> Yêu thích</button>
+      <button :class="{ active: currentView === 'playlists' }" @click="currentView = 'playlists'"><span>▤</span> Playlist</button>
       <button :class="{ active: currentView === 'lyrics' }" @click="currentView = 'lyrics'"><span>Aa</span> Lyrics Lab</button>
       <button v-if="authState.user?.role === 'admin'" :class="{ active: currentView === 'cinema' }" @click="currentView = 'cinema'"><span>▶</span> LuNu Cinema</button>
       <button v-if="authState.user?.role === 'admin'" :class="{ active: currentView === 'admin' }" @click="currentView = 'admin'"><span>✦</span> Quản trị</button>

@@ -6,6 +6,7 @@
       <AdminView v-if="currentView === 'admin'" />
       <CinemaView v-else-if="currentView === 'cinema'" />
       <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
+      <PlaylistsView v-else-if="currentView === 'playlists'" :songs="songs" @play-song="playFromLibrary" />
       <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
     </main>
     <PlayerBar />
@@ -35,7 +36,7 @@
       @clear="player.clearQueue"
       @play="playFromQueue"
     />
-    <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playSong" @action="runCommand" />
+    <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playSong" @open-playlist="openPlaylist" @action="runCommand" />
     <Toast />
   </div>
 </template>
@@ -53,6 +54,7 @@ import CinemaView from './views/CinemaView.vue';
 import Sidebar from './components/Sidebar.vue';
 import MainView from './components/MainView.vue';
 import LyricsManager from './components/LyricsManager.vue';
+import PlaylistsView from './views/PlaylistsView.vue';
 import PlayerBar from './components/PlayerBar.vue';
 import NowPlayingView from './components/NowPlayingView.vue';
 import QueuePanel from './components/QueuePanel.vue';
@@ -60,11 +62,12 @@ import CommandPalette from './components/CommandPalette.vue';
 import Toast from './components/Toast.vue';
 
 const player = usePlayer();
-const { playlists } = usePlaylists();
+const { playlists, selectPlaylist } = usePlaylists();
 const commandOpen = ref(false);
 
 const playFromLibrary = (song) => playSong(song, songs);
 const playFromQueue = (song) => playSong(song, [player.state.currentSong, ...player.state.queue].filter(Boolean));
+const openPlaylist = (playlist) => { selectPlaylist(playlist?.id); currentView.value = 'playlists'; };
 const runCommand = (action) => {
   if (action === 'home') currentView.value = 'home';
   if (action === 'search') commandOpen.value = true;
