@@ -7,7 +7,15 @@ const request = async (path, options = {}) => {
   if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
   const token = readToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
-  const response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  let response;
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, { ...options, headers });
+  } catch (cause) {
+    const error = new Error(`Không thể kết nối backend tại ${API_BASE_URL}. Kiểm tra Render đang hoạt động và Vercel đang dùng đúng VITE_API_URL.`);
+    error.code = 'NETWORK_ERROR';
+    error.cause = cause;
+    throw error;
+  }
   const contentType = response.headers.get('content-type') || '';
   const payload = contentType.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {

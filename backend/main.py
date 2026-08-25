@@ -223,7 +223,13 @@ async def get_current_user(authorization: Optional[str] = Header(default=None)) 
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Cần đăng nhập để tiếp tục.')
     payload = decode_token(authorization.split(' ', 1)[1].strip())
     client = require_supabase()
-    result = client.table('users').select('id, username, role').eq('id', payload.get('sub')).limit(1).execute()
+    try:
+        result = client.table('users').select('id, username, role').eq('id', payload.get('sub')).limit(1).execute()
+    except Exception as error:
+        error_text = str(error)
+        if 'PGRST303' in error_text or 'JWT issued at future' in error_text:
+            raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='SUPABASE_KEY trên Render đang bị Supabase từ chối vì JWT phát hành ở tương lai. Hãy thay bằng Secret/Service Role key hiện tại trên Supabase rồi redeploy Render.') from error
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail='Backend không thể xác thực tài khoản với Supabase. Kiểm tra SUPABASE_URL và SUPABASE_KEY trên Render.') from error
     if not result.data:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail='Tài khoản không còn tồn tại.')
     return result.data[0]
