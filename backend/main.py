@@ -249,6 +249,8 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
         },
+        'source_address': '0.0.0.0',
+        'socket_timeout': 30,
     }
     if is_download:
         cookie_path = Path(os.getenv('YOUTUBE_COOKIES_PATH', '')).expanduser() if os.getenv('YOUTUBE_COOKIES_PATH', '').strip() else Path.cwd() / 'cookies.txt'
@@ -691,7 +693,9 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
         ('ios', 'best[height<=1080]/best'),
     ]
     errors = []
-    for client, selector in profiles:
+    for profile_index, (client, selector) in enumerate(profiles):
+        if profile_index:
+            time.sleep(min(6, 1.5 * (2 ** (profile_index - 1))))
         try:
             options = get_ydl_opts(True, temp_dir, client=client, format_selector=selector, postprocessors=[] if mode == 'video' else None)
             with yt_dlp.YoutubeDL(options) as ydl:
@@ -723,7 +727,11 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
             run_ffmpeg(source, output, 'video')
             return output
         except Exception as error:
-            errors.append(f'{client}: {error}')
+            error_text = str(error)
+            if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
+                errors.append(f'{client}: Render không có route mạng tới stream YouTube (Errno 101); đã thử lại với IPv4/backoff')
+            else:
+                errors.append(f'{client}: {error}')
             for item in available_media_files(temp_dir, video_id):
                 item.unlink(missing_ok=True)
     raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-3:]))
