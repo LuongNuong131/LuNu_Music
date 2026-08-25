@@ -1,5 +1,7 @@
 const API_BASE_URL = (import.meta.env.VITE_API_URL || 'http://localhost:8000/api').replace(/\/$/, '');
 
+import { logoutUser } from '../store/appState';
+
 const readToken = () => localStorage.getItem('lunu_access_token');
 
 const request = async (path, options = {}) => {
@@ -22,6 +24,11 @@ const request = async (path, options = {}) => {
     const message = typeof payload === 'object' && payload?.detail ? payload.detail : 'Yêu cầu không thành công.';
     const error = new Error(message);
     error.status = response.status;
+    if (response.status === 401 && token && path !== '/login') {
+      logoutUser();
+      error.code = 'AUTH_EXPIRED';
+      window.dispatchEvent(new CustomEvent('lunu-auth-expired'));
+    }
     throw error;
   }
   return payload;
