@@ -668,8 +668,7 @@ def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
 
 
 def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str) -> dict:
-    file_size = file_path.stat().st_size if file_path.exists() else 0
-    if resource_type == 'video' and file_size >= 100 * 1024 * 1024:
+    if resource_type == 'video':
         return cloudinary.uploader.upload_large(
             str(file_path),
             resource_type='video',
@@ -835,6 +834,7 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
             update_proposal(client, proposal_id, {'file_size_bytes': file_size_bytes})
         set_import_job(job_id, message=f'Đã tải video ({file_size_bytes or 0} bytes), đang upload Cloudinary với mã {media_key}...')
         public_id = f'lunu_cinema/{media_key}'
+        set_import_job(job_id, message=f'Đã tải video ({file_size_bytes or 0} bytes), đang upload Cloudinary theo chunk 20 MiB với mã {media_key}...')
         result = upload_cloudinary_media(file_path, public_id, 'video')
         secure_url = result.get('secure_url')
         if not secure_url:
