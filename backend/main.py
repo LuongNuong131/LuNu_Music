@@ -17,7 +17,7 @@ from zoneinfo import ZoneInfo
 import urllib.parse
 import urllib.request
 from pathlib import Path
-from typing import Optional
+from typing import Literal, Optional
 
 import cloudinary
 import cloudinary.uploader
@@ -129,6 +129,25 @@ class AddVideoRequest(BaseModel):
     @classmethod
     def strip_text(cls, value: str) -> str:
         return value.strip()
+
+
+class MediaProposalRequest(BaseModel):
+    kind: Literal['song', 'video']
+    source_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
+    title: str = Field(min_length=1, max_length=240)
+    artist: str = Field(default='', max_length=160)
+    uploader: str = Field(default='YouTube', max_length=160)
+    cover: str = Field(default='', max_length=500)
+    description: str = Field(default='', max_length=5000)
+
+    @field_validator('title', 'artist', 'uploader', 'cover', 'description')
+    @classmethod
+    def strip_proposal_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class ProposalDecision(BaseModel):
+    reason: str = Field(default='', max_length=1000)
 
 
 class LoginRequest(BaseModel):
@@ -606,6 +625,28 @@ def set_import_job(job_id: str, **updates: object) -> None:
         import_jobs[job_id].update(updates)
 
 
+def notify_users(client: Client, user_ids: list[str], title: str, body: str, kind: str = 'system', link: str = '') -> None:
+    recipients = list(dict.fromkeys(str(user_id) for user_id in user_ids if user_id))
+    if not recipients:
+        return
+    payload = [{'user_id': user_id, 'title': title[:160], 'body': body[:1000], 'kind': kind[:40], 'link': link[:240], 'is_read': False} for user_id in recipients]
+    try:
+        client.table('notifications').insert(payload).execute()
+    except Exception as error:
+        print(f'⚠️ Không thể tạo notification: {error}')
+
+
+def notify_proposal_status(client: Client, proposal: dict, title: str, body: str, kind: str = 'proposal') -> None:
+    notify_users(client, [str(proposal.get('requested_by') or '')], title, body, kind, f"proposal:{proposal.get('id', '')}")
+
+
+def update_proposal(client: Client, proposal_id: str, updates: dict) -> None:
+    try:
+        client.table('media_proposals').update(updates).eq('id', proposal_id).execute()
+    except Exception as error:
+        print(f'⚠️ Không thể cập nhật media proposal {proposal_id}: {error}')
+
+
 def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
     image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.vtt', '.part', '.ytdl'}
     return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
@@ -677,8 +718,10 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
 
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
     video_id = request_data['video_id']
+    proposal_id = request_data.get('proposal_id')
     temp_dir = tempfile.mkdtemp(prefix='lunu-song-')
     file_path: Optional[Path] = None
+    client: Optional[Client] = None
     set_import_job(job_id, status='processing', message='Đang tải audio từ YouTube...')
     try:
         client = require_supabase()
@@ -686,7 +729,10 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
             raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
         media_key = next_media_key(client, 'songs')
         file_path = download_media(video_id, temp_dir, 'song')
-        set_import_job(job_id, message=f'Đã tải MP3, đang upload Cloudinary với mã {media_key}...')
+        file_size_bytes = file_path.stat().st_size if file_path.exists() else None
+        if proposal_id:
+            update_proposal(client, proposal_id, {'file_size_bytes': file_size_bytes})
+        set_import_job(job_id, message=f'Đã tải MP3 ({file_size_bytes or 0} bytes), đang upload Cloudinary với mã {media_key}...')
         public_id = f'lunu_music/{media_key}'
         result = cloudinary.uploader.upload(str(file_path), resource_type='video', public_id=public_id, overwrite=False, unique_filename=False)
         secure_url = result.get('secure_url')
@@ -714,9 +760,15 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
             client.table('songs').insert(song_data).execute()
             message = 'Đã thêm bài hát và file MP3 vào thư viện.'
         set_import_job(job_id, status='completed', message=message, song=song_data)
+        if proposal_id and client:
+            update_proposal(client, proposal_id, {'status': 'approved', 'job_id': job_id, 'media_key': media_key, 'file_size_bytes': file_path.stat().st_size if file_path and file_path.exists() else None})
+            notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất nhạc đã được duyệt', f'Bài “{song_data["title"]}” đã được admin duyệt và thêm vào thư viện LuNu Music.', 'proposal-approved')
         print(f'✅ Đã thêm bài hát {media_key}: {song_data["title"]}')
     except Exception as error:
         set_import_job(job_id, status='failed', message=str(error))
+        if proposal_id and client:
+            update_proposal(client, proposal_id, {'status': 'failed', 'job_id': job_id, 'rejection_reason': str(error)[:1000]})
+            notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất nhạc chưa thể xử lý', f'Bài “{request_data.get("title", "")}" chưa được thêm: {error}', 'proposal-failed')
         print(f'❌ Lỗi xử lý audio {video_id}: {error}')
     finally:
         if file_path and file_path.exists():
@@ -726,8 +778,10 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
 
 def process_and_upload_video(job_id: str, request_data: dict) -> None:
     video_id = request_data['video_id']
+    proposal_id = request_data.get('proposal_id')
     temp_dir = tempfile.mkdtemp(prefix='lunu-cinema-')
     file_path: Optional[Path] = None
+    client: Optional[Client] = None
     set_import_job(job_id, status='processing', message='Đang tải video từ YouTube...')
     try:
         client = require_supabase()
@@ -735,7 +789,10 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
             raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
         media_key = next_media_key(client, 'cinema_videos', 'VD')
         file_path = download_media(video_id, temp_dir, 'video')
-        set_import_job(job_id, message=f'Đã tải video, đang upload Cloudinary với mã {media_key}...')
+        file_size_bytes = file_path.stat().st_size if file_path.exists() else None
+        if proposal_id:
+            update_proposal(client, proposal_id, {'file_size_bytes': file_size_bytes})
+        set_import_job(job_id, message=f'Đã tải video ({file_size_bytes or 0} bytes), đang upload Cloudinary với mã {media_key}...')
         public_id = f'lunu_cinema/{media_key}'
         result = cloudinary.uploader.upload(str(file_path), resource_type='video', public_id=public_id, overwrite=False, unique_filename=False)
         secure_url = result.get('secure_url')
@@ -763,9 +820,15 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
             client.table('cinema_videos').insert(video_data).execute()
             message = 'Đã thêm video vào LuNu Cinema.'
         set_import_job(job_id, status='completed', message=message, video=video_data)
+        if proposal_id and client:
+            update_proposal(client, proposal_id, {'status': 'approved', 'job_id': job_id, 'media_key': media_key, 'file_size_bytes': file_path.stat().st_size if file_path and file_path.exists() else None})
+            notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất video đã được duyệt', f'Video “{video_data["title"]}” đã được admin duyệt và thêm vào LuNu Tea Room.', 'proposal-approved')
         print(f'✅ Đã thêm video {media_key}: {video_data["title"]}')
     except Exception as error:
         set_import_job(job_id, status='failed', message=str(error))
+        if proposal_id and client:
+            update_proposal(client, proposal_id, {'status': 'failed', 'job_id': job_id, 'rejection_reason': str(error)[:1000]})
+            notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất video chưa thể xử lý', f'Video “{request_data.get("title", "")}" chưa được thêm: {error}', 'proposal-failed')
         print(f'❌ Lỗi xử lý video {video_id}: {error}')
     finally:
         if file_path and file_path.exists():
@@ -776,6 +839,130 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
 @app.get('/api/health')
 async def health() -> dict:
     return {'ok': True, 'supabase_configured': supabase is not None}
+
+
+@app.post('/api/media-proposals', status_code=status.HTTP_201_CREATED)
+async def create_media_proposal(request: MediaProposalRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    if request.kind == 'song' and not request.artist:
+        raise HTTPException(status_code=422, detail='Bài hát cần có tên ca sĩ trước khi gửi duyệt.')
+    try:
+        duplicate = client.table('media_proposals').select('id,status').eq('source_id', request.source_id).in_('status', ['pending', 'processing']).limit(1).execute()
+        if duplicate.data:
+            raise HTTPException(status_code=409, detail='Media này đã có một đề xuất đang chờ xử lý.')
+        payload = {
+            'kind': request.kind, 'source_id': request.source_id, 'title': request.title,
+            'artist': request.artist, 'uploader': request.uploader or 'YouTube',
+            'cover': request.cover, 'description': request.description,
+            'requested_by': current_user['id'], 'requested_by_username': current_user.get('username', 'user'),
+            'status': 'pending',
+        }
+        inserted = client.table('media_proposals').insert(payload).select('*').execute()
+        proposal = (inserted.data or [None])[0]
+        if not proposal:
+            raise HTTPException(status_code=502, detail='Supabase không trả về proposal vừa tạo.')
+        admins = client.table('users').select('id').eq('role', 'admin').limit(100).execute().data or []
+        media_label = 'bài hát' if request.kind == 'song' else 'video'
+        notify_users(client, [row.get('id') for row in admins], 'Có đề xuất media mới', f'{current_user.get("username", "Một user")} muốn thêm {media_label} “{request.title}”.', 'proposal-new', f'proposal:{proposal["id"]}')
+        return {'success': True, 'proposal': proposal, 'message': 'Đã gửi đề xuất. Admin sẽ xem xét trước khi hệ thống tải media.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể gửi đề xuất media: {error}')
+
+
+@app.get('/api/media-proposals/mine')
+async def get_my_media_proposals(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> list:
+    try:
+        response = client.table('media_proposals').select('*').eq('requested_by', current_user['id']).order('created_at', desc=True).limit(100).execute()
+        return response.data or []
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể tải đề xuất của bạn: {error}')
+
+
+@app.get('/api/media-proposals')
+async def get_media_proposals(status_filter: Optional[str] = Query(default=None, alias='status'), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> list:
+    try:
+        query = client.table('media_proposals').select('*').order('created_at', desc=True).limit(100)
+        if status_filter in {'pending', 'processing', 'approved', 'rejected', 'failed'}:
+            query = query.eq('status', status_filter)
+        return query.execute().data or []
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể tải danh sách đề xuất: {error}')
+
+
+@app.post('/api/media-proposals/{proposal_id}/approve', status_code=status.HTTP_202_ACCEPTED)
+async def approve_media_proposal(proposal_id: str, background_tasks: BackgroundTasks, client: Client = Depends(require_supabase), reviewer: dict = Depends(require_admin)) -> dict:
+    try:
+        response = client.table('media_proposals').select('*').eq('id', proposal_id).limit(1).execute()
+        proposal = (response.data or [None])[0]
+        if not proposal:
+            raise HTTPException(status_code=404, detail='Không tìm thấy đề xuất media.')
+        if proposal.get('status') != 'pending':
+            raise HTTPException(status_code=409, detail='Đề xuất này đã được xử lý trước đó.')
+        if proposal.get('kind') == 'song' and not proposal.get('artist'):
+            raise HTTPException(status_code=422, detail='Bổ sung ca sĩ trước khi duyệt bài hát.')
+        job_id = str(uuid.uuid4())
+        client.table('media_proposals').update({'status': 'processing', 'job_id': job_id, 'reviewed_by': reviewer['id'], 'reviewed_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', proposal_id).execute()
+        request_data = {
+            'video_id': proposal['source_id'], 'title': proposal['title'], 'artist': proposal.get('artist', ''),
+            'uploader': proposal.get('uploader') or 'YouTube', 'cover': proposal.get('cover', ''),
+            'description': proposal.get('description', ''), 'proposal_id': proposal_id,
+            'requested_by': proposal.get('requested_by'), 'proposal': proposal,
+        }
+        kind = proposal.get('kind')
+        import_jobs[job_id] = {'job_id': job_id, 'kind': f'proposal-{kind}', 'proposal_id': proposal_id, 'status': 'queued', 'message': 'Đã duyệt đề xuất. Đang xếp hàng tải media.'}
+        background_tasks.add_task(process_and_upload_song if kind == 'song' else process_and_upload_video, job_id, request_data)
+        return {'success': True, 'job_id': job_id, 'proposal_id': proposal_id, 'message': 'Đã duyệt. Hệ thống bắt đầu tải và upload media.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể duyệt đề xuất: {error}')
+
+
+@app.post('/api/media-proposals/{proposal_id}/reject')
+async def reject_media_proposal(proposal_id: str, decision: ProposalDecision, client: Client = Depends(require_supabase), reviewer: dict = Depends(require_admin)) -> dict:
+    try:
+        response = client.table('media_proposals').select('*').eq('id', proposal_id).limit(1).execute()
+        proposal = (response.data or [None])[0]
+        if not proposal:
+            raise HTTPException(status_code=404, detail='Không tìm thấy đề xuất media.')
+        if proposal.get('status') != 'pending':
+            raise HTTPException(status_code=409, detail='Đề xuất này đã được xử lý trước đó.')
+        reason = decision.reason.strip() or 'Admin chưa phê duyệt đề xuất này.'
+        client.table('media_proposals').update({'status': 'rejected', 'reviewed_by': reviewer['id'], 'reviewed_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat(), 'rejection_reason': reason}).eq('id', proposal_id).execute()
+        notify_proposal_status(client, proposal, 'Đề xuất media đã được xử lý', f'Đề xuất “{proposal.get("title", "")}" chưa được duyệt. Lý do: {reason}', 'proposal-rejected')
+        return {'success': True, 'message': 'Đã từ chối đề xuất và gửi thông báo cho user.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể từ chối đề xuất: {error}')
+
+
+@app.get('/api/notifications')
+async def get_notifications(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        rows = client.table('notifications').select('id,title,body,kind,link,is_read,created_at').eq('user_id', current_user['id']).order('created_at', desc=True).limit(50).execute().data or []
+        return {'items': rows, 'unread_count': sum(1 for row in rows if not row.get('is_read'))}
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể tải thông báo: {error}')
+
+
+@app.patch('/api/notifications/{notification_id}/read')
+async def mark_notification_read(notification_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        client.table('notifications').update({'is_read': True}).eq('id', notification_id).eq('user_id', current_user['id']).execute()
+        return {'success': True}
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể cập nhật thông báo: {error}')
+
+
+@app.patch('/api/notifications/read-all')
+async def mark_all_notifications_read(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        client.table('notifications').update({'is_read': True}).eq('user_id', current_user['id']).execute()
+        return {'success': True}
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể đánh dấu thông báo: {error}')
 
 
 @app.get('/api/songs')

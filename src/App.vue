@@ -7,6 +7,7 @@
       <CinemaView v-else-if="currentView === 'cinema'" />
       <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
       <PlaylistsView v-else-if="currentView === 'playlists'" :songs="songs" @play-song="playFromLibrary" />
+      <ProposalView v-else-if="currentView === 'proposals'" />
       <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
     </main>
     <PlayerBar />
@@ -37,6 +38,7 @@
       @play="playFromQueue"
     />
     <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playSong" @open-playlist="openPlaylist" @action="runCommand" />
+    <NotificationCenter />
     <Toast />
   </div>
 </template>
@@ -55,11 +57,13 @@ import Sidebar from './components/Sidebar.vue';
 import MainView from './components/MainView.vue';
 import LyricsManager from './components/LyricsManager.vue';
 import PlaylistsView from './views/PlaylistsView.vue';
+import ProposalView from './views/ProposalView.vue';
 import PlayerBar from './components/PlayerBar.vue';
 import NowPlayingView from './components/NowPlayingView.vue';
 import QueuePanel from './components/QueuePanel.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import Toast from './components/Toast.vue';
+import NotificationCenter from './components/NotificationCenter.vue';
 
 const player = usePlayer();
 const { playlists, selectPlaylist } = usePlaylists();

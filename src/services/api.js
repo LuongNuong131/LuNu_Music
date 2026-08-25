@@ -103,4 +103,13 @@ export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { 
 
 export const importLegacySongs = () => request('/songs/import-legacy', { method: 'POST' });
 
+export const createMediaProposal = (proposal) => request('/media-proposals', { method: 'POST', body: JSON.stringify({ kind: proposal.kind, source_id: proposal.sourceId || proposal.source_id, title: proposal.title, artist: proposal.artist || '', uploader: proposal.uploader || 'YouTube', cover: proposal.cover || '', description: proposal.description || '' }) });
+export const getMyMediaProposals = () => request('/media-proposals/mine');
+export const getMediaProposals = (status = '') => request(`/media-proposals${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+export const approveMediaProposal = (id) => request(`/media-proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({}) });
+export const rejectMediaProposal = (id, reason = '') => request(`/media-proposals/${encodeURIComponent(id)}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const getNotifications = () => request('/notifications');
+export const markNotificationRead = (id) => request(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' });
+export const markAllNotificationsRead = () => request('/notifications/read-all', { method: 'PATCH' });
+
 export const getHealth = () => request('/health');

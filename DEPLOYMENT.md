@@ -80,3 +80,13 @@ Mỗi bài trong **Quản trị → Kho nhạc** có nút **Tìm lời**. Backen
 LRCLIB yêu cầu client nhận diện bằng User-Agent và tôn trọng rate limit; tính năng này chỉ gọi theo từng thao tác Admin, không tự động quét 188 bài đồng thời. Nếu không có kết quả, hãy thử sửa tên bài/nghệ sĩ cho chính xác hoặc dùng khu vực nhập JSON/SQL hàng loạt với nội dung bạn có quyền sử dụng. Nguồn này có thể trả bản lyrics khác nhau hoặc không có bản ghi cho một số bài.
 
 Tài liệu nguồn: [LRCLIB API Documentation](https://lrclib.net/docs) và [Musixmatch Content Restrictions](https://docs.musixmatch.com/content-restrictions). Musixmatch là lựa chọn thương mại được cấp phép nếu cần nguồn ổn định và quyền lưu trữ phù hợp; không tự động scrape Genius, Musixmatch web hoặc các trang lyrics khác để né giới hạn truy cập.
+
+## LuNu Tea Room, đề xuất media và thông báo
+
+LuNu Tea Room cho phép thành viên đăng nhập xem các video đã được lưu; chỉ admin được tìm/import/xóa trực tiếp. User gửi yêu cầu tại mục **Đề xuất media**. User có thể tìm một video YouTube, chọn loại **Bài hát MP3** hoặc **Video MP4**, nhập tên/ca sĩ hoặc kênh, rồi gửi cho admin. Admin xem hàng đợi, người gửi, metadata và dung lượng file sau khi pipeline tải xong, sau đó duyệt hoặc từ chối. Kết quả được gửi về trung tâm **Thông báo**.
+
+Trước khi bật workflow này, chạy `supabase/media_requests_notifications.sql` một lần trong Supabase SQL Editor. Migration giả định `public.users.id` là kiểu `uuid`, giống ID mà backend đang dùng để xác thực. Nếu schema users của bạn dùng kiểu khác, cần đổi kiểu khóa ngoại tương ứng trước khi chạy migration.
+
+Để tìm theo tên kênh YouTube ổn định, đặt `YOUTUBE_API_KEY` ở Render. Luồng tìm video vẫn có các fallback hiện có. Backend `backend/Dockerfile` dùng Node 22 vì phiên bản yt-dlp-ejs hiện tại yêu cầu Node tối thiểu 22; Render phải build đúng Dockerfile backend sau commit mới.
+
+Nếu yt-dlp vẫn báo `Only images are available`, nguyên nhân là YouTube đã trả về metadata hình ảnh nhưng không cấp audio/video stream cho IP hoặc phiên làm việc của Render. Đổi format selector không thể tạo stream bị thiếu. Chỉ dùng cookies Netscape của tài khoản có quyền truy cập nội dung khi cần, không commit cookies và không gửi cookies qua chat. Với nội dung do bạn sở hữu, lựa chọn ổn định hơn là upload file MP3/MP4 trực tiếp qua một kênh server-side được kiểm soát, thay vì phụ thuộc extractor YouTube.
