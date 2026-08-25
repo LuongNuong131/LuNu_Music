@@ -31,11 +31,13 @@
 import { computed, ref, watch } from 'vue';
 import songs from '../data/songs';
 import { usePlaylists } from '../composables/usePlaylists';
+import { useDialog } from '../composables/useDialog';
 
 const props = defineProps({ songs: { type: Array, default: () => songs } });
 const emit = defineEmits(['play-song']);
 const fallbackCover = '/images/ChoCiu.jpg';
 const { playlists, activePlaylistId, selectPlaylist, createPlaylist, deletePlaylist, addSong, removeSong, getSongs } = usePlaylists();
+const { confirmDialog } = useDialog();
 const selectedId = ref(activePlaylistId.value || playlists.value[0]?.id || null);
 const newName = ref('');
 const newDescription = ref('');
@@ -46,7 +48,7 @@ const availableSongs = computed(() => props.songs.filter((song) => !selectedPlay
 const createNew = () => { const playlist = createPlaylist(newName.value, newDescription.value); if (!playlist) return; selectedId.value = playlist.id; selectPlaylist(playlist.id); newName.value = ''; newDescription.value = ''; };
 const addSelectedSong = () => { if (!selectedPlaylist.value || !songToAdd.value) return; addSong(selectedPlaylist.value.id, songToAdd.value); songToAdd.value = ''; };
 const removeSongFromPlaylist = (songId) => removeSong(selectedPlaylist.value?.id, songId);
-const removePlaylist = () => { if (!selectedPlaylist.value || !window.confirm(`Xóa playlist “${selectedPlaylist.value.name}”?`)) return; const currentIndex = playlists.value.findIndex((item) => item.id === selectedPlaylist.value.id); deletePlaylist(selectedPlaylist.value.id); selectedId.value = playlists.value[currentIndex]?.id || playlists.value[0]?.id || null; };
+const removePlaylist = async () => { if (!selectedPlaylist.value || !await confirmDialog(`Xóa playlist “${selectedPlaylist.value.name}”?`, { title: 'Xóa playlist', confirmLabel: 'Xóa playlist', danger: true })) return; const currentIndex = playlists.value.findIndex((item) => item.id === selectedPlaylist.value.id); deletePlaylist(selectedPlaylist.value.id); selectedId.value = playlists.value[currentIndex]?.id || playlists.value[0]?.id || null; };
 const playAll = () => { if (playlistSongs.value[0]) emit('play-song', playlistSongs.value[0]); };
 const formatDate = (value) => { if (!value) return 'VỪA CẬP NHẬT'; try { return new Date(value).toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' }); } catch { return 'VỪA CẬP NHẬT'; } };
 watch(selectedId, (value) => selectPlaylist(value), { immediate: true });

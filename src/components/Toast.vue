@@ -48,9 +48,9 @@ const iconFor = (type) => {
 .toast-item {
   pointer-events: auto;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
   gap: 9px;
-  padding: 11px 18px;
+  padding: 11px 15px;
   border-radius: 999px;
   background: linear-gradient(135deg, #211c14 0%, #100d08 100%);
   border: 1px solid var(--hairline);
@@ -60,9 +60,9 @@ const iconFor = (type) => {
   font-weight: 600;
   cursor: pointer;
   max-width: 100%;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 .toast-icon {
@@ -84,8 +84,9 @@ const iconFor = (type) => {
 }
 
 .toast-msg {
-  overflow: hidden;
-  text-overflow: ellipsis;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+  line-height: 1.45;
 }
 
 .toast-enter-active,

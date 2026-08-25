@@ -40,6 +40,19 @@
     <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playSong" @open-playlist="openPlaylist" @action="runCommand" />
     <NotificationCenter />
     <Toast />
+    <ConfirmModal
+      :visible="dialog.state.visible"
+      :title="dialog.state.title"
+      :message="dialog.state.message"
+      :mode="dialog.state.mode"
+      :initial-value="dialog.state.initialValue"
+      :placeholder="dialog.state.placeholder"
+      :confirm-label="dialog.state.confirmLabel"
+      :cancel-label="dialog.state.cancelLabel"
+      :danger="dialog.state.danger"
+      @confirm="dialog.confirm"
+      @cancel="dialog.cancel"
+    />
   </div>
 </template>
 
@@ -63,11 +76,14 @@ import NowPlayingView from './components/NowPlayingView.vue';
 import QueuePanel from './components/QueuePanel.vue';
 import CommandPalette from './components/CommandPalette.vue';
 import Toast from './components/Toast.vue';
+import ConfirmModal from './components/ConfirmModal.vue';
 import NotificationCenter from './components/NotificationCenter.vue';
+import { useDialog } from './composables/useDialog';
 
 const player = usePlayer();
 const { playlists, selectPlaylist } = usePlaylists();
 const commandOpen = ref(false);
+const dialog = useDialog();
 
 const playFromLibrary = (song) => playSong(song, songs);
 const playFromQueue = (song) => playSong(song, [player.state.currentSong, ...player.state.queue].filter(Boolean));

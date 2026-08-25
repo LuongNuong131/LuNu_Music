@@ -1,49 +1,132 @@
-# LuNu Music
+<div align="center">
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:7c3aed,100:f5b97a&height=220&section=header&text=LuNu%20Music&fontSize=64&fontColor=ffffff&fontAlignY=38&desc=Listen%20deeply.%20Curate%20your%20own%20room.&descAlignY=60&descSize=17" alt="LuNu Music banner" width="100%" />
 
-> **LuNu Music** là thư viện nghe nhạc offline cá nhân với giao diện dark premium, trình phát nhạc tập trung vào trải nghiệm nghe, queue, tìm kiếm và hệ thống quản lý lyrics lưu trực tiếp trên thiết bị.
+  <h1>LuNu Music</h1>
+  <p><strong>A premium personal music library and private video tea room.</strong></p>
+  <p>
+    <a href="https://lunu-music.vercel.app"><img src="https://img.shields.io/badge/Live%20frontend-Vercel-000000?style=for-the-badge&logo=vercel&logoColor=white" alt="Live frontend" /></a>
+    <a href="https://github.com/LuongNuong131/LuNu_Music"><img src="https://img.shields.io/badge/GitHub-LuongNuong131-181717?style=for-the-badge&logo=github&logoColor=white" alt="GitHub repository" /></a>
+    <a href="https://lunu-music.onrender.com/api/health"><img src="https://img.shields.io/badge/API-Render-46E3B7?style=for-the-badge&logo=render&logoColor=111827" alt="API health" /></a>
+  </p>
+</div>
 
-![LuNu Music — Now Playing](https://github.com/LuongNuong131/LuNu_Music/raw/master/public/images/ChoCiu.jpg)
+> **LuNu Music** là một không gian nghe nhạc cá nhân được xây dựng theo hướng product-first: thư viện bài hát, trình phát toàn cục, lyrics, playlist, quản trị media, đề xuất cộng đồng, thông báo và **LuNu Cinema / Tea Room** cùng tồn tại trong một trải nghiệm thống nhất.
 
-## Tổng quan
+## About the project
 
-LuNu Music được thiết kế cho việc nghe các file nhạc đã có sẵn trong thư viện local mà không phụ thuộc vào dịch vụ streaming. Ứng dụng có visual system **Midnight Vinyl** với nền midnight, glass surface, amber/coral accent, vinyl artwork stage và các trạng thái tương tác rõ ràng trên desktop lẫn mobile.
+LuNu Music bắt đầu từ nhu cầu tạo một thư viện nghe nhạc riêng, sau đó phát triển thành một sản phẩm fullstack có quản lý tài khoản, lưu trữ media và workflow kiểm duyệt. Giao diện theo tinh thần **Midnight Vinyl**: nền tối, glass surface, amber accent, typography giàu cảm xúc và các trạng thái tương tác rõ ràng trên desktop lẫn mobile.
 
-Bên cạnh chức năng nghe nhạc, phiên bản hiện tại có **Lyrics Lab** — một control room để quét, kiểm tra, chỉnh sửa và lưu lyrics riêng theo từng bài. Lyrics được phân loại thành synced LRC, plain lyrics, lyrics lưu local hoặc missing; dữ liệu thủ công và offset được lưu trong `localStorage` của trình duyệt.
+Đây không chỉ là một audio player. Frontend Vue 3 giao tiếp với FastAPI backend; backend xác thực người dùng, đọc/ghi Supabase, xử lý pipeline media bằng yt-dlp/FFmpeg và lưu asset trên Cloudinary. Vì vậy dữ liệu thư viện, quyền admin, trạng thái đề xuất và thông báo có thể được quản lý tập trung thay vì chỉ tồn tại trong trình duyệt.
 
-## Tính năng chính
+> **Product direction:** biến việc nghe nhạc và xem video thành một phòng riêng có chủ đích — nhẹ nhàng, kiểm soát được và đủ chuyên nghiệp để tiếp tục mở rộng.
 
-| Nhóm | Tính năng |
-| --- | --- |
-| **Audio player** | Phát/tạm dừng, bài trước/bài tiếp, seek, volume, mute, shuffle, repeat và progress bar. |
-| **Offline library** | Thư viện bài hát local, không cần tài khoản streaming hoặc backend để phát nhạc. |
-| **Now Playing** | Màn hình immersive với vinyl artwork, visualizer/equalizer, metadata, control deck và lyrics view. |
-| **Queue** | Xem hàng đợi, track đang phát và thao tác queue trong drawer riêng. |
-| **Search** | Tìm bài hát và nghệ sĩ trong thư viện local theo thời gian thực. |
-| **Artists & playlists** | Duyệt theo nghệ sĩ, tạo playlist và tổ chức bộ sưu tập cá nhân. |
-| **Lyrics Lab** | Filter inventory lyrics, mở editor, dán LRC/plain text, lưu thủ công và quản lý trạng thái. |
-| **LRC sync** | Parse timestamp LRC, highlight dòng hiện tại, tự cuộn và click dòng để seek đến thời điểm tương ứng. |
-| **Offset** | Chỉnh lyrics nhanh theo bước ±100 ms trong editor và Now Playing, có giới hạn an toàn và nút reset. |
-| **Scan / Fix All** | Quét lyrics theo queue async, hiển thị progress, thống kê, cancel và retry khi provider lỗi. |
-| **Responsive** | Sidebar desktop, bottom navigation mobile, mini-player và layout thích ứng theo kích thước màn hình. |
+## Product surface
 
-## Tech stack
+| Khu vực | Trải nghiệm chính |
+|---|---|
+| **Home / Library** | Duyệt thư viện, tìm kiếm bài hát/nghệ sĩ, Personal Rotation, bài yêu thích và thao tác thêm nhanh vào playlist. |
+| **Global player** | PlayerBar cố định, Now Playing, queue, seek, volume, mute, shuffle, repeat và phím tắt. |
+| **Lyrics Lab** | Tìm lyrics từ nguồn được hỗ trợ, xem trước, xác nhận, lưu plain text, cập nhật hàng loạt và chỉnh sửa theo từng bài. |
+| **Playlist workspace** | Tạo playlist, mô tả, thêm/xóa bài, phát toàn bộ và quản lý các bộ sưu tập nghe cá nhân. |
+| **LuNu Cinema** | Tìm video hoặc kênh YouTube, chọn metadata, tải MP4, phát Theater mode và quản lý video đã lưu. |
+| **Cinema retention** | Chọn **Lưu lâu dài** hoặc **Xem trong hôm nay**; video tạm có `expires_at` và được cleanup tự động/thủ công. |
+| **Media proposals** | User đề xuất bài hát MP3 hoặc video MP4; admin duyệt/từ chối; pipeline và notification được đồng bộ. |
+| **Notification Center** | Inbox đọc/chưa đọc, đánh dấu tất cả, xóa từng thông báo, xóa đã đọc và cleanup dữ liệu cũ. |
+| **Admin Control Room** | Khôi phục 188 bài legacy, sửa metadata, quản lý user, lyrics, media proposals, Cinema và file Cloudinary. |
+| **Responsive UX** | Sidebar desktop, bottom navigation mobile, modal/popup nội bộ, toast, safe-area và layout thích ứng. |
 
-- **Vue 3** với `<script setup>` và Composition API.
-- **Vite** cho development server và production build.
-- **Vue Router** cho điều hướng nội bộ.
-- **JavaScript ES modules** cho service, composables và dữ liệu local.
-- **CSS thuần** với design tokens, responsive media queries và animation.
-- **localStorage** cho lyrics thủ công, offset và các state local cần giữ lại trên thiết bị.
+## Architecture
 
-## Yêu cầu môi trường
+```text
+                         ┌────────────────────────┐
+                         │  Vue 3 + Vite frontend │
+                         │  Vercel                │
+                         └───────────┬────────────┘
+                                     │ HTTPS / JSON API
+                                     ▼
+                         ┌────────────────────────┐
+                         │ FastAPI backend         │
+                         │ Render + Docker         │
+                         └───────┬────────┬─────────┘
+                                 │        │
+                 ┌───────────────┘        └────────────────┐
+                 ▼                                        ▼
+      ┌────────────────────┐                    ┌────────────────────┐
+      │ Supabase           │                    │ Cloudinary         │
+      │ users, songs,      │                    │ audio/video assets │
+      │ cinema, proposals, │                    │ secure delivery URL│
+      │ notifications      │                    └────────────────────┘
+      └────────────────────┘
+                                 │
+                                 ▼
+                         ┌────────────────────────┐
+                         │ yt-dlp + FFmpeg         │
+                         │ source download/media   │
+                         │ processing pipeline     │
+                         └────────────────────────┘
+```
 
-- Node.js 18 trở lên.
-- npm 9 trở lên.
-- Trình duyệt hiện đại có hỗ trợ HTML5 Audio, ES modules và `localStorage`.
+The frontend never receives server secrets. It only receives public media delivery URLs and calls the backend through `VITE_API_URL`. Supabase, Cloudinary, YouTube API configuration, authentication signing and cookies remain server-side on Render.
 
-## Cài đặt và chạy local
+## Technology stack
 
-Clone repository và cài dependencies:
+<div align="center">
+  <img src="https://skillicons.dev/icons?i=vue,vite,javascript,python,fastapi,postgres,supabase,docker,git,github,vercel&perline=11" alt="LuNu Music technology stack" />
+</div>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/Vue%203-41B883?style=flat-square&logo=vuedotjs&logoColor=white" alt="Vue 3" />
+  <img src="https://img.shields.io/badge/Vite-646CFF?style=flat-square&logo=vite&logoColor=white" alt="Vite" />
+  <img src="https://img.shields.io/badge/FastAPI-009688?style=flat-square&logo=fastapi&logoColor=white" alt="FastAPI" />
+  <img src="https://img.shields.io/badge/Python-3776AB?style=flat-square&logo=python&logoColor=white" alt="Python" />
+  <img src="https://img.shields.io/badge/Supabase-3ECF8E?style=flat-square&logo=supabase&logoColor=111827" alt="Supabase" />
+  <img src="https://img.shields.io/badge/Cloudinary-3448C5?style=flat-square&logo=cloudinary&logoColor=white" alt="Cloudinary" />
+  <img src="https://img.shields.io/badge/Render-46E3B7?style=flat-square&logo=render&logoColor=111827" alt="Render" />
+</p>
+
+| Layer | Technologies |
+|---|---|
+| **Frontend** | Vue 3, Composition API, Vue Router, Vite, JavaScript ES modules, CSS design tokens. |
+| **Client state** | Reactive composables, localStorage for playlists/player preferences and selected local states. |
+| **Backend** | Python 3.11, FastAPI, Pydantic, Uvicorn, PBKDF2 password hashing and signed LuNu access tokens. |
+| **Database** | Supabase Postgres through the Python client and REST/PostgREST. |
+| **Media** | yt-dlp, yt-dlp-ejs, Node.js runtime, FFmpeg and Cloudinary video/audio delivery. |
+| **Deployment** | Vercel for the frontend, Render Docker service for the backend. |
+
+## Repository layout
+
+```text
+LuNu_Music/
+├── backend/
+│   ├── main.py                  # FastAPI routes, auth, media jobs and integrations
+│   ├── Dockerfile               # Render image with Python, FFmpeg and Node runtime
+│   ├── requirements.txt         # Backend dependencies
+│   └── legacy_catalog.json      # Catalog used to restore the 188 legacy songs
+├── public/
+│   ├── images/                  # Artwork and default ChoCiu cover
+│   └── audio/                   # Local/demo assets when present
+├── src/
+│   ├── components/              # Player, queue, notifications, modal and shared UI
+│   ├── composables/              # Player, playlist, toast, dialog and lyrics logic
+│   ├── data/                     # Frontend catalog fallback and local state
+│   ├── services/                 # API client and lyrics provider services
+│   ├── store/                    # Authentication, view and player state
+│   ├── views/                    # Home, Admin, Cinema, Lyrics, Playlist and Proposal screens
+│   ├── App.vue                   # Authenticated application shell
+│   └── style.css                 # Global design system and responsive rules
+├── supabase/
+│   ├── media_upgrade.sql         # Song/Cinema media columns and base table
+│   ├── cinema_retention.sql      # Temporary Cinema retention and expiration
+│   └── media_requests_notifications.sql # Proposals and notification tables
+├── DEPLOYMENT.md                 # Detailed Render, Vercel and Supabase deployment notes
+├── PRODUCT_UPGRADE_ROADMAP.md    # Product direction and future improvements
+├── package.json
+└── vite.config.js
+```
+
+## Local development
+
+### Frontend
 
 ```bash
 git clone https://github.com/LuongNuong131/LuNu_Music.git
@@ -51,179 +134,175 @@ cd LuNu_Music
 npm install
 ```
 
-Khởi động development server:
+Create `.env.local` in the repository root:
+
+```env
+VITE_API_URL=http://localhost:8000/api
+```
+
+Run Vite:
 
 ```bash
 npm run dev
 ```
 
-Sau đó mở URL mà Vite hiển thị, thường là `http://localhost:5173`.
+The frontend is normally available at `http://localhost:5173`.
 
-## Các lệnh thường dùng
+### Backend
 
-| Lệnh | Mục đích |
-| --- | --- |
-| `npm install` | Cài dependencies. |
-| `npm run dev` | Chạy development server với hot reload. |
-| `npm run build` | Build production vào thư mục `dist/`. |
-| `npm run preview` | Preview bản production sau khi build. |
+```bash
+cd backend
+python3 -m venv .venv
+source .venv/bin/activate
+pip install -r requirements.txt
+uvicorn main:app --reload --host 0.0.0.0 --port 8000
+```
 
-Trước khi tạo pull request, nên chạy:
+For local backend work, configure the server-side variables in the shell or a local environment file that is excluded from Git. Never place these values in `src/`, Vercel frontend variables or committed files.
+
+## Environment variables
+
+### Vercel frontend
+
+Only the public API base URL belongs in Vercel:
+
+```env
+VITE_API_URL=https://lunu-music.onrender.com/api
+```
+
+Because Vite injects `VITE_*` values at build time, redeploy Vercel after changing this value. Do not add Supabase keys, Cloudinary secrets, auth signing secrets or YouTube cookies to Vercel.
+
+### Render backend
+
+| Variable | Purpose |
+|---|---|
+| `SUPABASE_URL` | Supabase project URL. |
+| `SUPABASE_KEY` | Current server-side Secret/Service Role key; never a frontend publishable key. |
+| `CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name. |
+| `CLOUDINARY_API_KEY` | Cloudinary server-side API key. |
+| `CLOUDINARY_API_SECRET` | Cloudinary server-side API secret. |
+| `LUNU_AUTH_SECRET` | Long, stable signing secret for LuNu access tokens. Changing it invalidates existing sessions. |
+| `CORS_ORIGINS` | Comma-separated Vercel and local frontend origins. |
+| `YOUTUBE_API_KEY` | Recommended server-side key for stable YouTube search. |
+| `YOUTUBE_COOKIES_PATH` | Optional path to a YouTube-only Netscape cookie Secret File. |
+| `YOUTUBE_COOKIES_B64` | Optional alternative cookie input; avoid when Secret File is available. |
+| `LUNU_SONG_START_SEQUENCE` | Optional song sequence start; default is `199`. |
+| `LUNU_RENDER_MAX_DOWNLOAD_BYTES` | Cinema source safety limit; default is 450 MiB to protect the Render instance. |
+| `LUNU_VIDEO_TRANSCODE_TIMEOUT_SECONDS` | FFmpeg video timeout; default is 900 seconds. |
+
+A healthy backend can be checked at `https://lunu-music.onrender.com/api/health`. The current pipeline marker should include `video_pipeline: preflight-450mb-chunked` after the latest deployment.
+
+## Supabase migrations
+
+Run the migrations in Supabase SQL Editor in this order:
+
+| Order | File | Purpose |
+|---:|---|---|
+| 1 | `supabase/media_upgrade.sql` | Adds media metadata columns and creates the Cinema table. |
+| 2 | `supabase/cinema_retention.sql` | Adds `retention_mode`, `expires_at` and cleanup index. |
+| 3 | `supabase/media_requests_notifications.sql` | Creates media proposals and notification tables. |
+
+The migrations are intended to be idempotent, but they should still be applied deliberately and reviewed against the current schema. The backend uses the server-side key; do not expose that key in the frontend bundle.
+
+## Media lifecycle and safety
+
+New songs and videos receive stable LuNu media keys. New songs follow the sequence convention beginning after the 188 legacy songs, while Cinema videos use the `VD` prefix. New media uses `/images/ChoCiu.jpg` as the stored default cover; YouTube thumbnails are preview-only search assets.
+
+Cinema supports chunked Cloudinary upload for video files. When the current Cloudinary configuration refuses a file at the 100 MiB endpoint limit, the backend attempts a compatible FFmpeg-compressed version below the safe threshold. This preserves a playable library item, but it does not preserve the original quality or make a plan with a 100 MiB limit accept a 1 GiB file.
+
+Render has an explicit source-download safety limit because a video around 1.93 GiB previously caused the web instance to restart during download. A source above the limit is rejected before expensive downloading. Larger originals should be uploaded through a separate server-side/direct-upload workflow to storage that supports the required size, or processed on a dedicated worker with sufficient disk and memory.
+
+All media operations must respect ownership, authorization, terms of service and copyright. The project should only store content that the operator has permission to download, retain and play.
+
+## Popup and notification UX
+
+LuNu Music uses a shared in-app interaction layer instead of native browser dialogs. `useToast.js` handles transient success/error/info feedback, while `useDialog.js` and `ConfirmModal.vue` handle confirmation and text input flows. Admin deletion, legacy restore, lyrics batch update, proposal moderation, Inbox cleanup, playlist deletion and Cinema deletion therefore remain inside the product visual system.
+
+The global player, Notification Center and modal layers account for mobile navigation, safe-area spacing, viewport height and wrapping long messages. This prevents notification text from being clipped or hidden behind the player and bottom navigation.
+
+## Common workflows
+
+### Restore the 188 legacy songs
+
+After `media_upgrade.sql` is applied and the backend is deployed, an admin can open **Admin → Kho nhạc → Khôi phục 188 bài**. Existing records are skipped safely; missing records are inserted into Supabase so the full legacy library becomes manageable through the admin UI.
+
+### Add a song or Cinema video
+
+An admin searches YouTube, selects a result, edits metadata and starts the media job. The backend downloads an authorized source, processes it, uploads the asset, writes the Supabase record and exposes job status to the frontend. A user follows a similar path through **Đề xuất media**, but the asset is not imported until an admin approves it.
+
+### Use temporary Cinema retention
+
+In Cinema, select **Xem trong hôm nay** before starting the import. The backend stores the expiration at the next midnight in Vietnam time. Cleanup runs periodically while the service is active, on library access and through the admin cleanup action. If Render is sleeping or restarting at the exact expiration time, the cleanup occurs on the next wake-up or library request.
+
+### Manage lyrics
+
+Lyrics can be searched from Admin, reviewed in a popup, confirmed and stored as plain text. Bulk import accepts JSON containing song IDs and lyrics. The audio URL and media key are not changed by lyrics updates.
+
+## Quality checks
+
+Run the following commands before opening a pull request or deploying a significant change:
 
 ```bash
 npm run build
+python3 -m py_compile backend/main.py
 git diff --check
 ```
 
-## Cấu trúc thư mục chính
-
-```text
-LuNu_Music/
-├── public/
-│   ├── audio/                  # Audio assets của thư viện local
-│   ├── images/                 # Cover artwork
-│   └── ...
-├── src/
-│   ├── components/
-│   │   ├── LyricsManager.vue  # Lyrics Lab: scan, filter, editor, save
-│   │   ├── NowPlayingView.vue  # Full-screen player và synced lyrics
-│   │   ├── PlayerBar.vue       # Mini-player cố định
-│   │   ├── QueuePanel.vue      # Queue drawer
-│   │   ├── Sidebar.vue         # Desktop navigation rail
-│   │   └── ...
-│   ├── composables/
-│   │   └── useLyrics.js        # Reactive lyrics state và active line
-│   ├── services/
-│   │   └── lyricsService.js    # Parse, resolve, cache và provider abstraction
-│   ├── data/
-│   │   └── songs.js            # Song metadata và audio catalog
-│   ├── views/
-│   │   ├── Login.vue
-│   │   └── PlayerView.vue      # App shell và orchestration player
-│   ├── App.vue
-│   └── style.css               # Design system và responsive styles
-├── index.html
-├── package.json
-└── vite.config.js
-```
-
-## Quy trình sử dụng Lyrics Lab
-
-### 1. Mở Lyrics Lab
-
-Chọn **Lyrics** trong sidebar hoặc mở shortcut Lyrics Lab trên Home. Màn hình sẽ hiển thị inventory của toàn bộ bài hát cùng các chỉ số Synced, Plain, Đã lưu và Cần bổ sung.
-
-### 2. Quét thư viện
-
-Bấm **Scan / Fix All Lyrics** để chạy scan async. Scan không chặn audio player; bạn có thể dừng giữa chừng bằng nút **Dừng quét**. Kết quả được chia thành bài đã có lyrics, bài tìm thấy nội dung, bài cần sửa tay và bài chưa có nguồn.
-
-### 3. Thêm hoặc sửa lyrics
-
-Tại mỗi row, bấm **Thêm lời** hoặc **Sửa**, sau đó dán một trong hai định dạng:
-
-Plain lyrics:
-
-```text
-Dòng lời thứ nhất
-Dòng lời thứ hai
-Dòng lời thứ ba
-```
-
-LRC timestamp:
-
-```text
-[00:00.00]Dòng lời thứ nhất
-[00:05.20]Dòng lời thứ hai
-[00:10.40]Dòng lời thứ ba
-```
-
-Bấm **Lưu lyrics** để lưu vào thiết bị. Plain lyrics được hiển thị dạng static; LRC được highlight và đồng bộ theo thời gian phát.
-
-### 4. Căn chỉnh offset
-
-Nếu lyrics chạy sớm hoặc trễ, dùng `−` và `＋` trong khu vực **Lyrics offset**. Mỗi lần bấm thay đổi 100 ms. Offset được giữ lại cùng record lyrics của bài hát và có thể đưa về `0 ms` bằng nút **RESET**.
-
-## Kiến trúc lyrics
-
-Luồng xử lý lyrics được tách khỏi UI để có thể mở rộng mà không ảnh hưởng audio player:
-
-```text
-Current song
-    │
-    ▼
-useLyrics composable
-    │
-    ▼
-lyricsService.resolveLyrics()
-    │
-    ├── Local override / manual cache
-    ├── Lyrics trong song metadata
-    ├── Provider abstraction
-    └── Missing / manual fallback
-```
-
-`lyricsService.js` chịu trách nhiệm parse LRC/plain text, lưu record và cung cấp điểm nối cho provider. `useLyrics.js` chuyển dữ liệu đó thành state reactive cho Now Playing, bao gồm `isLoading`, `isMissing`, `isSynced`, `activeLyricIndex`, `offsetMs` và các hàm cập nhật offset.
-
-## Dữ liệu local và quyền riêng tư
-
-Lyrics thủ công và offset được lưu trong `localStorage` của trình duyệt, không tự động gửi lên server. Khi xóa dữ liệu site hoặc đổi trình duyệt/thiết bị, các record local này có thể bị mất; nếu lyrics quan trọng, nên giữ bản LRC/plain text gốc bên ngoài ứng dụng.
-
-Ứng dụng hiện không tự động bịa lyrics. Nếu một bài chưa có lyrics trong metadata và chưa có provider được cấu hình, Lyrics Lab sẽ hiển thị trạng thái **Cần bổ sung** để người dùng dán nội dung hợp lệ.
-
-## Thêm lyrics provider
-
-`src/services/lyricsService.js` có abstraction `lookupLyrics(song)` để nối một nguồn lyrics hợp lệ trong tương lai. Khi triển khai provider mới, nên bảo đảm:
-
-1. Provider trả về `content`, `source` và nếu có thể là `format` hoặc timestamp LRC.
-2. Request có timeout và xử lý lỗi rõ ràng.
-3. Không chặn thao tác phát nhạc hoặc khóa UI.
-4. Tuân thủ điều khoản sử dụng, giấy phép và quyền tác giả của nguồn lyrics.
-5. Không ghi API key bí mật trực tiếp vào frontend static bundle.
-
-Với provider cần secret hoặc server-side proxy, nên chuyển phần gọi provider sang backend phù hợp thay vì để credential trong mã client.
-
-## Ghi chú về audio assets
-
-Audio và artwork là dữ liệu của thư viện cá nhân. Khi phân phối dự án công khai, hãy kiểm tra quyền sử dụng đối với các file trong `public/audio` và `public/images`, đồng thời thay thế asset demo bằng nội dung mà bạn có quyền phân phối.
+For backend changes that touch media jobs, also verify the health endpoint, test a small authorized media file first and inspect Render logs for the ordered states: preflight, download, upload/chunk, optional transcode, Cloudinary success and Supabase insert.
 
 ## Troubleshooting
 
-### Ứng dụng không phát được audio
+### Frontend reports that the backend is unavailable
 
-Kiểm tra URL trong `src/data/songs.js`, đảm bảo file tồn tại trong `public/audio` và trình duyệt hỗ trợ định dạng audio đó. Một số trình duyệt cũng yêu cầu người dùng click tương tác trước khi cho phép phát.
+Check that Vercel has `VITE_API_URL=https://lunu-music.onrender.com/api`, redeploy Vercel after changing it, and confirm Render responds at `/api/health`. Verify `CORS_ORIGINS` contains the exact Vercel origin without an extra path.
 
-### Lyrics không tự đồng bộ
+### Health endpoint only returns the old two fields
 
-Chỉ dòng LRC có timestamp hợp lệ mới được sync. Nếu bạn dán plain lyrics, ứng dụng cố ý hiển thị static text thay vì tự đoán timing. Với LRC chạy lệch, hãy điều chỉnh offset trong editor hoặc Now Playing.
+The Render service is running an older image. Confirm the deployed branch is `master`, the service points to `LuongNuong131/LuNu_Music`, and deploy the latest commit. If necessary, use a cache-cleared deploy. The new response must contain `video_pipeline` and `video_download_limit_bytes`.
 
-### Dữ liệu lyrics local biến mất
+### A large Cinema video is rejected
 
-Kiểm tra bạn có đang dùng đúng origin/URL hay không. `localStorage` tách theo origin; đổi port, domain, chế độ trình duyệt hoặc xóa site data sẽ tạo storage mới.
+This may be an intentional preflight rejection above the Render safety limit, or a Cloudinary plan limit. Choose a lower YouTube quality, use a shorter source, upload from an authorized personal machine through storage that supports the original size, or move the workload to a dedicated worker. Temporary retention only controls deletion timing; it does not increase Render or Cloudinary capacity.
 
-### Build lỗi sau khi chỉnh component
+### YouTube returns a challenge or no media stream
 
-Chạy lại:
+A cookie is optional and is not a fix for Cloudinary limits. If authorized content requires an account session, use a fresh YouTube-only Netscape Secret File on Render. Do not paste cookie values into chat, commit them to GitHub or expose them to the frontend. Public content that successfully downloads does not need cookies.
 
-```bash
-npm run build
-git diff --check
-```
+### Login becomes invalid after an auth secret change
 
-Sau đó kiểm tra lỗi template Vue, tên event giữa component cha/con và các import trong `src/services` hoặc `src/composables`.
+Changing `LUNU_AUTH_SECRET` intentionally invalidates old tokens. Clear the site session or use the app logout flow, then sign in again. Keep the value stable between deploys after that.
 
-## Đóng góp
+### Supabase rejects the server key
 
-1. Tạo branch riêng cho thay đổi.
-2. Giữ component nhỏ và tách logic dùng lại vào composables/services.
-3. Không đưa secret hoặc credential vào frontend.
-4. Kiểm tra desktop và mobile trước khi commit.
-5. Chạy `npm run build` và `git diff --check`.
-6. Mô tả rõ thay đổi, ảnh hưởng UX và cách kiểm thử trong pull request.
+Use the current server-side Secret/Service Role key in Render only. A future-issued JWT, a stale key or a frontend publishable key can cause authentication/database errors. Replace the server-side value through the provider dashboard without copying it into source control.
 
-## License
+## Contributing
 
-Repository chưa khai báo license chính thức. Nếu muốn public hoặc nhận đóng góp từ bên ngoài, hãy bổ sung file `LICENSE` và quy định rõ quyền sử dụng code, audio, artwork và lyrics trước khi phát hành.
+LuNu Music is developed as an iterative product. Keep API contracts backward-compatible where possible, place reusable UI behavior in composables, keep secrets server-side and test both desktop and mobile layouts. A useful pull request should describe the user-facing change, migration requirements, environment changes and verification performed.
+
+## License and content
+
+The repository does not currently declare a formal open-source license. Code, artwork, audio, video and lyrics may have different ownership conditions. Before public distribution or third-party deployment, add an explicit `LICENSE` and verify that every media asset is authorized for the intended use.
+
+## Links
+
+| Resource | Link |
+|---|---|
+| **Live application** | [lunu-music.vercel.app](https://lunu-music.vercel.app) |
+| **Backend health** | [lunu-music.onrender.com/api/health](https://lunu-music.onrender.com/api/health) |
+| **Source repository** | [github.com/LuongNuong131/LuNu_Music](https://github.com/LuongNuong131/LuNu_Music) |
+| **Deployment guide** | [`DEPLOYMENT.md`](./DEPLOYMENT.md) |
+| **Product roadmap** | [`PRODUCT_UPGRADE_ROADMAP.md`](./PRODUCT_UPGRADE_ROADMAP.md) |
 
 ---
 
-Made for personal listening with **LuNu Music**.
+<div align="center">
+  <p><strong>Built with care by LuNu.</strong></p>
+  <p>Listen deeply. Keep the room yours.</p>
+  <img src="https://capsule-render.vercel.app/api?type=waving&color=0:f5b97a,50:7c3aed,100:0f172a&height=100&section=footer" alt="LuNu Music footer" width="100%" />
+</div>
+
+<!--
+  LuNu Music project README
+  Inspired by the presentation language of github.com/LuongNuong131.
+-->
