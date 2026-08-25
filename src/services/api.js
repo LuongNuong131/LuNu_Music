@@ -114,10 +114,15 @@ export const importLegacySongs = () => request('/songs/import-legacy', { method:
 export const createMediaProposal = (proposal) => request('/media-proposals', { method: 'POST', body: JSON.stringify({ kind: proposal.kind, source_id: proposal.sourceId || proposal.source_id, title: proposal.title, artist: proposal.artist || '', uploader: proposal.uploader || 'YouTube', cover: proposal.cover || '/images/ChoCiu.jpg', description: proposal.description || '' }) });
 export const getMyMediaProposals = () => request('/media-proposals/mine');
 export const getMediaProposals = (status = '') => request(`/media-proposals${status ? `?status=${encodeURIComponent(status)}` : ''}`);
+export const deleteMediaProposal = (id) => request(`/media-proposals/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const cleanupMediaProposals = (beforeDays = 30) => request(`/media-proposals/cleanup?before_days=${encodeURIComponent(beforeDays)}`, { method: 'DELETE' });
 export const approveMediaProposal = (id) => request(`/media-proposals/${encodeURIComponent(id)}/approve`, { method: 'POST', body: JSON.stringify({}) });
 export const rejectMediaProposal = (id, reason = '') => request(`/media-proposals/${encodeURIComponent(id)}/reject`, { method: 'POST', body: JSON.stringify({ reason }) });
 export const getNotifications = () => request('/notifications');
 export const markNotificationRead = (id) => request(`/notifications/${encodeURIComponent(id)}/read`, { method: 'PATCH' });
 export const markAllNotificationsRead = () => request('/notifications/read-all', { method: 'PATCH' });
+export const deleteNotification = (id) => request(`/notifications/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const clearReadNotifications = () => request('/notifications/clear-read', { method: 'DELETE' });
+export const cleanupNotifications = (beforeDays = 30) => request(`/notifications/cleanup?before_days=${encodeURIComponent(beforeDays)}`, { method: 'DELETE' });
 
 export const getHealth = () => request('/health');

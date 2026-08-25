@@ -12,7 +12,7 @@ import tempfile
 import time
 import uuid
 import unicodedata
-from datetime import datetime
+from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import urllib.parse
 import urllib.request
@@ -917,6 +917,39 @@ async def get_media_proposals(status_filter: Optional[str] = Query(default=None,
         raise HTTPException(status_code=502, detail=f'Không thể tải danh sách đề xuất: {error}')
 
 
+@app.delete('/api/media-proposals/cleanup')
+async def cleanup_media_proposals(before_days: int = Query(default=30, ge=1, le=3650), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    cutoff = (datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')) - timedelta(days=before_days)).isoformat()
+    try:
+        response = client.table('media_proposals').delete().in_('status', ['rejected', 'failed']).lt('created_at', cutoff).execute()
+        return {'success': True, 'deleted_count': len(response.data or []), 'message': f'Đã dọn các đề xuất lỗi/từ chối cũ hơn {before_days} ngày.'}
+    except Exception as error:
+        if is_missing_table_error(error, 'media_proposals'):
+            return {'success': True, 'deleted_count': 0, 'available': False, 'message': 'Bảng đề xuất chưa được tạo.'}
+        raise HTTPException(status_code=502, detail=f'Không thể dọn đề xuất: {error}')
+
+
+@app.delete('/api/media-proposals/{proposal_id}')
+async def delete_media_proposal(proposal_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        response = client.table('media_proposals').select('id,requested_by,status').eq('id', proposal_id).limit(1).execute()
+        proposal = (response.data or [None])[0]
+        if not proposal:
+            raise HTTPException(status_code=404, detail='Không tìm thấy đề xuất media.')
+        if proposal.get('status') == 'processing':
+            raise HTTPException(status_code=409, detail='Không thể xóa đề xuất đang được xử lý.')
+        if current_user.get('role') != 'admin' and str(proposal.get('requested_by')) != str(current_user.get('id')):
+            raise HTTPException(status_code=403, detail='Bạn không có quyền xóa đề xuất này.')
+        client.table('media_proposals').delete().eq('id', proposal_id).execute()
+        return {'success': True, 'message': 'Đã xóa đề xuất. Media đã được duyệt không bị xóa khỏi kho.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if is_missing_table_error(error, 'media_proposals'):
+            return {'success': True, 'deleted_count': 0, 'available': False, 'message': 'Bảng đề xuất chưa được tạo.'}
+        raise HTTPException(status_code=502, detail=f'Không thể xóa đề xuất: {error}')
+
+
 @app.post('/api/media-proposals/{proposal_id}/approve', status_code=status.HTTP_202_ACCEPTED)
 async def approve_media_proposal(proposal_id: str, background_tasks: BackgroundTasks, client: Client = Depends(require_supabase), reviewer: dict = Depends(require_admin)) -> dict:
     try:
@@ -974,6 +1007,40 @@ async def get_notifications(client: Client = Depends(require_supabase), current_
         if is_missing_table_error(error, 'notifications'):
             return {'items': [], 'unread_count': 0, 'available': False}
         raise HTTPException(status_code=502, detail=f'Không thể tải thông báo: {error}')
+
+
+@app.delete('/api/notifications/cleanup')
+async def cleanup_notifications(before_days: int = Query(default=30, ge=1, le=3650), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    cutoff = (datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')) - timedelta(days=before_days)).isoformat()
+    try:
+        response = client.table('notifications').delete().eq('is_read', True).lt('created_at', cutoff).execute()
+        return {'success': True, 'deleted_count': len(response.data or []), 'message': f'Đã dọn thông báo đã đọc cũ hơn {before_days} ngày.'}
+    except Exception as error:
+        if is_missing_table_error(error, 'notifications'):
+            return {'success': True, 'deleted_count': 0, 'available': False, 'message': 'Bảng thông báo chưa được tạo.'}
+        raise HTTPException(status_code=502, detail=f'Không thể dọn thông báo: {error}')
+
+
+@app.delete('/api/notifications/clear-read')
+async def clear_read_notifications(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        response = client.table('notifications').delete().eq('user_id', current_user['id']).eq('is_read', True).execute()
+        return {'success': True, 'deleted_count': len(response.data or [])}
+    except Exception as error:
+        if is_missing_table_error(error, 'notifications'):
+            return {'success': True, 'deleted_count': 0, 'available': False}
+        raise HTTPException(status_code=502, detail=f'Không thể xóa thông báo đã đọc: {error}')
+
+
+@app.delete('/api/notifications/{notification_id}')
+async def delete_notification(notification_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        client.table('notifications').delete().eq('id', notification_id).eq('user_id', current_user['id']).execute()
+        return {'success': True}
+    except Exception as error:
+        if is_missing_table_error(error, 'notifications'):
+            return {'success': True, 'deleted_count': 0, 'available': False}
+        raise HTTPException(status_code=502, detail=f'Không thể xóa thông báo: {error}')
 
 
 @app.patch('/api/notifications/{notification_id}/read')
