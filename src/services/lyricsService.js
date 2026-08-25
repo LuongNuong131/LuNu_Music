@@ -26,11 +26,12 @@ const writeStore = (store) => {
 export const normalizeLyrics = (value) => {
   if (typeof value !== 'string') return '';
   const clean = value.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trim();
-  return PLACEHOLDER_VALUES.has(clean.toLowerCase()) ? '' : clean;
+  const plain = clean.replace(/\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]\s*/g, '').replace(/\n{3,}/g, '\n\n').trim();
+  return PLACEHOLDER_VALUES.has(plain.toLowerCase()) ? '' : plain;
 };
 
 export const hasLyrics = (value) => normalizeLyrics(value).length > 0;
-export const isTimedLyrics = (value) => /\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/.test(normalizeLyrics(value));
+export const isTimedLyrics = () => false;
 
 export const parseLyrics = (value, offsetMs = 0) => {
   const raw = normalizeLyrics(value);
@@ -106,7 +107,7 @@ export const lookupLyrics = async (song, options = {}) => {
 
 export const resolveLyrics = async (song, options = {}) => {
   const stored = getStoredLyrics(song?.id);
-  if (stored?.content) return { ...stored, status: 'manual', mode: getLyricsMode(stored.content) };
+  if (stored?.content) return { ...stored, status: stored.source === 'manual' ? 'manual' : 'metadata', mode: 'plain' };
 
   const metadataLyrics = normalizeLyrics(song?.lyrics || song?.metadata?.lyrics || song?.metadata?.unsyncedLyrics || '');
   if (metadataLyrics) return { content: metadataLyrics, source: 'metadata', offsetMs: 0, status: 'metadata', mode: getLyricsMode(metadataLyrics) };
@@ -128,8 +129,8 @@ export const getLyricsInventory = (songs) => songs.reduce((summary, song) => {
   const mode = getLyricsMode(raw);
   summary.total += 1;
   summary[mode] += 1;
-  if (stored?.content) summary.manual += 1;
+  if (stored?.content && stored.source === 'manual') summary.manual += 1;
   return summary;
 }, { total: 0, synced: 0, plain: 0, missing: 0, manual: 0 });
 
-export const createFallbackMessage = (song) => `Chưa có lời bài hát cho “${song?.title || 'bài hát này'}”.\n\nBạn có thể thêm lyrics thủ công để lưu riêng trên thiết bị.`;
+export const createFallbackMessage = (song) => `Chưa có lời bài hát cho “${song?.title || 'bài hát này'}”.\n\nBạn có thể thêm lyrics thủ công; nội dung sẽ được đồng bộ vào Supabase.`;

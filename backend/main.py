@@ -329,6 +329,18 @@ def search_lrclib(track_name: str, artist_name: str) -> list[dict]:
     except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
         raise RuntimeError(f'Không thể kết nối LRCLIB: {error}') from error
 
+    if not isinstance(payload, list) or not payload:
+        fallback_params = urllib.parse.urlencode({'q': track_name})
+        fallback_request = urllib.request.Request(
+            f'https://lrclib.net/api/search?{fallback_params}',
+            headers={'User-Agent': 'LuNuMusic/2.1 (https://lunu-music.vercel.app)', 'Accept': 'application/json'},
+        )
+        try:
+            with urllib.request.urlopen(fallback_request, timeout=15) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+        except (urllib.error.HTTPError, urllib.error.URLError, TimeoutError, json.JSONDecodeError):
+            payload = []
+
     results = []
     for item in payload if isinstance(payload, list) else []:
         lyrics = plain_lyrics(item.get('plainLyrics') or item.get('syncedLyrics') or '')
