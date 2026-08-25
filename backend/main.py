@@ -812,7 +812,7 @@ async def get_import_job(job_id: str, _: dict = Depends(require_admin)) -> dict:
 @app.patch('/api/songs/{song_id}')
 async def update_song(song_id: str, request: UpdateSongRequest, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
     try:
-        response = client.table('songs').update(request.model_dump()).eq('id', song_id).execute()
+        response = client.table('songs').update(request.model_dump()).eq('id', song_id).select('*').execute()
         if not response.data:
             raise HTTPException(status_code=404, detail='Không tìm thấy bài hát để cập nhật.')
         return {'success': True, 'song': response.data[0], 'message': 'Đã cập nhật metadata; link Cloudinary giữ nguyên.'}
