@@ -31,7 +31,7 @@ Không đưa `SUPABASE_KEY`, Cloudinary API secret hoặc `LUNU_AUTH_SECRET` và
 
 Bảng `songs` hiện được backend sử dụng với các cột `id`, `title`, `artist`, `url`, `cover`, `lyrics`, đồng thời bản nâng cấp thêm `media_key`, `source_id`, `cloudinary_public_id`. Chạy file `supabase/media_upgrade.sql` một lần trước khi tải bài mới. Bản ghi legacy 188 bài vẫn giữ nguyên; bài mới mặc định bắt đầu từ `19925082026`, rồi tăng dần theo số thứ tự.
 
-Bảng `cinema_videos` được tạo bởi cùng migration. Video mới có mã dạng `VD0125082026`, tăng dần theo số thứ tự trong kho Cinema. Bảng `users` tối thiểu cần `id`, `username`, `role`; bản nâng cấp ưu tiên cột `password_hash`. Backend vẫn đọc cột `password` cũ để cho phép đăng nhập lần đầu và tự nâng cấp sang PBKDF2 hash, sau đó nên xóa dữ liệu plaintext sau khi xác nhận migration thành công.
+Bảng `cinema_videos` được tạo bởi cùng migration. Video mới có mã dạng `VD0125082026`, tăng dần theo số thứ tự trong kho Cinema. Để bật hai chế độ lưu, chạy thêm `supabase/cinema_retention.sql` một lần; migration này thêm `retention_mode` (`permanent` hoặc `temporary`) và `expires_at`. Bảng `users` tối thiểu cần `id`, `username`, `role`; bản nâng cấp ưu tiên cột `password_hash`. Backend vẫn đọc cột `password` cũ để cho phép đăng nhập lần đầu và tự nâng cấp sang PBKDF2 hash, sau đó nên xóa dữ liệu plaintext sau khi xác nhận migration thành công.
 
 Nếu database đã bật RLS, cần tạo policy server-side phù hợp với cách backend kết nối. Không dùng service key trong bundle frontend.
 
@@ -49,7 +49,7 @@ Endpoint import trả về trạng thái `queued`; Render xử lý tải yt-dlp,
 
 ## Migration bắt buộc trước khi dùng tính năng mới
 
-Mở Supabase SQL Editor và chạy toàn bộ `supabase/media_upgrade.sql`. Sau đó Render cần redeploy để nhận Dockerfile/requirements mới. Không chạy nút **Khôi phục 188 bài** trước migration nếu muốn backend ghi thêm các trường media mới; bản import legacy đã được sửa để bỏ qua trường `legacyId` không tồn tại trong schema.
+Mở Supabase SQL Editor và chạy toàn bộ `supabase/media_upgrade.sql`, sau đó chạy `supabase/cinema_retention.sql` nếu muốn bật video tạm, rồi chạy `supabase/media_requests_notifications.sql` nếu dùng đề xuất/thông báo. Sau đó Render cần redeploy để nhận Dockerfile/requirements mới. Không chạy nút **Khôi phục 188 bài** trước migration nếu muốn backend ghi thêm các trường media mới; bản import legacy đã được sửa để bỏ qua trường `legacyId` không tồn tại trong schema.
 
 ## Kiểm tra sau deploy
 
@@ -95,7 +95,7 @@ Nếu yt-dlp vẫn báo `Only images are available`, nguyên nhân là YouTube �
 
 Cinema video import truyền `postprocessors=[]` cho yt-dlp để không chạy hậu xử lý `FFmpegExtractAudio` của luồng bài hát. Video được giữ ở dạng MP4 sau khi tải. Backend luôn dùng `upload_large()` theo chunk 20 MiB cho video. Nếu Cloudinary trả lỗi giới hạn chính xác 100 MiB của plan, backend tự dùng FFmpeg tạo bản MP4 tương thích dưới khoảng 92 MiB rồi upload bản đó; job sẽ hiển thị rõ các trạng thái `đang nén` và `đang upload bản tương thích`. Vì vậy tài khoản Cloudinary chưa hỗ trợ file gốc trên 100 MiB vẫn có thể lưu video sau khi giảm bitrate, còn tài khoản hỗ trợ giới hạn cao hơn sẽ giữ luồng upload chunk cho file gốc. Media mới được ghi với cover mặc định `/images/ChoCiu.jpg`; thumbnail YouTube chỉ dùng để xem trước trong giao diện tìm kiếm. Sau thay đổi này, Render cần build lại từ `backend/Dockerfile` mới và phải có gói `ffmpeg` (Dockerfile hiện đã cài).
 
-Nếu Supabase chưa có bảng `media_proposals` hoặc `notifications`, hãy chạy `supabase/media_requests_notifications.sql` một lần. Frontend hiện xử lý graceful fallback và không spam lỗi khi migration chưa sẵn sàng.
+Nếu Supabase chưa có bảng `media_proposals` hoặc `notifications`, hãy chạy `supabase/media_requests_notifications.sql` một lần. Nếu đang dùng chế độ video tạm, cũng phải chạy `supabase/cinema_retention.sql`. Backend cleanup tự động kiểm tra định kỳ trong process, cleanup ngay khi mở thư viện, và admin có nút **Dọn video hết hạn** để chạy thủ công. Frontend hiện xử lý graceful fallback và không spam lỗi khi migration chưa sẵn sàng.
 
 ### Chẩn đoán lỗi `Maximum is 104857600`
 

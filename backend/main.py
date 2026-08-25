@@ -1,4 +1,5 @@
 import base64
+import asyncio
 import hashlib
 import html
 import hmac
@@ -84,6 +85,40 @@ else:
     print('⚠️ Thiếu Cloudinary credentials; upload sẽ bị từ chối rõ ràng.')
 
 
+_cleanup_task: Optional[asyncio.Task] = None
+
+
+async def periodic_cinema_cleanup() -> None:
+    await asyncio.sleep(15)
+    while True:
+        if supabase is not None:
+            try:
+                result = await asyncio.to_thread(cleanup_expired_cinema_videos, supabase)
+                if result['deleted_count'] or result['failed_count']:
+                    print(f'🧹 Cinema cleanup: đã xóa {result["deleted_count"]}, lỗi {result["failed_count"]}.')
+            except Exception as error:
+                print(f'⚠️ Cinema cleanup chưa chạy được: {error}')
+        await asyncio.sleep(15 * 60)
+
+
+@app.on_event('startup')
+async def start_periodic_cleanup() -> None:
+    global _cleanup_task
+    _cleanup_task = asyncio.create_task(periodic_cinema_cleanup())
+
+
+@app.on_event('shutdown')
+async def stop_periodic_cleanup() -> None:
+    global _cleanup_task
+    if _cleanup_task:
+        _cleanup_task.cancel()
+        try:
+            await _cleanup_task
+        except asyncio.CancelledError:
+            pass
+        _cleanup_task = None
+
+
 class AddSongRequest(BaseModel):
     video_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
     title: str = Field(min_length=1, max_length=240)
@@ -129,6 +164,7 @@ class AddVideoRequest(BaseModel):
     uploader: str = Field(default='YouTube', max_length=160)
     cover: str = Field(default='', max_length=500)
     description: str = Field(default='', max_length=5000)
+    retention_mode: Literal['permanent', 'temporary'] = 'permanent'
 
     @field_validator('title', 'uploader', 'cover', 'description')
     @classmethod
@@ -284,6 +320,12 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
 
 def today_stamp() -> str:
     return datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).strftime('%d%m%Y')
+
+
+def tomorrow_midnight_iso() -> str:
+    local_now = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh'))
+    tomorrow = (local_now + timedelta(days=1)).replace(hour=0, minute=0, second=0, microsecond=0)
+    return tomorrow.isoformat()
 
 
 def next_media_key(client: Client, table: str, prefix: str = '') -> str:
@@ -660,6 +702,32 @@ def update_proposal(client: Client, proposal_id: str, updates: dict) -> None:
         print(f'⚠️ Không thể cập nhật media proposal {proposal_id}: {error}')
 
 
+def cleanup_expired_cinema_videos(client: Client, limit: int = 50) -> dict:
+    now = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()
+    response = (
+        client.table('cinema_videos')
+        .select('id,media_key,url,cloudinary_public_id,expires_at')
+        .eq('retention_mode', 'temporary')
+        .lt('expires_at', now)
+        .order('expires_at')
+        .limit(limit)
+        .execute()
+    )
+    deleted = 0
+    failed = 0
+    for row in response.data or []:
+        try:
+            asset = row.get('cloudinary_public_id') or row.get('url')
+            if asset:
+                delete_cloudinary_asset(asset, resource_type='video')
+            client.table('cinema_videos').delete().eq('id', row['id']).execute()
+            deleted += 1
+        except Exception as error:
+            failed += 1
+            print(f'⚠️ Không thể dọn video tạm {row.get("media_key")}: {error}')
+    return {'deleted_count': deleted, 'failed_count': failed, 'scanned_count': len(response.data or [])}
+
+
 def is_missing_table_error(error: Exception, table_name: str) -> bool:
     detail = str(error)
     return table_name in detail and ('PGRST205' in detail or 'schema cache' in detail or 'Could not find the table' in detail)
@@ -915,11 +983,14 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
         secure_url = result.get('secure_url')
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url cho video.')
+        retention_mode = request_data.get('retention_mode') or 'permanent'
+        expires_at = tomorrow_midnight_iso() if retention_mode == 'temporary' else None
         video_data = {
             'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': video_id,
             'cloudinary_public_id': public_id, 'title': request_data['title'], 'uploader': request_data.get('uploader') or 'YouTube',
             'url': secure_url, 'cover': DEFAULT_COVER,
             'description': request_data.get('description', ''),
+            'retention_mode': retention_mode, 'expires_at': expires_at,
         }
         set_import_job(job_id, message='Đã upload Cloudinary, đang ghi video vào Supabase...')
         existing = client.table('cinema_videos').select('id,url').eq('source_id', video_id).limit(1).execute()
@@ -1377,10 +1448,23 @@ async def delete_song(song_id: str, client: Client = Depends(require_supabase), 
 @app.get('/api/cinema/videos')
 async def get_cinema_videos(client: Client = Depends(require_supabase), _: dict = Depends(get_current_user)) -> list:
     try:
+        try:
+            cleanup_expired_cinema_videos(client)
+        except Exception as cleanup_error:
+            print(f'⚠️ Bỏ qua cleanup Cinema trong lúc tải danh sách: {cleanup_error}')
         response = client.table('cinema_videos').select('*').order('created_at', desc=True).execute()
         return response.data or []
     except Exception as error:
         raise HTTPException(status_code=502, detail=f'Không thể tải kho LuNu Cinema. Hãy chạy migration Supabase: {error}')
+
+
+@app.post('/api/cinema/videos/cleanup-expired')
+async def cleanup_expired_cinema_videos_endpoint(client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    try:
+        result = cleanup_expired_cinema_videos(client)
+        return {'success': True, **result, 'message': f'Đã dọn {result["deleted_count"]} video tạm hết hạn.'}
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể dọn video tạm: {error}')
 
 
 @app.get('/api/cinema/search_youtube')

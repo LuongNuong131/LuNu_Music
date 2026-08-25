@@ -93,6 +93,7 @@ export const addCinemaVideo = async (videoData) => {
       uploader: videoData.uploader || 'YouTube',
       cover: videoData.cover || '/images/ChoCiu.jpg',
       description: videoData.description || '',
+      retention_mode: videoData.retentionMode || videoData.retention_mode || 'permanent',
     }) });
   } catch (error) {
     console.error('Lỗi thêm video Cinema:', error);
@@ -101,6 +102,7 @@ export const addCinemaVideo = async (videoData) => {
 };
 
 export const deleteCinemaVideo = (id) => request(`/cinema/videos/${encodeURIComponent(id)}`, { method: 'DELETE' });
+export const cleanupExpiredCinemaVideos = () => request('/cinema/videos/cleanup-expired', { method: 'POST' });
 
 export const searchSongLyrics = (id) => request(`/songs/${encodeURIComponent(id)}/lyrics/search`);
 
