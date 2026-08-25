@@ -72,3 +72,11 @@ Trong **Quản trị → Kho nhạc**, khu vực **Nhập lyrics hàng loạt** 
 Có thể dùng `supabase/lyrics_bulk_import_template.sql` thay cho giao diện. File này mặc định kết thúc bằng `ROLLBACK`; chỉ đổi thành `COMMIT` sau khi đã điền nội dung lyrics, chạy câu `SELECT COUNT(*)`, và kiểm tra kết quả. Không chạy file mẫu khi các trường lyrics vẫn rỗng vì nó sẽ không cập nhật dòng nào.
 
 Lyrics phải là nội dung mà chủ dự án có quyền sử dụng, do người dùng cung cấp, hoặc thuộc phạm vi public domain/licensed. Hệ thống không tự động sao chép nguyên văn lyrics có bản quyền từ website bên thứ ba.
+
+## Tìm lyrics từng bài trong Admin
+
+Mỗi bài trong **Quản trị → Kho nhạc** có nút **Tìm lời**. Backend sẽ tra cứu theo tên bài và nghệ sĩ từ LRCLIB, trả tối đa năm kết quả có plain lyrics, rồi Admin xem trước trong popup. Chỉ khi bấm **Xác nhận và lưu lyrics**, frontend mới gọi endpoint cập nhật Supabase. Backend chỉ cập nhật `songs.lyrics`, vì vậy URL audio Cloudinary và mã media không bị ảnh hưởng.
+
+LRCLIB yêu cầu client nhận diện bằng User-Agent và tôn trọng rate limit; tính năng này chỉ gọi theo từng thao tác Admin, không tự động quét 188 bài đồng thời. Nếu không có kết quả, hãy thử sửa tên bài/nghệ sĩ cho chính xác hoặc dùng khu vực nhập JSON/SQL hàng loạt với nội dung bạn có quyền sử dụng. Nguồn này có thể trả bản lyrics khác nhau hoặc không có bản ghi cho một số bài.
+
+Tài liệu nguồn: [LRCLIB API Documentation](https://lrclib.net/docs) và [Musixmatch Content Restrictions](https://docs.musixmatch.com/content-restrictions). Musixmatch là lựa chọn thương mại được cấp phép nếu cần nguồn ổn định và quyền lưu trữ phù hợp; không tự động scrape Genius, Musixmatch web hoặc các trang lyrics khác để né giới hạn truy cập.

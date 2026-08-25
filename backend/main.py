@@ -304,6 +304,49 @@ def _decode_json_text(value: str) -> str:
         return html.unescape(value).replace('\\"', '"')
 
 
+def plain_lyrics(value: str) -> str:
+    text = str(value or '')
+    text = re.sub(r'\[\d{1,2}:\d{2}(?:[.:]\d{1,3})?\]\s*', '', text)
+    return re.sub(r'\n{3,}', '\n\n', text).strip()
+
+
+def search_lrclib(track_name: str, artist_name: str) -> list[dict]:
+    params = urllib.parse.urlencode({'track_name': track_name, 'artist_name': artist_name})
+    request = urllib.request.Request(
+        f'https://lrclib.net/api/search?{params}',
+        headers={
+            'User-Agent': 'LuNuMusic/2.1 (https://lunu-music.vercel.app)',
+            'Accept': 'application/json',
+        },
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=15) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as error:
+        if error.code == 404:
+            return []
+        raise RuntimeError(f'LRCLIB trả HTTP {error.code}') from error
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise RuntimeError(f'Không thể kết nối LRCLIB: {error}') from error
+
+    results = []
+    for item in payload if isinstance(payload, list) else []:
+        lyrics = plain_lyrics(item.get('plainLyrics') or item.get('syncedLyrics') or '')
+        if not lyrics:
+            continue
+        results.append({
+            'provider': 'LRCLIB',
+            'provider_id': item.get('id'),
+            'title': item.get('trackName') or item.get('name') or track_name,
+            'artist': item.get('artistName') or artist_name,
+            'album': item.get('albumName') or '',
+            'duration': item.get('duration'),
+            'lyrics': lyrics,
+            'source_url': f"https://lrclib.net/api/get/{item.get('id')}" if item.get('id') else 'https://lrclib.net',
+        })
+    return results[:5]
+
+
 def search_youtube_data_api(query: str) -> list[dict]:
     api_key = os.getenv('YOUTUBE_API_KEY', '').strip()
     if not api_key:
@@ -702,6 +745,34 @@ async def get_songs(client: Client = Depends(require_supabase)) -> list:
         return response.data or []
     except Exception as error:
         raise HTTPException(status_code=502, detail=f'Không thể tải thư viện nhạc: {error}')
+
+
+@app.get('/api/songs/{song_id}/lyrics/search')
+async def search_song_lyrics(song_id: str, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    try:
+        response = client.table('songs').select('id,title,artist').eq('id', song_id).limit(1).execute()
+        song = (response.data or [None])[0]
+        if not song:
+            raise HTTPException(status_code=404, detail='Không tìm thấy bài hát trong Supabase.')
+        title = str(song.get('title') or '').strip()
+        artist = str(song.get('artist') or '').strip()
+        if not title or not artist:
+            raise HTTPException(status_code=422, detail='Bài hát cần có cả tên bài và nghệ sĩ trước khi tìm lyrics.')
+        try:
+            results = search_lrclib(title, artist)
+        except RuntimeError as error:
+            raise HTTPException(status_code=502, detail=str(error)) from error
+        return {
+            'success': True,
+            'song': {'id': song_id, 'title': title, 'artist': artist},
+            'provider': 'LRCLIB',
+            'results': results,
+            'message': 'Không tìm thấy lyrics phù hợp.' if not results else f'Tìm thấy {len(results)} kết quả; hãy kiểm tra trước khi lưu.',
+        }
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể tìm lyrics: {error}') from error
 
 
 def load_legacy_catalog() -> list[dict]:

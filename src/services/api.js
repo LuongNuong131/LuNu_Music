@@ -87,6 +87,8 @@ export const addCinemaVideo = async (videoData) => {
 
 export const deleteCinemaVideo = (id) => request(`/cinema/videos/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
+export const searchSongLyrics = (id) => request(`/songs/${encodeURIComponent(id)}/lyrics/search`);
+
 export const updateSongLyricsBulk = (items) => request('/songs/lyrics/bulk', {
   method: 'PATCH',
   body: JSON.stringify({ items }),
