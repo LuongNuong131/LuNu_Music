@@ -1,7 +1,7 @@
 <template>
   <footer class="player-bar" :class="{ 'has-error': state.error }">
     <button v-if="state.currentSong" class="now-track" @click="state.nowPlayingVisible = true" aria-label="Mở trình phát toàn màn hình">
-      <div class="mini-art" :class="{ spinning: state.isPlaying }"><img :src="state.currentSong.cover" :alt="state.currentSong.title" /><span class="mini-art-ring"></span></div>
+      <div class="mini-art" :class="{ spinning: state.isPlaying }"><img :src="state.currentSong.cover || '/images/ChoCiu.jpg'" :alt="state.currentSong.title" /><span class="mini-art-ring"></span></div>
       <div class="track-details"><strong class="track-title">{{ state.currentSong.title }}</strong><span class="track-artist">{{ state.currentSong.artist }}</span></div>
       <span class="expand-hint">↗</span>
     </button>
@@ -21,7 +21,7 @@
 
     <div class="player-actions"><button class="queue-toggle" :class="{ active: state.queueVisible }" @click="state.queueVisible = true" title="Hàng đợi" aria-label="Mở hàng đợi">☷</button><button class="volume-icon" @click="toggleMute" title="Tắt hoặc bật tiếng" aria-label="Tắt hoặc bật tiếng">{{ state.muted || state.volume === 0 ? '○' : '◖' }}</button><input type="range" class="volume-bar" min="0" max="1" step="0.01" :value="state.muted ? 0 : state.volume" @input="setVolume($event.target.value)" :style="volumeStyle" aria-label="Âm lượng" /><span class="quality-pill">HI-FI</span></div>
 
-    <audio ref="audioRef" :src="state.currentSong?.url || ''" preload="metadata" @timeupdate="onTimeUpdate" @loadedmetadata="onLoadedMetadata" @waiting="handleAudioWaiting" @canplay="handleAudioCanPlay" @error="handleAudioError" @ended="handleAudioEnded"></audio>
+    <audio v-if="state.currentSong?.url" ref="audioRef" :src="state.currentSong.url" preload="metadata" @timeupdate="onTimeUpdate" @loadedmetadata="onLoadedMetadata" @waiting="handleAudioWaiting" @canplay="handleAudioCanPlay" @error="handleAudioError" @ended="handleAudioEnded"></audio>
   </footer>
 </template>
 
@@ -37,6 +37,7 @@ onBeforeUnmount(() => setAudioElement(null));
 
 watch(() => state.currentSong?.url, async (url) => {
   await nextTick();
+  setAudioElement(audioRef.value);
   if (!audioRef.value) return;
   audioRef.value.load();
   if (!url) audioRef.value.pause();

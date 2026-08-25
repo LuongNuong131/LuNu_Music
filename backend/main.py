@@ -647,6 +647,11 @@ def update_proposal(client: Client, proposal_id: str, updates: dict) -> None:
         print(f'⚠️ Không thể cập nhật media proposal {proposal_id}: {error}')
 
 
+def is_missing_table_error(error: Exception, table_name: str) -> bool:
+    detail = str(error)
+    return table_name in detail and ('PGRST205' in detail or 'schema cache' in detail or 'Could not find the table' in detail)
+
+
 def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
     image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.vtt', '.part', '.ytdl'}
     return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
@@ -867,6 +872,8 @@ async def create_media_proposal(request: MediaProposalRequest, client: Client = 
     except HTTPException:
         raise
     except Exception as error:
+        if is_missing_table_error(error, 'media_proposals'):
+            raise HTTPException(status_code=503, detail='Tính năng đề xuất chưa được bật. Admin cần chạy supabase/media_requests_notifications.sql trước.') from error
         raise HTTPException(status_code=502, detail=f'Không thể gửi đề xuất media: {error}')
 
 
@@ -876,6 +883,8 @@ async def get_my_media_proposals(client: Client = Depends(require_supabase), cur
         response = client.table('media_proposals').select('*').eq('requested_by', current_user['id']).order('created_at', desc=True).limit(100).execute()
         return response.data or []
     except Exception as error:
+        if is_missing_table_error(error, 'media_proposals'):
+            return []
         raise HTTPException(status_code=502, detail=f'Không thể tải đề xuất của bạn: {error}')
 
 
@@ -887,6 +896,8 @@ async def get_media_proposals(status_filter: Optional[str] = Query(default=None,
             query = query.eq('status', status_filter)
         return query.execute().data or []
     except Exception as error:
+        if is_missing_table_error(error, 'media_proposals'):
+            return []
         raise HTTPException(status_code=502, detail=f'Không thể tải danh sách đề xuất: {error}')
 
 
@@ -944,6 +955,8 @@ async def get_notifications(client: Client = Depends(require_supabase), current_
         rows = client.table('notifications').select('id,title,body,kind,link,is_read,created_at').eq('user_id', current_user['id']).order('created_at', desc=True).limit(50).execute().data or []
         return {'items': rows, 'unread_count': sum(1 for row in rows if not row.get('is_read'))}
     except Exception as error:
+        if is_missing_table_error(error, 'notifications'):
+            return {'items': [], 'unread_count': 0, 'available': False}
         raise HTTPException(status_code=502, detail=f'Không thể tải thông báo: {error}')
 
 
