@@ -7,7 +7,7 @@
       <button :class="{ active: currentView === 'liked' }" @click="currentView = 'liked'"><span>♥</span> Yêu thích</button>
       <button :class="{ active: currentView === 'playlists' }" @click="currentView = 'playlists'"><span>▤</span> Playlist</button>
       <button :class="{ active: currentView === 'lyrics' }" @click="currentView = 'lyrics'"><span>Aa</span> Lyrics Lab</button>
-      <button v-if="authState.user?.role === 'admin'" :class="{ active: currentView === 'cinema' }" @click="currentView = 'cinema'"><span>▶</span> LuNu Cinema</button>
+      <button :class="{ active: currentView === 'cinema' }" @click="currentView = 'cinema'"><span>▶</span> LuNu Tea Room</button>
       <button v-if="authState.user?.role === 'admin'" :class="{ active: currentView === 'admin' }" @click="currentView = 'admin'"><span>✦</span> Quản trị</button>
     </nav>
     <div class="sidebar-note"><span class="note-orb">◖</span><div><small>NOW CURATING</small><p>Những âm thanh<br />đáng nhớ.</p></div></div>

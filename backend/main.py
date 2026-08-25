@@ -359,6 +359,34 @@ def search_lrclib(track_name: str, artist_name: str) -> list[dict]:
     return results[:5]
 
 
+def search_youtube_channel_api(query: str) -> list[dict]:
+    api_key = os.getenv('YOUTUBE_API_KEY', '').strip()
+    if not api_key:
+        return []
+    channel_params = urllib.parse.urlencode({'part': 'snippet', 'type': 'channel', 'maxResults': 1, 'q': query, 'regionCode': 'VN', 'relevanceLanguage': 'vi', 'key': api_key})
+    channel_request = urllib.request.Request(f'https://www.googleapis.com/youtube/v3/search?{channel_params}', headers={'User-Agent': 'LuNu Music API/1.0'})
+    with urllib.request.urlopen(channel_request, timeout=20) as response:
+        channel_payload = json.loads(response.read().decode('utf-8'))
+    channel_items = channel_payload.get('items') or []
+    channel_id = ((channel_items[0].get('id') or {}).get('channelId')) if channel_items else None
+    if not channel_id:
+        return []
+    params = urllib.parse.urlencode({'part': 'snippet', 'type': 'video', 'channelId': channel_id, 'order': 'date', 'maxResults': 10, 'regionCode': 'VN', 'relevanceLanguage': 'vi', 'key': api_key})
+    request = urllib.request.Request(f'https://www.googleapis.com/youtube/v3/search?{params}', headers={'User-Agent': 'LuNu Music API/1.0'})
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode('utf-8'))
+    results = []
+    channel_title = (channel_items[0].get('snippet') or {}).get('channelTitle') or query
+    for item in payload.get('items') or []:
+        video_id = (item.get('id') or {}).get('videoId')
+        snippet = item.get('snippet') or {}
+        thumbnails = snippet.get('thumbnails') or {}
+        thumbnail = (thumbnails.get('high') or thumbnails.get('medium') or thumbnails.get('default') or {}).get('url')
+        if video_id:
+            results.append({'id': video_id, 'title': html.unescape(snippet.get('title') or ''), 'uploader': snippet.get('channelTitle') or channel_title, 'thumbnail': thumbnail or f'https://i.ytimg.com/vi/{video_id}/hqdefault.jpg'})
+    return normalize_search_entries(results)
+
+
 def search_youtube_data_api(query: str) -> list[dict]:
     api_key = os.getenv('YOUTUBE_API_KEY', '').strip()
     if not api_key:
@@ -968,7 +996,7 @@ async def delete_song(song_id: str, client: Client = Depends(require_supabase), 
 
 
 @app.get('/api/cinema/videos')
-async def get_cinema_videos(client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> list:
+async def get_cinema_videos(client: Client = Depends(require_supabase), _: dict = Depends(get_current_user)) -> list:
     try:
         response = client.table('cinema_videos').select('*').order('created_at', desc=True).execute()
         return response.data or []
@@ -977,7 +1005,13 @@ async def get_cinema_videos(client: Client = Depends(require_supabase), _: dict 
 
 
 @app.get('/api/cinema/search_youtube')
-async def search_cinema_youtube(query: str = Query(min_length=2, max_length=120)) -> dict:
+async def search_cinema_youtube(query: str = Query(min_length=2, max_length=120), mode: str = Query(default='video', pattern=r'^(video|channel)$')) -> dict:
+    if mode == 'channel':
+        try:
+            results = search_youtube_channel_api(query)
+            return {'success': True, 'results': results, 'source': 'youtube-data-api-channel', 'message': f'Tìm thấy {len(results)} video mới nhất từ kênh phù hợp.' if results else 'Không tìm thấy kênh hoặc kênh chưa có video công khai.'}
+        except Exception as error:
+            return {'success': False, 'results': [], 'source': 'youtube-data-api-channel', 'message': f'Không thể tìm theo kênh: {error}'}
     return await search_youtube(query)
 
 

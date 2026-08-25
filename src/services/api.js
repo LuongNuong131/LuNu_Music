@@ -65,8 +65,8 @@ export const getImportJob = (jobId) => request(`/songs/import-jobs/${encodeURICo
 
 export const getCinemaVideos = () => request('/cinema/videos');
 
-export const searchCinema = async (query) => {
-  try { return await request(`/cinema/search_youtube?query=${encodeURIComponent(query)}`); }
+export const searchCinema = async (query, mode = 'video') => {
+  try { return await request(`/cinema/search_youtube?query=${encodeURIComponent(query)}&mode=${encodeURIComponent(mode)}`); }
   catch (error) { console.error('Lỗi tìm kiếm LuNu Cinema:', error); return { success: false, message: error.message }; }
 };
 
