@@ -57,8 +57,10 @@ Mở `https://<render-domain>/api/health`; response cần có `ok: true`. Sau đ
 
 ## Khôi phục 188 bài hát từ catalog legacy
 
-Sau khi Render deploy commit mới, đăng xuất rồi đăng nhập lại để nhận access token mới. Vào **Quản trị → Kho nhạc → Khôi phục 188 bài** và xác nhận. Backend sẽ đọc `backend/legacy_catalog.json`, kiểm tra URL đã tồn tại, insert phần còn thiếu vào Supabase và trả về số lượng `imported/skipped`.
+Sau khi Render deploy commit mới và đã chạy `supabase/media_upgrade.sql`, đăng xuất rồi đăng nhập lại để nhận access token mới. Vào **Quản trị → Kho nhạc → Khôi phục 188 bài** và xác nhận. Backend sẽ đọc `backend/legacy_catalog.json`, bỏ trường `legacyId` không có trong schema, kiểm tra URL đã tồn tại, insert phần còn thiếu vào Supabase và trả về số lượng `imported/skipped`. Từ thời điểm đó 188 bài không còn chỉ là fallback mặc định mà trở thành các row quản lý được trong Supabase.
 
 Nếu không muốn dùng giao diện, có thể chạy `supabase/import_legacy_songs.sql` trong Supabase SQL Editor. Trước khi chạy SQL, xác nhận kiểu của `songs.id`; file SQL đang dùng UUID deterministic tương thích với backend hiện tại. Không chạy đồng thời cả nút import và SQL nếu chưa kiểm tra duplicate theo `url`.
+
+Trong **Quản trị → Kho nhạc**, nút **Sửa** cho phép đổi tên, ca sĩ, ảnh bìa và lyrics của mọi bài, bao gồm 188 bài legacy. API `PATCH /api/songs/{id}` không nhận trường `url`, nên link audio Cloudinary không bị thay đổi. Nút **Xóa** sẽ xóa asset Cloudinary trước rồi xóa row Supabase.
 
 CORS đã được bổ sung cố định cho `https://lunu-music.vercel.app`, đồng thời vẫn nhận thêm các domain trong `CORS_ORIGINS`. Vì vậy lỗi `No 'Access-Control-Allow-Origin' header` trong console sẽ hết sau khi Render chạy đúng commit mới; nếu vẫn còn, kiểm tra Render đã redeploy và domain Vercel có đúng chính tả hay chưa.

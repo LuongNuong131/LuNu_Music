@@ -87,6 +87,11 @@ export const addCinemaVideo = async (videoData) => {
 
 export const deleteCinemaVideo = (id) => request(`/cinema/videos/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
+export const updateSong = (id, metadata) => request(`/songs/${encodeURIComponent(id)}`, {
+  method: 'PATCH',
+  body: JSON.stringify({ title: metadata.title, artist: metadata.artist, cover: metadata.cover || '', lyrics: metadata.lyrics || '' }),
+});
+
 export const deleteSong = (id) => request(`/songs/${encodeURIComponent(id)}`, { method: 'DELETE' });
 
 export const importLegacySongs = () => request('/songs/import-legacy', { method: 'POST' });

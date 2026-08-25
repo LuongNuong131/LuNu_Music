@@ -92,6 +92,18 @@ class AddSongRequest(BaseModel):
         return value.strip()
 
 
+class UpdateSongRequest(BaseModel):
+    title: str = Field(min_length=1, max_length=240)
+    artist: str = Field(min_length=1, max_length=160)
+    cover: str = Field(default='', max_length=500)
+    lyrics: str = Field(default='', max_length=100000)
+
+    @field_validator('title', 'artist', 'cover', 'lyrics')
+    @classmethod
+    def strip_text(cls, value: str) -> str:
+        return value.strip()
+
+
 class AddVideoRequest(BaseModel):
     video_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
     title: str = Field(min_length=1, max_length=240)
@@ -797,10 +809,23 @@ async def get_import_job(job_id: str, _: dict = Depends(require_admin)) -> dict:
     return {'success': True, **job}
 
 
+@app.patch('/api/songs/{song_id}')
+async def update_song(song_id: str, request: UpdateSongRequest, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    try:
+        response = client.table('songs').update(request.model_dump()).eq('id', song_id).execute()
+        if not response.data:
+            raise HTTPException(status_code=404, detail='Không tìm thấy bài hát để cập nhật.')
+        return {'success': True, 'song': response.data[0], 'message': 'Đã cập nhật metadata; link Cloudinary giữ nguyên.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể cập nhật bài hát: {error}')
+
+
 @app.delete('/api/songs/{song_id}')
 async def delete_song(song_id: str, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
     try:
-        response = client.table('songs').select('id,url,cloudinary_public_id').eq('id', song_id).limit(1).execute()
+        response = client.table('songs').select('id,url').eq('id', song_id).limit(1).execute()
         row = (response.data or [None])[0]
         if not row:
             raise HTTPException(status_code=404, detail='Không tìm thấy bài hát.')
