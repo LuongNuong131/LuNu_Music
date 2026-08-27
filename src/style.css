@@ -695,3 +695,83 @@ button, input, select, textarea { min-width: 0; }
 :root[data-theme='light'] .playlist-picker { border-color: rgba(80, 58, 43, .15); background: #fffdf8; box-shadow: 0 25px 80px rgba(91, 67, 46, .2); }
 :root[data-theme='light'] .playlist-picker-list button { background: rgba(168, 102, 59, .045); }
 :root[data-theme='light'] .playlist-picker-list button:hover:not(:disabled) { border-color: rgba(168, 102, 59, .3); background: rgba(168, 102, 59, .1); }
+
+
+/* LuNu design tokens v5: semantic aliases shared by new and legacy surfaces. */
+:root {
+  --color-bg: var(--bg-deep);
+  --color-bg-elevated: var(--bg-color);
+  --color-surface: var(--panel-solid);
+  --color-surface-hover: var(--panel-bg-hover);
+  --color-primary: var(--gold);
+  --color-secondary: var(--violet);
+  --color-accent: var(--mint);
+  --color-text-primary: var(--text-main);
+  --color-text-secondary: var(--text-sub);
+  --color-text-muted: var(--text-faint);
+  --color-border: var(--hairline);
+  --color-divider: var(--hairline-soft);
+  --color-success: var(--mint);
+  --color-warning: var(--gold);
+  --color-danger: var(--crimson);
+  --color-info: var(--violet);
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 18px;
+  --radius-xl: 26px;
+  --shadow-sm: 0 6px 18px rgba(0, 0, 0, .12);
+  --shadow-md: var(--shadow-soft);
+  --shadow-lg: var(--shadow-deep);
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --duration-fast: 120ms;
+  --duration-normal: 220ms;
+  --duration-slow: 380ms;
+}
+
+:root[data-theme='light'] {
+  --shadow-sm: 0 5px 15px rgba(94, 65, 43, .07);
+  --shadow-md: var(--shadow-soft);
+  --shadow-lg: var(--shadow-deep);
+}
+
+/* Ensure the global system follows the active visual theme in every browser. */
+:root[data-theme='dark'] { color-scheme: dark; }
+:root[data-theme='light'] { color-scheme: light; }
+
+/* More reliable artwork fallbacks and stable media geometry. */
+img { max-width: 100%; }
+.song-cover, .recommendation-art img, .recent-item img, .mini-art img, .row-art img { aspect-ratio: 1; background: var(--surface-2); }
+
+/* A consistent visible focus treatment for keyboard and assistive technology users. */
+:where(button, a, input, select, textarea):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+/* Avoid accidental horizontal overflow from long music metadata. */
+:where(.song-card, .recommendation-card, .recent-item, .list-item, .conversation-row, .track-copy, .track-details) {
+  min-width: 0;
+}
+
+/* Touch controls should remain comfortable without inflating desktop layouts. */
+@media (pointer: coarse) {
+  :where(.nav-menu button, .primary-btn, .ghost-btn, .play-btn, .icon-control, .queue-toggle, .volume-icon, .like-btn, .card-play) {
+    min-width: 44px;
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .workspace-enter-active, .workspace-leave-active,
+  .song-cover, .song-card, .recommendation-card, .recent-item,
+  button, a, input, select, textarea {
+    transition-duration: 0.01ms !important;
+  }
+}

@@ -1,26 +1,31 @@
 <template>
   <div v-if="!authState.user || !authState.token" id="login-container"><Login /></div>
   <div v-else id="app-container" class="glass-app-wrapper noise-overlay">
-    <button type="button" class="mobile-menu-toggle" :aria-expanded="mobileMenuOpen" aria-controls="lunu-navigation" @click="mobileMenuOpen = true"><span></span><span></span><span></span><b>Menu</b></button>
+    <a class="skip-link" href="#main-workspace">Bỏ qua đến nội dung</a>
+    <button type="button" class="mobile-menu-toggle" :aria-expanded="mobileMenuOpen" aria-controls="lunu-navigation" aria-label="Mở menu điều hướng" @click="mobileMenuOpen = true"><span></span><span></span><span></span><b>Menu</b></button>
     <button type="button" class="theme-quick-toggle" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme">{{ themeState === 'dark' ? '☾' : '☀' }}</button>
     <div v-if="mobileMenuOpen" class="mobile-menu-backdrop" aria-hidden="true" @click="mobileMenuOpen = false"></div>
     <Sidebar id="lunu-navigation" :mobile-open="mobileMenuOpen" @close="mobileMenuOpen = false" />
-    <main class="main-content">
+    <main id="main-workspace" class="main-content" tabindex="-1">
       <div class="app-utility-bar" role="navigation" aria-label="Thanh công cụ nhanh">
-        <div class="utility-context"><span class="utility-pulse"></span><span>LISTENING ROOM</span><b>/</b><strong>{{ viewTitle }}</strong></div>
-        <div class="utility-actions"><NotificationCenter compact /><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span>⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
+        <div class="utility-context"><span class="utility-pulse"></span><span>LISTENING ROOM</span><b>/</b><strong aria-live="polite">{{ viewTitle }}</strong></div>
+        <div class="utility-actions"><NotificationCenter compact /><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span aria-hidden="true">⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
       </div>
-      <AdminView v-if="currentView === 'admin'" />
-      <CinemaView v-else-if="currentView === 'cinema'" />
-      <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
-      <PlaylistsView v-else-if="currentView === 'playlists'" :songs="songs" @play-song="playFromLibrary" />
-      <ArtistsView v-else-if="currentView === 'artists'" :songs="songs" @play-song="playFromLibrary" />
-      <ProposalView v-else-if="currentView === 'proposals'" />
-      <AccountView v-else-if="currentView === 'account'" />
-      <RoomsView v-else-if="currentView === 'rooms'" />
-      <FriendsView v-else-if="currentView === 'friends'" />
-      <ChatView v-else-if="currentView === 'chat'" />
-      <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
+      <Transition name="workspace" mode="out-in">
+        <div :key="currentView" class="workspace-view">
+          <AdminView v-if="currentView === 'admin'" />
+          <CinemaView v-else-if="currentView === 'cinema'" />
+          <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
+          <PlaylistsView v-else-if="currentView === 'playlists'" :songs="songs" @play-song="playFromLibrary" />
+          <ArtistsView v-else-if="currentView === 'artists'" :songs="songs" @play-song="playFromLibrary" />
+          <ProposalView v-else-if="currentView === 'proposals'" />
+          <AccountView v-else-if="currentView === 'account'" />
+          <RoomsView v-else-if="currentView === 'rooms'" />
+          <FriendsView v-else-if="currentView === 'friends'" />
+          <ChatView v-else-if="currentView === 'chat'" />
+          <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
+        </div>
+      </Transition>
     </main>
     <RoomSyncBridge />
     <PlayerBar />
@@ -141,6 +146,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 
 <style>
 #login-container { min-height: 100vh; width: 100%; }
+.skip-link { position: fixed; top: 12px; left: 12px; z-index: 500; padding: 10px 14px; border: 1px solid var(--gold); border-radius: 9px; background: var(--panel-solid); color: var(--text-main); transform: translateY(-160%); transition: transform 180ms var(--ease-out); }
+.skip-link:focus { transform: translateY(0); }
+.workspace-view { min-height: 0; }
+.workspace-enter-active, .workspace-leave-active { transition: opacity 180ms var(--ease-out), transform 180ms var(--ease-out); }
+.workspace-enter-from { opacity: 0; transform: translateY(6px); }
+.workspace-leave-to { opacity: 0; transform: translateY(-4px); }
+.main-content:focus { outline: none; }
 #app-container { display: grid; grid-template-columns: 244px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; height: 100vh; min-height: 600px; overflow: hidden; color: var(--text-main); background: radial-gradient(circle at 70% -20%, rgba(245,185,122,.13), transparent 32%), radial-gradient(circle at 0% 100%, rgba(113,110,255,.1), transparent 38%), var(--bg-deep); }
 .main-content { min-width: 0; min-height: 0; padding: clamp(18px, 3vw, 40px); overflow: auto; }
 .mobile-menu-toggle, .theme-quick-toggle, .mobile-menu-backdrop { display: none; }
@@ -149,7 +161,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 @media (max-width: 380px) { .mobile-menu-toggle { padding-right: 9px; padding-left: 9px; }.mobile-menu-toggle b { display: none; } }
 :root[data-theme='light'] #app-container { background: radial-gradient(circle at 70% -20%, rgba(154,103,60,.13), transparent 34%), radial-gradient(circle at 0% 100%, rgba(102,89,168,.09), transparent 38%), var(--bg-deep); }
 :root[data-theme='light'] .theme-quick-toggle { background: rgba(255,250,243,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(91,67,46,.14); }
-@media (prefers-reduced-motion: reduce) { .mobile-menu-toggle, .theme-quick-toggle, .mobile-menu-backdrop { transition: none; } }
+@media (prefers-reduced-motion: reduce) { .mobile-menu-toggle, .theme-quick-toggle, .mobile-menu-backdrop, .workspace-enter-active, .workspace-leave-active { transition: none; } }
 .app-utility-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; max-width: 1440px; margin: 0 auto 14px; min-height: 34px; color: var(--text-faint); }
 .utility-context { display: flex; align-items: center; gap: 9px; min-width: 0; font: 8px var(--font-mono); letter-spacing: 1.6px; }
 .utility-context strong { overflow: hidden; color: var(--text-main); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .4px; }

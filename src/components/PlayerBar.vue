@@ -1,7 +1,7 @@
 <template>
   <footer class="player-bar" :class="{ 'has-error': state.error }">
     <button v-if="state.currentSong" class="now-track" @click="state.nowPlayingVisible = true" aria-label="Mở trình phát toàn màn hình">
-      <div class="mini-art" :class="{ spinning: state.isPlaying }"><img :src="state.currentSong.cover || '/images/ChoCiu.jpg'" :alt="state.currentSong.title" /><span class="mini-art-ring"></span></div>
+      <div class="mini-art" :class="{ spinning: state.isPlaying }"><img :src="state.currentSong.cover || fallbackCover" :alt="state.currentSong.title" @error="handleImageError" /><span class="mini-art-ring"></span></div>
       <div class="track-details"><strong class="track-title">{{ state.currentSong.title }}</strong><span class="track-artist">{{ state.currentSong.artist }}</span></div>
       <span class="expand-hint">↗</span>
     </button>
@@ -16,7 +16,7 @@
         <button class="icon-control optional" :class="{ active: state.repeatMode !== 'off' }" @click="toggleRepeat" title="Chế độ lặp" aria-label="Chế độ lặp"><span v-if="state.repeatMode === 'one'">↻¹</span><span v-else>↻</span></button>
       </div>
       <div class="progress-container"><span class="time">{{ formatTime(state.currentTime) }}</span><input type="range" class="progress-bar" min="0" :max="state.duration || 0" :value="state.currentTime" @input="seek($event.target.value)" :disabled="!state.currentSong" :style="progressStyle" aria-label="Tiến trình bài hát" /><span class="time">{{ formatTime(state.duration) }}</span></div>
-      <p v-if="state.error" class="player-error" role="status">{{ state.error }}</p>
+      <p v-if="state.error" class="player-error" role="alert" aria-live="assertive">{{ state.error }}</p>
     </div>
 
     <div class="player-actions"><button class="queue-toggle" :class="{ active: state.queueVisible }" @click="state.queueVisible = true" title="Hàng đợi" aria-label="Mở hàng đợi">☷</button><button class="volume-icon" @click="toggleMute" title="Tắt hoặc bật tiếng" aria-label="Tắt hoặc bật tiếng">{{ state.muted || state.volume === 0 ? '○' : '◖' }}</button><input type="range" class="volume-bar" min="0" max="1" step="0.01" :value="state.muted ? 0 : state.volume" @input="setVolume($event.target.value)" :style="volumeStyle" aria-label="Âm lượng" /><span class="quality-pill">HI-FI</span></div>
@@ -31,6 +31,13 @@ import { usePlayer, setAudioElement, handleAudioLoaded, handleAudioTimeUpdate, h
 
 const { state, togglePlay, seek, setVolume, toggleMute, toggleShuffle, toggleRepeat, next, previous } = usePlayer();
 const audioRef = ref(null);
+const fallbackCover = '/images/ChoCiu.jpg';
+const handleImageError = (event) => {
+  const image = event.currentTarget;
+  if (!image || image.dataset.fallbackApplied === 'true') return;
+  image.dataset.fallbackApplied = 'true';
+  image.src = fallbackCover;
+};
 
 onMounted(() => setAudioElement(audioRef.value));
 onBeforeUnmount(() => setAudioElement(null));
