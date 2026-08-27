@@ -174,6 +174,9 @@ export const sendChatAttachment = (conversationId, file, body = '') => { const f
 export const deleteChatMessage = (messageId) => request(`/chat/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
 export const reportChatMessage = (messageId, reason) => request(`/chat/messages/${encodeURIComponent(messageId)}/report`, { method: 'POST', body: JSON.stringify({ reason }) });
 export const cleanupChatMessages = () => request('/chat/cleanup', { method: 'DELETE' });
+export const getAdminChatReports = (status = '') => request(`/admin/chat-reports${status ? `?status_filter=${encodeURIComponent(status)}` : ''}`);
+export const reviewAdminChatReport = (id, status) => request(`/admin/chat-reports/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ status }) });
+export const cleanupAdminChatReports = (beforeDays = 30) => request(`/admin/chat-reports/cleanup?before_days=${encodeURIComponent(beforeDays)}`, { method: 'DELETE' });
 
 export const getMyProfile = () => request('/me');
 

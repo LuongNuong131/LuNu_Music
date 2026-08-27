@@ -329,6 +329,10 @@ class ChatReportRequest(BaseModel):
         return value.strip()
 
 
+class ChatReportStatusRequest(BaseModel):
+    status: Literal['reviewed', 'dismissed']
+
+
 def require_supabase() -> Client:
     if supabase is None:
         raise HTTPException(status_code=503, detail='Supabase chưa được cấu hình trên server.')
@@ -921,6 +925,18 @@ def notify_users(client: Client, user_ids: list[str], title: str, body: str, kin
 
 def notify_proposal_status(client: Client, proposal: dict, title: str, body: str, kind: str = 'proposal') -> None:
     notify_users(client, [str(proposal.get('requested_by') or '')], title, body, kind, f"proposal:{proposal.get('id', '')}")
+
+
+def notify_admins_about_chat_report(client: Client, report: dict, message: dict, reporter: dict) -> None:
+    try:
+        admins = client.table('users').select('id').eq('role', 'admin').limit(50).execute().data or []
+        admin_ids = [str(row.get('id')) for row in admins if row.get('id')]
+        sender_name = str(message.get('sender_name') or 'một thành viên')
+        reporter_name = str(reporter.get('display_name') or reporter.get('username') or 'một thành viên')
+        reason = str(report.get('reason') or '').replace('\\n', ' ')[:220]
+        notify_users(client, admin_ids, 'Báo cáo chat mới', f'@{reporter_name} báo cáo tin nhắn của @{sender_name}: {reason}', 'chat-report', f"chat-report:{report.get('id', '')}")
+    except Exception as error:
+        print(f'⚠️ Không thể thông báo report chat cho admin: {error}')
 
 
 def update_proposal(client: Client, proposal_id: str, updates: dict) -> None:
@@ -1885,13 +1901,87 @@ async def report_chat_message(message_id: str, request: ChatReportRequest, clien
         raise HTTPException(status_code=404, detail='Không tìm thấy tin nhắn trong cuộc trò chuyện của bạn.')
     assert_chat_access(client, str(row['conversation_id']), str(current_user['id']))
     try:
-        client.table('chat_reports').insert({'message_id': message_id, 'reporter_id': current_user['id'], 'reason': request.reason}).execute()
+        report = (client.table('chat_reports').insert({'message_id': message_id, 'reporter_id': current_user['id'], 'reason': request.reason}).select('id,message_id,reporter_id,reason,status,created_at').execute().data or [None])[0]
+        if not report:
+            raise RuntimeError('Supabase không trả report vừa tạo.')
+        try:
+            sender_rows = client.table('chat_messages').select('sender_id').eq('id', message_id).limit(1).execute().data or []
+            sender_id = str((sender_rows[0] if sender_rows else {}).get('sender_id') or '')
+            sender_map = social_users_map(client, [sender_id])
+            sender = sender_map.get(sender_id, {})
+            notify_admins_about_chat_report(client, report, {'sender_name': sender.get('display_name') or sender.get('username') or 'member'}, current_user)
+        except Exception as notification_error:
+            print(f'⚠️ Report đã ghi nhưng notification admin thất bại: {notification_error}')
     except Exception as error:
         if 'duplicate' in str(error).lower() or 'unique' in str(error).lower():
             raise HTTPException(status_code=409, detail='Bạn đã report tin nhắn này rồi.') from error
+        if is_missing_table_error(error, 'chat_reports'):
+            raise HTTPException(status_code=503, detail='Tính năng report chưa được bật. Admin cần chạy supabase/chat_messages.sql.') from error
         print(f'⚠️ Chat report failed: {error}')
         raise HTTPException(status_code=502, detail='Không thể report tin nhắn lúc này.') from error
     return {'success': True, 'message': 'Đã gửi report cho moderator.'}
+
+
+@app.get('/api/admin/chat-reports')
+async def get_admin_chat_reports(status_filter: Literal['open', 'reviewed', 'dismissed', ''] = Query(default=''), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    try:
+        query = client.table('chat_reports').select('id,message_id,reporter_id,reason,status,created_at,reviewed_by,reviewed_at')
+        if status_filter:
+            query = query.eq('status', status_filter)
+        reports = query.order('created_at', desc=True).limit(200).execute().data or []
+        message_ids = list({str(row.get('message_id')) for row in reports if row.get('message_id')})
+        reporter_ids = list({str(row.get('reporter_id')) for row in reports if row.get('reporter_id')})
+        messages = []
+        if message_ids:
+            try:
+                messages = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at,attachment_url,attachment_name,attachment_mime,attachment_size_bytes').in_('id', message_ids).limit(200).execute().data or []
+            except Exception as error:
+                if not is_missing_chat_attachment_column_error(error):
+                    raise
+                messages = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at').in_('id', message_ids).limit(200).execute().data or []
+        sender_ids = list({str(row.get('sender_id')) for row in messages if row.get('sender_id')})
+        users = social_users_map(client, reporter_ids + sender_ids)
+        message_map = {str(row.get('id')): row for row in messages}
+        items = []
+        for report in reports:
+            message = message_map.get(str(report.get('message_id')), {})
+            items.append({**report, 'message': message, 'reporter': users.get(str(report.get('reporter_id')), {}), 'sender': users.get(str(message.get('sender_id')), {})})
+        return {'items': items, 'open_count': sum(1 for item in items if item.get('status') == 'open')}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if is_missing_table_error(error, 'chat_reports'):
+            return {'items': [], 'open_count': 0, 'available': False}
+        print(f'⚠️ Admin chat report list failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể tải danh sách report chat lúc này.') from error
+
+
+@app.patch('/api/admin/chat-reports/{report_id}')
+async def review_admin_chat_report(report_id: str, request: ChatReportStatusRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(require_admin)) -> dict:
+    try:
+        row = (client.table('chat_reports').update({'status': request.status, 'reviewed_by': current_user['id'], 'reviewed_at': datetime.now(ZoneInfo('UTC')).isoformat()}).eq('id', report_id).select('id,status,reviewed_by,reviewed_at').execute().data or [None])[0]
+        if not row:
+            raise HTTPException(status_code=404, detail='Không tìm thấy report.')
+        return {'success': True, 'report': row}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if is_missing_table_error(error, 'chat_reports'):
+            raise HTTPException(status_code=503, detail='Bảng report chưa được tạo. Admin cần chạy supabase/chat_messages.sql.') from error
+        print(f'⚠️ Admin chat report review failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể cập nhật report lúc này.') from error
+
+
+@app.delete('/api/admin/chat-reports/cleanup')
+async def cleanup_admin_chat_reports(before_days: int = Query(default=30, ge=1, le=3650), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    cutoff = (datetime.now(ZoneInfo('UTC')) - timedelta(days=before_days)).isoformat()
+    try:
+        result = client.table('chat_reports').delete().in_('status', ['reviewed', 'dismissed']).lt('created_at', cutoff).execute()
+        return {'success': True, 'deleted_count': len(result.data or [])}
+    except Exception as error:
+        if is_missing_table_error(error, 'chat_reports'):
+            return {'success': True, 'deleted_count': 0, 'available': False}
+        raise HTTPException(status_code=502, detail='Không thể dọn report cũ lúc này.') from error
 
 
 @app.delete('/api/chat/cleanup')
