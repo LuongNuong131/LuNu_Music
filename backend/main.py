@@ -13,6 +13,7 @@ import tempfile
 import time
 import uuid
 import unicodedata
+from collections import deque
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
 import urllib.parse
@@ -24,7 +25,7 @@ import cloudinary
 import cloudinary.uploader
 import yt_dlp
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from supabase import Client, create_client
@@ -66,6 +67,11 @@ if AUTH_SECRET == 'change-this-secret-in-production':
 
 supabase: Optional[Client] = None
 import_jobs: dict[str, dict] = {}
+chat_connections: dict[str, set[WebSocket]] = {}
+chat_connection_users: dict[WebSocket, str] = {}
+chat_send_windows: dict[str, deque[float]] = {}
+CHAT_RATE_LIMIT_COUNT = 30
+CHAT_RATE_LIMIT_WINDOW_SECONDS = 60.0
 
 if SUPABASE_URL and SUPABASE_KEY:
     try:
@@ -99,6 +105,12 @@ async def periodic_cinema_cleanup() -> None:
                     print(f'🧹 Cinema cleanup: đã xóa {result["deleted_count"]}, lỗi {result["failed_count"]}.')
             except Exception as error:
                 print(f'⚠️ Cinema cleanup chưa chạy được: {error}')
+            try:
+                deleted_chat = await asyncio.to_thread(cleanup_expired_chat_messages, supabase)
+                if deleted_chat:
+                    print(f'🧹 Chat cleanup: đã xóa {deleted_chat} tin nhắn hết hạn.')
+            except Exception as error:
+                print(f'⚠️ Chat cleanup chưa chạy được: {error}')
         await asyncio.sleep(15 * 60)
 
 
@@ -287,6 +299,28 @@ class PrivacySettingsRequest(BaseModel):
     allow_direct_messages: Literal['friends', 'room_members', 'nobody'] = 'friends'
     show_online_status: bool = True
     show_current_room: bool = False
+
+
+class ChatTargetRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=80)
+
+
+class ChatMessageRequest(BaseModel):
+    body: str = Field(min_length=1, max_length=2000)
+
+    @field_validator('body')
+    @classmethod
+    def normalize_message_body(cls, value: str) -> str:
+        return value.strip()
+
+
+class ChatReportRequest(BaseModel):
+    reason: str = Field(min_length=1, max_length=500)
+
+    @field_validator('reason')
+    @classmethod
+    def normalize_report_reason(cls, value: str) -> str:
+        return value.strip()
 
 
 def require_supabase() -> Client:
@@ -1268,6 +1302,103 @@ def make_invite_code() -> str:
     return re.sub(r'[^A-Z0-9]', '', secrets.token_urlsafe(8).upper())[:10]
 
 
+def chat_get_conversation(client: Client, conversation_id: str) -> dict:
+    row = (client.table('conversations').select('id,kind,room_id,direct_key,created_by,created_at,updated_at').eq('id', conversation_id).limit(1).execute().data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail='Không tìm thấy cuộc trò chuyện.')
+    return row
+
+
+def chat_member(client: Client, conversation_id: str, user_id: str) -> Optional[dict]:
+    return (client.table('conversation_members').select('conversation_id,user_id,joined_at,last_read_at').eq('conversation_id', conversation_id).eq('user_id', user_id).limit(1).execute().data or [None])[0]
+
+
+def assert_chat_access(client: Client, conversation_id: str, user_id: str) -> tuple[dict, dict]:
+    """Require a current conversation membership and re-check its social/room authority."""
+    conversation = chat_get_conversation(client, conversation_id)
+    membership = chat_member(client, conversation_id, user_id)
+    if not membership:
+        raise HTTPException(status_code=403, detail='Bạn không thuộc cuộc trò chuyện này.')
+    kind = conversation.get('kind')
+    if kind == 'room':
+        room_id = str(conversation.get('room_id') or '')
+        if not room_id:
+            raise HTTPException(status_code=403, detail='Cuộc trò chuyện phòng không hợp lệ.')
+        get_room(client, room_id)
+        if not get_room_member(client, room_id, user_id):
+            raise HTTPException(status_code=403, detail='Bạn không còn là thành viên của phòng nghe này.')
+    elif kind == 'direct':
+        direct_ids = [part for part in str(conversation.get('direct_key') or '').split(':') if part]
+        if user_id not in direct_ids or len(direct_ids) != 2:
+            raise HTTPException(status_code=403, detail='Bạn không có quyền truy cập cuộc trò chuyện này.')
+        other_id = direct_ids[0] if direct_ids[1] == user_id else direct_ids[1]
+        if chat_is_blocked(client, user_id, other_id):
+            raise HTTPException(status_code=403, detail='Cuộc trò chuyện đã bị chặn.')
+        if not chat_are_friends(client, user_id, other_id):
+            raise HTTPException(status_code=403, detail='Cuộc trò chuyện trực tiếp chỉ dành cho bạn bè đã chấp nhận.')
+        if chat_privacy(client, other_id).get('allow_direct_messages', 'friends') == 'nobody':
+            raise HTTPException(status_code=403, detail='User này hiện không nhận tin nhắn trực tiếp.')
+    else:
+        raise HTTPException(status_code=403, detail='Loại cuộc trò chuyện không được hỗ trợ.')
+    return conversation, membership
+
+
+def enforce_chat_send_rate_limit(user_id: str) -> None:
+    now = time.monotonic()
+    window = chat_send_windows.setdefault(str(user_id), deque())
+    while window and now - window[0] >= CHAT_RATE_LIMIT_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= CHAT_RATE_LIMIT_COUNT:
+        raise HTTPException(status_code=429, detail='Bạn gửi tin nhắn quá nhanh. Vui lòng thử lại sau một lát.')
+    window.append(now)
+    if len(chat_send_windows) > 5000:
+        for key in list(chat_send_windows)[:1000]:
+            if not chat_send_windows[key]:
+                chat_send_windows.pop(key, None)
+
+
+def chat_is_blocked(client: Client, first_id: str, second_id: str) -> bool:
+    rows = client.table('blocks').select('id').or_(f'and(blocker_id.eq.{first_id},blocked_id.eq.{second_id}),and(blocker_id.eq.{second_id},blocked_id.eq.{first_id})').limit(1).execute().data or []
+    return bool(rows)
+
+
+def chat_are_friends(client: Client, first_id: str, second_id: str) -> bool:
+    rows = client.table('friendships').select('id').eq('status', 'accepted').or_(f'and(requester_id.eq.{first_id},addressee_id.eq.{second_id}),and(requester_id.eq.{second_id},addressee_id.eq.{first_id})').limit(1).execute().data or []
+    return bool(rows)
+
+
+def chat_privacy(client: Client, user_id: str) -> dict:
+    try:
+        row = (client.table('users').select('privacy_settings').eq('id', user_id).limit(1).execute().data or [{}])[0]
+        return row.get('privacy_settings') or {}
+    except Exception:
+        return {}
+
+
+def chat_message_payload(row: dict, users: dict) -> dict:
+    sender_id = str(row.get('sender_id') or '')
+    return {**row, 'sender': users.get(sender_id, {'id': sender_id, 'username': 'member', 'display_name': 'Member', 'avatar_url': '', 'role': 'user', 'bio': ''})}
+
+
+def cleanup_expired_chat_messages(client: Client) -> int:
+    cutoff = datetime.now(ZoneInfo('UTC')).isoformat()
+    response = client.table('chat_messages').delete().lte('expires_at', cutoff).execute()
+    return len(response.data or [])
+
+
+async def broadcast_chat_event(conversation_id: str, event: dict) -> None:
+    connections = chat_connections.get(str(conversation_id), set()).copy()
+    stale = []
+    for connection in connections:
+        try:
+            await connection.send_json(event)
+        except Exception:
+            stale.append(connection)
+    for connection in stale:
+        chat_connections.get(str(conversation_id), set()).discard(connection)
+        chat_connection_users.pop(connection, None)
+
+
 @app.get('/api/health')
 async def health() -> dict:
     return {
@@ -1419,6 +1550,243 @@ async def update_privacy_settings(request: PrivacySettingsRequest, client: Clien
     except Exception as error:
         raise HTTPException(status_code=503, detail='Privacy settings chưa được bật. Admin cần chạy supabase/user_profiles.sql trước.') from error
     return {'success': True, 'settings': settings, 'message': 'Đã lưu quyền riêng tư.'}
+
+
+@app.get('/api/chat/conversations')
+async def list_chat_conversations(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        memberships = client.table('conversation_members').select('conversation_id,last_read_at').eq('user_id', current_user['id']).limit(100).execute().data or []
+        conversation_ids = [row.get('conversation_id') for row in memberships if row.get('conversation_id')]
+        if not conversation_ids:
+            return {'items': []}
+        rows = client.table('conversations').select('id,kind,room_id,direct_key,created_by,created_at,updated_at').in_('id', conversation_ids).order('updated_at', desc=True).limit(100).execute().data or []
+        visible_rows = []
+        for row in rows:
+            try:
+                assert_chat_access(client, str(row.get('id')), str(current_user['id']))
+                visible_rows.append(row)
+            except HTTPException as access_error:
+                if access_error.status_code in {403, 404, 410}:
+                    continue
+                raise
+        rows = visible_rows
+        room_ids = [row.get('room_id') for row in rows if row.get('room_id')]
+        rooms_by_id = {}
+        if room_ids:
+            rooms = client.table('listening_rooms').select('id,name,invite_code,status').in_('id', room_ids).limit(50).execute().data or []
+            rooms_by_id = {str(row.get('id')): row for row in rooms}
+        direct_user_ids = []
+        for row in rows:
+            if row.get('kind') == 'direct' and row.get('direct_key'):
+                direct_user_ids.extend(str(value) for value in str(row['direct_key']).split(':') if value and value != str(current_user['id']))
+        users_by_id = social_users_map(client, list(set(direct_user_ids))) if direct_user_ids else {}
+        items = []
+        for row in rows:
+            item = {**row, 'room': rooms_by_id.get(str(row.get('room_id')))}
+            if row.get('kind') == 'direct' and row.get('direct_key'):
+                other_id = next((value for value in str(row['direct_key']).split(':') if value != str(current_user['id'])), '')
+                item['other_user'] = users_by_id.get(other_id)
+            items.append(item)
+        return {'items': items}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if any(is_missing_table_error(error, table) for table in ('conversations', 'chat_messages', 'conversation_members', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
+            raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
+        print(f'⚠️ Chat conversation list failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể tải cuộc trò chuyện lúc này.') from error
+
+
+@app.post('/api/chat/conversations/direct', status_code=status.HTTP_201_CREATED)
+async def create_direct_chat(request: ChatTargetRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    target_id = str(request.user_id)
+    if target_id == str(current_user['id']):
+        raise HTTPException(status_code=400, detail='Bạn không thể nhắn tin với chính mình.')
+    target = (client.table('users').select('id,username,role,display_name,avatar_url,bio').eq('id', target_id).limit(1).execute().data or [None])[0]
+    if not target:
+        raise HTTPException(status_code=404, detail='Không tìm thấy user này.')
+    if chat_is_blocked(client, str(current_user['id']), target_id):
+        raise HTTPException(status_code=403, detail='Không thể mở chat vì một trong hai tài khoản đang chặn nhau.')
+    if not chat_are_friends(client, str(current_user['id']), target_id):
+        raise HTTPException(status_code=403, detail='Chỉ có thể nhắn tin trực tiếp với bạn bè đã chấp nhận.')
+    privacy = chat_privacy(client, target_id)
+    if privacy.get('allow_direct_messages', 'friends') == 'nobody':
+        raise HTTPException(status_code=403, detail='User này hiện không nhận tin nhắn trực tiếp.')
+    direct_key = ':'.join(sorted([str(current_user['id']), target_id]))
+    existing = (client.table('conversations').select('*').eq('direct_key', direct_key).limit(1).execute().data or [None])[0]
+    if existing:
+        conversation = existing
+    else:
+        conversation = (client.table('conversations').insert({'kind': 'direct', 'direct_key': direct_key, 'created_by': current_user['id']}).select('*').execute().data or [None])[0]
+        if not conversation:
+            raise HTTPException(status_code=502, detail='Không thể tạo cuộc trò chuyện.')
+    client.table('conversation_members').upsert([{'conversation_id': conversation['id'], 'user_id': current_user['id']}, {'conversation_id': conversation['id'], 'user_id': target_id}], on_conflict='conversation_id,user_id').execute()
+    return {'success': True, 'conversation': conversation, 'other_user': public_user_payload(target), 'message': 'Đã mở cuộc trò chuyện.'}
+
+
+@app.post('/api/chat/conversations/room/{room_id}', status_code=status.HTTP_201_CREATED)
+async def create_room_chat(room_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    room = get_room(client, room_id)
+    member = get_room_member(client, room_id, str(current_user['id']))
+    if not member:
+        raise HTTPException(status_code=403, detail='Bạn chưa tham gia phòng nghe này.')
+    existing = (client.table('conversations').select('*').eq('room_id', room_id).limit(1).execute().data or [None])[0]
+    if existing:
+        conversation = existing
+    else:
+        conversation = (client.table('conversations').insert({'kind': 'room', 'room_id': room_id, 'created_by': room.get('host_id')}).select('*').execute().data or [None])[0]
+        if not conversation:
+            raise HTTPException(status_code=502, detail='Không thể tạo chat phòng.')
+    members = client.table('room_members').select('user_id').eq('room_id', room_id).limit(50).execute().data or []
+    rows = [{'conversation_id': conversation['id'], 'user_id': row['user_id']} for row in members if row.get('user_id')]
+    if rows:
+        client.table('conversation_members').upsert(rows, on_conflict='conversation_id,user_id').execute()
+    return {'success': True, 'conversation': conversation, 'message': 'Đã mở chat phòng.'}
+
+
+@app.get('/api/chat/conversations/{conversation_id}/messages')
+async def list_chat_messages(conversation_id: str, limit: int = Query(default=100, ge=1, le=100), client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        assert_chat_access(client, conversation_id, str(current_user['id']))
+        now = datetime.now(ZoneInfo('UTC')).isoformat()
+        rows = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at').eq('conversation_id', conversation_id).gt('expires_at', now).is_('deleted_at', 'null').order('created_at', desc=False).limit(limit).execute().data or []
+        sender_ids = list({str(row.get('sender_id')) for row in rows if row.get('sender_id')})
+        users = social_users_map(client, sender_ids)
+        return {'items': [chat_message_payload(row, users) for row in rows], 'expires_after_minutes': 60}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversation_members', 'conversations', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
+            raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
+        print(f'⚠️ Chat message list failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể tải tin nhắn lúc này.') from error
+
+
+@app.post('/api/chat/conversations/{conversation_id}/messages', status_code=status.HTTP_201_CREATED)
+async def send_chat_message(conversation_id: str, request: ChatMessageRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        assert_chat_access(client, conversation_id, str(current_user['id']))
+        enforce_chat_send_rate_limit(str(current_user['id']))
+        expires_at = (datetime.now(ZoneInfo('UTC')) + timedelta(minutes=60)).isoformat()
+        row = (client.table('chat_messages').insert({'conversation_id': conversation_id, 'sender_id': current_user['id'], 'body': request.body, 'expires_at': expires_at}).select('id,conversation_id,sender_id,body,created_at,expires_at').execute().data or [None])[0]
+        if not row:
+            raise HTTPException(status_code=502, detail='Không thể gửi tin nhắn.')
+        client.table('conversations').update({'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', conversation_id).execute()
+        message = chat_message_payload(row, {str(current_user['id']): public_user_payload(current_user)})
+        await broadcast_chat_event(conversation_id, {'event': 'message_created', 'message': message})
+        return {'success': True, 'message': message}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversation_members', 'conversations', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
+            raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
+        print(f'⚠️ Chat send failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể gửi tin nhắn lúc này.') from error
+
+
+@app.delete('/api/chat/messages/{message_id}')
+async def delete_chat_message(message_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        row = (client.table('chat_messages').select('id,conversation_id,sender_id').eq('id', message_id).limit(1).execute().data or [None])[0]
+        if not row:
+            raise HTTPException(status_code=404, detail='Không tìm thấy tin nhắn.')
+        assert_chat_access(client, str(row['conversation_id']), str(current_user['id']))
+        if str(row.get('sender_id')) != str(current_user['id']) and current_user.get('role') != 'admin':
+            raise HTTPException(status_code=403, detail='Bạn không có quyền xóa tin nhắn này.')
+        client.table('chat_messages').delete().eq('id', message_id).execute()
+        await broadcast_chat_event(row['conversation_id'], {'event': 'message_deleted', 'message_id': message_id})
+        return {'success': True, 'message': 'Đã xóa tin nhắn cho mọi người.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversation_members', 'conversations', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
+            raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
+        print(f'⚠️ Chat delete failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể xóa tin nhắn lúc này.') from error
+
+
+@app.post('/api/chat/messages/{message_id}/report', status_code=status.HTTP_201_CREATED)
+async def report_chat_message(message_id: str, request: ChatReportRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    row = (client.table('chat_messages').select('id,conversation_id').eq('id', message_id).limit(1).execute().data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail='Không tìm thấy tin nhắn trong cuộc trò chuyện của bạn.')
+    assert_chat_access(client, str(row['conversation_id']), str(current_user['id']))
+    try:
+        client.table('chat_reports').insert({'message_id': message_id, 'reporter_id': current_user['id'], 'reason': request.reason}).execute()
+    except Exception as error:
+        if 'duplicate' in str(error).lower() or 'unique' in str(error).lower():
+            raise HTTPException(status_code=409, detail='Bạn đã report tin nhắn này rồi.') from error
+        print(f'⚠️ Chat report failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể report tin nhắn lúc này.') from error
+    return {'success': True, 'message': 'Đã gửi report cho moderator.'}
+
+
+@app.delete('/api/chat/cleanup')
+async def cleanup_chat_messages(client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    try:
+        deleted = await asyncio.to_thread(cleanup_expired_chat_messages, client)
+        return {'success': True, 'deleted_count': deleted, 'message': f'Đã xóa {deleted} tin nhắn hết hạn.'}
+    except Exception as error:
+        print(f'⚠️ Chat cleanup failed: {error}')
+        raise HTTPException(status_code=502, detail='Không thể cleanup chat lúc này.') from error
+
+
+@app.websocket('/api/chat/ws')
+async def chat_websocket(websocket: WebSocket):
+    conversation_id = str(websocket.query_params.get('conversation_id') or '')
+    origin = (websocket.headers.get('origin') or '').rstrip('/')
+    connection = websocket
+    if origin and origin not in allowed_origins:
+        await websocket.close(code=4403)
+        return
+    if not conversation_id:
+        await websocket.close(code=4400)
+        return
+    await websocket.accept()
+    try:
+        auth_text = await asyncio.wait_for(websocket.receive_text(), timeout=10)
+        auth_packet = json.loads(auth_text)
+        token = str(auth_packet.get('token') or '') if isinstance(auth_packet, dict) else ''
+        try:
+            payload = decode_token(token)
+        except Exception:
+            await websocket.close(code=4403)
+            return
+        client = require_supabase()
+        user_row = (client.table('users').select('id,username,role,display_name,avatar_url,bio').eq('id', payload.get('sub')).limit(1).execute().data or [None])[0]
+        if not user_row:
+            await websocket.close(code=4403)
+            return
+        assert_chat_access(client, conversation_id, str(user_row['id']))
+        chat_connections.setdefault(conversation_id, set()).add(connection)
+        chat_connection_users[connection] = str(user_row['id'])
+        await websocket.send_json({'event': 'ready', 'conversation_id': conversation_id})
+        while True:
+            try:
+                packet = await asyncio.wait_for(websocket.receive_text(), timeout=35)
+            except asyncio.TimeoutError:
+                assert_chat_access(client, conversation_id, str(user_row['id']))
+                await websocket.send_json({'event': 'ping'})
+                continue
+            if packet == 'ping' or packet == '{"type":"ping"}':
+                await websocket.send_json({'event': 'pong'})
+            elif packet == 'pong' or packet == '{"type":"pong"}':
+                continue
+    except WebSocketDisconnect:
+        pass
+    except HTTPException:
+        try:
+            await websocket.close(code=4403)
+        except Exception:
+            pass
+    except Exception:
+        try:
+            await websocket.close(code=1011)
+        except Exception:
+            pass
+    finally:
+        chat_connections.get(conversation_id, set()).discard(connection)
+        chat_connection_users.pop(connection, None)
 
 
 @app.get('/api/rooms')

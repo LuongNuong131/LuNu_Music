@@ -201,8 +201,20 @@ Run the migrations in Supabase SQL Editor in this order:
 | 1 | `supabase/media_upgrade.sql` | Adds media metadata columns and creates the Cinema table. |
 | 2 | `supabase/cinema_retention.sql` | Adds `retention_mode`, `expires_at` and cleanup index. |
 | 3 | `supabase/media_requests_notifications.sql` | Creates media proposals and notification tables. |
+| 4 | `supabase/user_profiles.sql` | Adds profile and privacy fields used by social features. |
+| 5 | `supabase/social_friends.sql` | Adds friend/block relationships and indexes. |
+| 6 | `supabase/listening_rooms.sql` | Adds Listening Room and active room memberships. |
+| 7 | `supabase/chat_messages.sql` | Adds direct/room conversations, 60-minute message expiry and chat reports. |
 
-The migrations are intended to be idempotent, but they should still be applied deliberately and reviewed against the current schema. The backend uses the server-side key; do not expose that key in the frontend bundle.
+The migrations are intended to be idempotent, but they should still be applied deliberately and reviewed against the current schema. The backend uses the server-side key; do not expose that key in the frontend bundle. If an older deployment already applied some files, run only the missing migrations in dependency order and redeploy Render after the final migration.
+
+## Chat retention and realtime behavior
+
+Chat messages are created by the backend with an individual `expires_at` equal to server creation time plus 60 minutes. Reads hide expired rows immediately, and the periodic backend cleanup hard-deletes expired rows from the active Supabase database. This does not guarantee removal from provider backups, infrastructure logs, browser caches, screenshots or other copies outside the active application database.
+
+The Chat Hub uses FastAPI WebSocket for low-latency delivery when the sender and recipient are connected to the same Render instance. The registry is in memory and does not synchronize across instances or restarts, so the frontend keeps a four-second REST polling fallback. The UI labels these modes accurately and does not promise zero latency. Direct chat is re-authorized against current friendship/block/privacy state on every access; room chat also requires current `room_members` membership.
+
+The backend applies a lightweight per-instance limit of 30 messages per user per 60 seconds. A multi-instance deployment should replace this with a Redis or Supabase-RPC distributed limiter before increasing chat volume.
 
 ## Media lifecycle and safety
 

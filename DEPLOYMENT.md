@@ -128,3 +128,14 @@ Các API room gồm `GET /api/rooms`, `POST /api/rooms`, `POST /api/rooms/join`,
 Host broadcast trạng thái room khi bài, play/pause, queue hoặc vị trí thay đổi theo chu kỳ ngắn; thành viên chỉ nhận và áp dụng khi đã bật **Đồng bộ với phòng**. State dùng `state_version`, `updated_at`, `position_seconds` và server-time calculation để tránh áp dụng state cũ và giảm drift. Khi host dừng, thành viên đã opt-in sẽ pause; khi host đổi bài, thành viên sẽ tải bài mới vào player hiện tại.
 
 Luồng hiện tại dùng polling fallback khoảng 2,5 giây, chưa phải Supabase Realtime/WebSocket. Đây là quyết định an toàn tạm thời để không đưa connection lifecycle mới vào player core. Khi bổ sung Realtime, chỉ thay transport của room state, không thay đổi audio element hoặc queue cá nhân.
+
+
+## Chat realtime và tin nhắn tự hết hạn
+
+Chat được bật bằng migration `supabase/chat_messages.sql`. Migration này tạo conversations cho chat riêng/phòng, thành viên, tin nhắn có `expires_at` sau 60 phút và bảng reports. Chạy migration sau `user_profiles.sql`, `social_friends.sql` và `listening_rooms.sql`.
+
+Frontend ưu tiên WebSocket tại `/api/chat/ws` để nhận tin nhắn nhanh trong cùng instance. Khi WebSocket không kết nối được hoặc request đi qua instance khác, Chat Hub tự chuyển sang fallback polling để tin nhắn vẫn được cập nhật. Backend luôn lọc `expires_at` khi đọc và worker cleanup định kỳ xóa các row hết hạn. Admin có thể gọi cleanup thủ công từ API khi cần.
+
+Chat không dùng player, audio element hoặc queue cá nhân. Tin nhắn bị xóa khỏi database hoạt động sau 60 phút; không nên mô tả là xóa được screenshot, cache thiết bị, backup hoặc log hạ tầng. Backend có rate limit nhẹ 30 tin nhắn mỗi user trong 60 giây trên từng Render instance; khi mở rộng nhiều instance cần Redis hoặc Supabase RPC để có limiter phân tán. WebSocket registry cũng nằm trong RAM từng instance, vì vậy UI luôn giữ polling fallback 4 giây và không quảng cáo zero delay hoặc realtime xuyên instance tuyệt đối.
+
+Sau khi migration chạy và Render/Vercel deploy, user chỉ có thể mở direct chat với bạn bè đã accepted và không bị block. Room member có thể mở chat phòng từ Listening Room. Kiểm tra bằng hai tài khoản: gửi message ở một trình duyệt, xác nhận trình duyệt kia nhận realtime; tắt WebSocket hoặc đổi mạng để kiểm tra fallback polling.

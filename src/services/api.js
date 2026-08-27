@@ -165,6 +165,15 @@ export const unblockUser = (userId) => request(`/blocks/${encodeURIComponent(use
 export const getPrivacySettings = () => request('/me/privacy');
 export const updatePrivacySettings = (settings) => request('/me/privacy', { method: 'PATCH', body: JSON.stringify(settings) });
 
+export const getChatConversations = () => request('/chat/conversations');
+export const createDirectChat = (userId) => request('/chat/conversations/direct', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+export const createRoomChat = (roomId) => request(`/chat/conversations/room/${encodeURIComponent(roomId)}`, { method: 'POST', body: JSON.stringify({}) });
+export const getChatMessages = (conversationId, limit = 100) => request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?limit=${encodeURIComponent(limit)}`);
+export const sendChatMessage = (conversationId, body) => request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ body }) });
+export const deleteChatMessage = (messageId) => request(`/chat/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
+export const reportChatMessage = (messageId, reason) => request(`/chat/messages/${encodeURIComponent(messageId)}/report`, { method: 'POST', body: JSON.stringify({ reason }) });
+export const cleanupChatMessages = () => request('/chat/cleanup', { method: 'DELETE' });
+
 export const getMyProfile = () => request('/me');
 
 export const updateMyProfile = (profile) => request('/me/profile', {

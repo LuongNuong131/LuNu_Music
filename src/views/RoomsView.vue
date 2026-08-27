@@ -21,7 +21,7 @@
     </div>
 
     <div v-if="activeRoom" class="active-room glass-panel">
-      <div class="room-topline"><div><span class="card-kicker">CURRENT ROOM</span><h2>{{ activeRoom.name }}</h2><div class="room-meta"><span class="code-pill">CODE {{ activeRoom.invite_code }}</span><span>{{ activeRoom.members?.length || 0 }}/{{ activeRoom.max_members }} listeners</span><span>{{ activeRoom.visibility === 'private' ? 'Private room' : 'Public room' }}</span><span class="connection-pill"><i></i>{{ connectionState === 'connected' ? 'SYNCED' : 'POLLING' }}</span></div></div><div class="room-top-actions"><button type="button" class="copy-btn" @click="copyInviteCode">{{ copied ? 'Đã copy' : 'Copy code' }}</button><button type="button" class="quiet-btn" @click="leaveRoom">Rời phòng</button><button v-if="isHost" type="button" class="danger-btn" @click="closeRoom">Đóng phòng</button></div></div>
+      <div class="room-topline"><div><span class="card-kicker">CURRENT ROOM</span><h2>{{ activeRoom.name }}</h2><div class="room-meta"><span class="code-pill">CODE {{ activeRoom.invite_code }}</span><span>{{ activeRoom.members?.length || 0 }}/{{ activeRoom.max_members }} listeners</span><span>{{ activeRoom.visibility === 'private' ? 'Private room' : 'Public room' }}</span><span class="connection-pill"><i></i>{{ connectionState === 'connected' ? 'SYNCED' : 'POLLING' }}</span></div></div><div class="room-top-actions"><button type="button" class="copy-btn" @click="copyInviteCode">{{ copied ? 'Đã copy' : 'Copy code' }}</button><button type="button" class="copy-btn" @click="openRoomChat">Chat phòng</button><button type="button" class="quiet-btn" @click="leaveRoom">Rời phòng</button><button v-if="isHost" type="button" class="danger-btn" @click="closeRoom">Đóng phòng</button></div></div>
       <div class="room-grid">
         <section class="now-room-card">
           <div class="section-label">ROOM PLAYBACK</div>
@@ -41,9 +41,10 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref } from 'vue';
-import { closeListeningRoom, createListeningRoom, getListeningRoom, getListeningRooms, joinListeningRoom, leaveListeningRoom, updateListeningRoomState } from '../services/api';
+import { closeListeningRoom, createListeningRoom, createRoomChat, getListeningRoom, getListeningRooms, joinListeningRoom, leaveListeningRoom, updateListeningRoomState } from '../services/api';
 import { playerState } from '../store/playerState';
-import { authState } from '../store/appState';
+import { authState, currentView } from '../store/appState';
+import { selectChatConversation } from '../store/chatSession';
 import { closeRoomSession, openRoomSession, setRoomSyncEnabled, updateRoomSessionVersion } from '../store/roomSession';
 import { useDialog } from '../composables/useDialog';
 import { useToast } from '../composables/useToast';
@@ -72,6 +73,7 @@ const publishRoomSnapshot = async ({ announce = false } = {}) => { if (!activeRo
 const publishPlayerState = () => publishRoomSnapshot({ announce: true });
 const syncRoomToPlayer = () => { if (isRoomSynced.value) { isRoomSynced.value = false; setRoomSyncEnabled(false); showToast('Đã tắt đồng bộ phòng; player của bạn hoạt động riêng.', { type: 'info' }); return; } if (activeRoom.value?.current_song) { isRoomSynced.value = true; setRoomSyncEnabled(true, 0); showToast('Đã bật đồng bộ phòng cho player của bạn.', { type: 'success' }); } else showToast('Host chưa đưa bài đang nghe vào phòng.', { type: 'warning' }); };
 const copyInviteCode = async () => { try { await navigator.clipboard.writeText(activeRoom.value.invite_code); copied.value = true; window.setTimeout(() => { copied.value = false; }, 1800); } catch { showToast(`Mã phòng: ${activeRoom.value.invite_code}`, { type: 'info', duration: 4200 }); } };
+const openRoomChat = async () => { if (!activeRoom.value?.id) return; try { const response = await createRoomChat(activeRoom.value.id); selectChatConversation(response.conversation); currentView.value = 'chat'; showToast('Đã mở chat phòng.', { type: 'success' }); } catch (error) { showToast(error.message || 'Không thể mở chat phòng.', { type: 'error' }); } };
 const leaveRoom = async () => { if (!activeRoom.value || !await confirmDialog('Bạn muốn rời phòng nghe này?', { title: 'Rời phòng', confirmLabel: 'Rời phòng' })) return; isBusy.value = true; try { await leaveListeningRoom(activeRoom.value.id); stopPolling(); closeRoomSession(); activeRoom.value = null; await loadRooms(); showToast('Đã rời phòng.', { type: 'success' }); } catch (error) { showToast(error.message || 'Không thể rời phòng.', { type: 'error' }); } finally { isBusy.value = false; } };
 const closeRoom = async () => { if (!activeRoom.value || !await confirmDialog('Đóng phòng sẽ khiến mọi thành viên rời khỏi phiên nghe.', { title: 'Đóng phòng nghe', confirmLabel: 'Đóng phòng', danger: true })) return; isBusy.value = true; try { await closeListeningRoom(activeRoom.value.id); stopPolling(); closeRoomSession(); activeRoom.value = null; await loadRooms(); showToast('Đã đóng phòng nghe.', { type: 'success' }); } catch (error) { showToast(error.message || 'Không thể đóng phòng.', { type: 'error' }); } finally { isBusy.value = false; } };
 
