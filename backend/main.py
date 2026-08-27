@@ -961,6 +961,11 @@ def is_missing_table_error(error: Exception, table_name: str) -> bool:
     return table_name in detail and ('PGRST205' in detail or 'schema cache' in detail or 'Could not find the table' in detail)
 
 
+def is_missing_chat_attachment_column_error(error: Exception) -> bool:
+    detail = str(error).lower()
+    return 'attachment_url' in detail or 'attachment_public_id' in detail or 'attachment_resource_type' in detail
+
+
 def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
     image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.vtt', '.part', '.ytdl'}
     return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
@@ -1455,7 +1460,12 @@ def chat_message_payload(row: dict, users: dict) -> dict:
 
 def cleanup_expired_chat_messages(client: Client, limit: int = 100) -> int:
     cutoff = datetime.now(ZoneInfo('UTC')).isoformat()
-    rows = client.table('chat_messages').select('id,attachment_public_id,attachment_resource_type').lte('expires_at', cutoff).order('expires_at').limit(limit).execute().data or []
+    try:
+        rows = client.table('chat_messages').select('id,attachment_public_id,attachment_resource_type').lte('expires_at', cutoff).order('expires_at').limit(limit).execute().data or []
+    except Exception as error:
+        if not is_missing_chat_attachment_column_error(error):
+            raise
+        rows = client.table('chat_messages').select('id').lte('expires_at', cutoff).order('expires_at').limit(limit).execute().data or []
     deleted = 0
     for row in rows:
         try:
@@ -1732,13 +1742,20 @@ async def list_chat_messages(conversation_id: str, limit: int = Query(default=10
     try:
         assert_chat_access(client, conversation_id, str(current_user['id']))
         now = datetime.now(ZoneInfo('UTC')).isoformat()
-        rows = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at,attachment_url,attachment_public_id,attachment_resource_type,attachment_name,attachment_mime,attachment_size_bytes').eq('conversation_id', conversation_id).gt('expires_at', now).is_('deleted_at', 'null').order('created_at', desc=False).limit(limit).execute().data or []
+        try:
+            rows = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at,attachment_url,attachment_public_id,attachment_resource_type,attachment_name,attachment_mime,attachment_size_bytes').eq('conversation_id', conversation_id).gt('expires_at', now).is_('deleted_at', 'null').order('created_at', desc=False).limit(limit).execute().data or []
+        except Exception as error:
+            if not is_missing_chat_attachment_column_error(error):
+                raise
+            rows = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at').eq('conversation_id', conversation_id).gt('expires_at', now).is_('deleted_at', 'null').order('created_at', desc=False).limit(limit).execute().data or []
         sender_ids = list({str(row.get('sender_id')) for row in rows if row.get('sender_id')})
         users = social_users_map(client, sender_ids)
         return {'items': [chat_message_payload(row, users) for row in rows], 'expires_after_minutes': 60}
     except HTTPException:
         raise
     except Exception as error:
+        if is_missing_chat_attachment_column_error(error):
+            raise HTTPException(status_code=503, detail='Chat attachment schema chưa được bật. Chạy supabase/chat_attachments.sql rồi thử lại.') from error
         if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversation_members', 'conversations', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
             raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
         print(f'⚠️ Chat message list failed: {error}')
@@ -1761,6 +1778,8 @@ async def send_chat_message(conversation_id: str, request: ChatMessageRequest, c
     except HTTPException:
         raise
     except Exception as error:
+        if is_missing_chat_attachment_column_error(error):
+            raise HTTPException(status_code=503, detail='Chat attachment schema chưa được bật. Chạy supabase/chat_attachments.sql rồi thử lại.') from error
         if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversation_members', 'conversations', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
             raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
         print(f'⚠️ Chat send failed: {error}')
@@ -1832,7 +1851,12 @@ async def send_chat_attachment(conversation_id: str, file: UploadFile = File(...
 @app.delete('/api/chat/messages/{message_id}')
 async def delete_chat_message(message_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
     try:
-        row = (client.table('chat_messages').select('id,conversation_id,sender_id,attachment_public_id,attachment_resource_type').eq('id', message_id).limit(1).execute().data or [None])[0]
+        try:
+            row = (client.table('chat_messages').select('id,conversation_id,sender_id,attachment_public_id,attachment_resource_type').eq('id', message_id).limit(1).execute().data or [None])[0]
+        except Exception as error:
+            if not is_missing_chat_attachment_column_error(error):
+                raise
+            row = (client.table('chat_messages').select('id,conversation_id,sender_id').eq('id', message_id).limit(1).execute().data or [None])[0]
         if not row:
             raise HTTPException(status_code=404, detail='Không tìm thấy tin nhắn.')
         assert_chat_access(client, str(row['conversation_id']), str(current_user['id']))
@@ -1846,6 +1870,8 @@ async def delete_chat_message(message_id: str, client: Client = Depends(require_
     except HTTPException:
         raise
     except Exception as error:
+        if is_missing_chat_attachment_column_error(error):
+            raise HTTPException(status_code=503, detail='Chat attachment schema chưa được bật. Chạy supabase/chat_attachments.sql rồi thử lại.') from error
         if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversation_members', 'conversations', 'friendships', 'blocks', 'listening_rooms', 'room_members')):
             raise HTTPException(status_code=503, detail='Tính năng chat hoặc social chưa được bật đầy đủ. Admin cần chạy các migration social, room và chat trước.') from error
         print(f'⚠️ Chat delete failed: {error}')
