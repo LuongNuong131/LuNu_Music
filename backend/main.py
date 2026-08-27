@@ -261,7 +261,7 @@ class JoinRoomRequest(BaseModel):
 
 class RoomStateRequest(BaseModel):
     current_song: Optional[dict] = None
-    queue: list[dict] = Field(default_factory=list, max_length=100)
+    queue: list[dict] = Field(default_factory=list, max_length=300)
     is_playing: bool = False
     position_seconds: float = Field(default=0, ge=0, le=86400)
     expected_version: Optional[int] = Field(default=None, ge=0)

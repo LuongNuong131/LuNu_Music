@@ -21,7 +21,15 @@ const request = async (path, options = {}) => {
   const contentType = response.headers.get('content-type') || '';
   const payload = contentType.includes('application/json') ? await response.json() : await response.text();
   if (!response.ok) {
-    const message = typeof payload === 'object' && payload?.detail ? payload.detail : 'Yêu cầu không thành công.';
+    const detail = typeof payload === 'object' ? payload?.detail : null;
+    const message = Array.isArray(detail)
+      ? detail.map((item) => {
+        const field = Array.isArray(item?.loc) ? item.loc.filter((part) => part !== 'body').join('.') : '';
+        return `${field ? `${field}: ` : ''}${item?.msg || 'Dữ liệu không hợp lệ.'}`;
+      }).join(' · ')
+      : typeof detail === 'string'
+        ? detail
+        : detail?.message || payload?.message || 'Yêu cầu không thành công.';
     const error = new Error(message);
     error.status = response.status;
     if (response.status === 401 && token && path !== '/login') {
