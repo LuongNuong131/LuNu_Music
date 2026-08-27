@@ -327,3 +327,10 @@ Chat Hub hỗ trợ gửi ảnh JPG/PNG/WebP/GIF và các tệp PDF, TXT, CSV, J
 Để bật tính năng này, chạy `supabase/chat_messages.sql` trước rồi chạy `supabase/chat_attachments.sql` trong Supabase SQL Editor. Frontend không chứa Cloudinary secret. Nếu chưa chạy migration attachment, chat chữ vẫn có thể dùng nhưng gửi/đọc attachment sẽ báo cần bật schema.
 
 LuNu Music cũng có lớp premium visual refresh dùng chung cho workspace: ambient grid, glass hierarchy, focus state, spacing responsive, card elevation, typography rhythm và mobile-safe modal/notification layout. Lớp này không thay đổi audio element, player bar, queue persistence hay media URL.
+
+
+## Premium visual system và Dark/Light mode
+
+LuNu Music có design system dark premium mặc định và light mode warm editorial. Theme được quản lý trong `src/store/themeState.js`, áp dụng bằng CSS tokens trên `document.documentElement`, lưu vào `localStorage` với key `lunu-theme` và không reload trang hoặc reset player/queue. Desktop có theme switcher trong Sidebar; mobile có quick toggle ở app shell.
+
+Các view dùng chung hierarchy glass surface, warm gold accent, violet identity, mint success, crimson destructive state, typography dễ đọc, focus-visible, responsive spacing và reduced-motion support. `PlayerBar.vue`, audio element và queue logic không thuộc visual redesign này.

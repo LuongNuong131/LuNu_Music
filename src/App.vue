@@ -2,6 +2,7 @@
   <div v-if="!authState.user || !authState.token" id="login-container"><Login /></div>
   <div v-else id="app-container" class="glass-app-wrapper noise-overlay">
     <button type="button" class="mobile-menu-toggle" :aria-expanded="mobileMenuOpen" aria-controls="lunu-navigation" @click="mobileMenuOpen = true"><span></span><span></span><span></span><b>Menu</b></button>
+    <button type="button" class="theme-quick-toggle" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme">{{ themeState === 'dark' ? '☾' : '☀' }}</button>
     <div v-if="mobileMenuOpen" class="mobile-menu-backdrop" aria-hidden="true" @click="mobileMenuOpen = false"></div>
     <Sidebar id="lunu-navigation" :mobile-open="mobileMenuOpen" @close="mobileMenuOpen = false" />
     <main class="main-content">
@@ -69,6 +70,7 @@ import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { loadSongs, songsError, songsLoading } from './data/songs';
 import songs from './data/songs';
 import { authState, currentView } from './store/appState';
+import { themeState, toggleTheme } from './store/themeState';
 import { playSong, usePlayer } from './store/playerState';
 import { usePlaylists } from './composables/usePlaylists';
 import Login from './views/Login.vue';
@@ -137,9 +139,11 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 #login-container { min-height: 100vh; width: 100%; }
 #app-container { display: grid; grid-template-columns: 244px minmax(0, 1fr); grid-template-rows: minmax(0, 1fr) auto; height: 100vh; min-height: 600px; overflow: hidden; color: var(--text-main); background: radial-gradient(circle at 70% -20%, rgba(245,185,122,.13), transparent 32%), radial-gradient(circle at 0% 100%, rgba(113,110,255,.1), transparent 38%), var(--bg-deep); }
 .main-content { min-width: 0; min-height: 0; padding: clamp(18px, 3vw, 40px); overflow: auto; }
-.mobile-menu-toggle, .mobile-menu-backdrop { display: none; }
+.mobile-menu-toggle, .theme-quick-toggle, .mobile-menu-backdrop { display: none; }
 #app-container > .player-bar { grid-column: 1 / -1; }
-@media (max-width: 760px) { #app-container { display: flex; flex-direction: column; min-height: 100vh; }.main-content { flex: 1; order: 0; padding: 72px 16px max(90px, calc(74px + env(safe-area-inset-bottom))); }.mobile-menu-toggle { position: fixed; z-index: 90; top: max(12px, env(safe-area-inset-top)); left: 14px; display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 7px 11px; border: 1px solid rgba(245,185,122,.3); border-radius: 12px; background: rgba(13,16,24,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(0,0,0,.25); cursor: pointer; backdrop-filter: blur(14px); }.mobile-menu-toggle span { display: block; width: 15px; height: 1.5px; border-radius: 2px; background: currentColor; }.mobile-menu-toggle b { margin-left: 4px; font: 9px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; }.mobile-menu-backdrop { position: fixed; z-index: 110; inset: 0; display: block; background: rgba(3,5,10,.62); backdrop-filter: blur(2px); }.player-bar { order: 1; position: fixed !important; right: 0; bottom: 64px; left: 0; } body.mobile-menu-open { overflow: hidden; } }
+@media (max-width: 760px) { #app-container { display: flex; flex-direction: column; min-height: 100vh; }.main-content { flex: 1; order: 0; padding: 72px 16px max(90px, calc(74px + env(safe-area-inset-bottom))); }.theme-quick-toggle { position: fixed; z-index: 90; top: max(12px, env(safe-area-inset-top)); right: 14px; display: grid; place-items: center; width: 40px; height: 40px; border: 1px solid rgba(245,185,122,.3); border-radius: 12px; background: rgba(13,16,24,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(0,0,0,.25); cursor: pointer; font-size: 18px; backdrop-filter: blur(14px); }.mobile-menu-toggle { position: fixed; z-index: 90; top: max(12px, env(safe-area-inset-top)); left: 14px; display: inline-flex; align-items: center; gap: 4px; height: 40px; padding: 7px 11px; border: 1px solid rgba(245,185,122,.3); border-radius: 12px; background: rgba(13,16,24,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(0,0,0,.25); cursor: pointer; backdrop-filter: blur(14px); }.mobile-menu-toggle span { display: block; width: 15px; height: 1.5px; border-radius: 2px; background: currentColor; }.mobile-menu-toggle b { margin-left: 4px; font: 9px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; }.mobile-menu-backdrop { position: fixed; z-index: 110; inset: 0; display: block; background: rgba(3,5,10,.62); backdrop-filter: blur(2px); }.player-bar { order: 1; position: fixed !important; right: 0; bottom: 64px; left: 0; } body.mobile-menu-open { overflow: hidden; } }
 @media (max-width: 380px) { .mobile-menu-toggle { padding-right: 9px; padding-left: 9px; }.mobile-menu-toggle b { display: none; } }
-@media (prefers-reduced-motion: reduce) { .mobile-menu-toggle, .mobile-menu-backdrop { transition: none; } }
+:root[data-theme='light'] #app-container { background: radial-gradient(circle at 70% -20%, rgba(154,103,60,.13), transparent 34%), radial-gradient(circle at 0% 100%, rgba(102,89,168,.09), transparent 38%), var(--bg-deep); }
+:root[data-theme='light'] .theme-quick-toggle { background: rgba(255,250,243,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(91,67,46,.14); }
+@media (prefers-reduced-motion: reduce) { .mobile-menu-toggle, .theme-quick-toggle, .mobile-menu-backdrop { transition: none; } }
 </style>
