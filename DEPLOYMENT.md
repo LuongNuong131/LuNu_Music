@@ -99,6 +99,10 @@ Cinema video import truyền `postprocessors=[]` cho yt-dlp để không chạy 
 
 Nếu Supabase chưa có bảng `media_proposals` hoặc `notifications`, hãy chạy `supabase/media_requests_notifications.sql` một lần. Nếu đang dùng chế độ video tạm, cũng phải chạy `supabase/cinema_retention.sql`. Backend cleanup tự động kiểm tra định kỳ trong process, cleanup ngay khi mở thư viện, và admin có nút **Dọn video hết hạn** để chạy thủ công. Frontend hiện xử lý graceful fallback và không spam lỗi khi migration chưa sẵn sàng.
 
+### Chẩn đoán lỗi `413 Request Entity Too Large` khi tải MP3
+
+Nếu log audio hiển thị `Error parsing server response (413)` kèm HTML `nginx`, Cloudinary đã từ chối request upload vì file MP3 vượt giới hạn của endpoint hoặc plan. Phần `Expecting value` chỉ là lỗi phụ do SDK cố đọc trang HTML 413 như JSON. Backend mới nhận diện cả dạng lỗi Nginx 413, thử upload chunk và nếu bị giới hạn sẽ dùng FFmpeg nén lại MP3 dưới ngưỡng an toàn trước khi upload thường. Job phải hiển thị lần lượt `đang upload ... theo chunk`, `đang nén MP3`, `đang upload bản tương thích`, rồi `đang ghi metadata vào Supabase`.
+
 ### Chẩn đoán lỗi `Maximum is 104857600`
 
 Nếu log hiển thị `File size too large. Got ... Maximum is 104857600`, đó là giới hạn 100 MiB của Cloudinary plan hoặc endpoint upload thường. Bản backend mới sẽ thử upload chunk, nhận diện lỗi này, nén video xuống dưới giới hạn rồi upload lại. Log thành công phải có các bước sau theo thứ tự: video tải xong, `đang upload ... theo chunk`, nếu plan từ chối thì `đang nén video`, sau đó `đang upload bản tương thích` và cuối cùng ghi metadata Supabase. Nếu sau deploy không thấy các câu trạng thái mới mà vẫn lỗi ngay ở 100 MiB, Render chưa chạy đúng commit hoặc đang dùng sai Root Directory/Dockerfile; hãy kiểm tra commit deploy là commit mới nhất trên `master` và dùng **Clear build cache & deploy**.

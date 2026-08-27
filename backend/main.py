@@ -747,13 +747,15 @@ def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
 
 def cloudinary_rejects_large_file(error: Exception) -> bool:
     message = str(error).lower()
-    return (
+    nginx_413 = '413' in message and ('request entity too large' in message or 'nginx' in message)
+    explicit_limit = (
         ('file size too large' in message or 'maximum is' in message or 'maximum file size' in message)
         and ('104857600' in message or '100 mb' in message or '100mb' in message)
     )
+    return nginx_413 or explicit_limit
 
 
-def transcode_video_for_cloudinary(input_path: Path, output_path: Path) -> None:
+def _media_duration_seconds(input_path: Path) -> float:
     probe = subprocess.run(
         [
             'ffprobe', '-v', 'error', '-show_entries', 'format=duration',
@@ -765,7 +767,35 @@ def transcode_video_for_cloudinary(input_path: Path, output_path: Path) -> None:
     except (TypeError, ValueError):
         duration = 0
     if duration <= 0:
-        raise RuntimeError('Không xác định được thời lượng video để nén tương thích Cloudinary.')
+        raise RuntimeError('Không xác định được thời lượng media để nén tương thích Cloudinary.')
+    return duration
+
+
+def transcode_audio_for_cloudinary(input_path: Path, output_path: Path) -> None:
+    duration = _media_duration_seconds(input_path)
+    target_bits_per_second = int((CLOUDINARY_SAFE_VIDEO_BYTES * 8 * 0.82) / duration)
+    audio_bitrate = max(32_000, min(128_000, target_bits_per_second))
+    command = [
+        'ffmpeg', '-y', '-i', str(input_path),
+        '-map', '0:a:0?', '-vn', '-codec:a', 'libmp3lame',
+        '-b:a', str(audio_bitrate), '-ar', '44100', '-ac', '2',
+        '-id3v2_version', '3', str(output_path),
+    ]
+    completed = subprocess.run(
+        command, capture_output=True, text=True, timeout=VIDEO_TRANSCODE_TIMEOUT_SECONDS,
+    )
+    if completed.returncode != 0 or not output_path.exists():
+        raise RuntimeError(f'FFmpeg không thể nén MP3 để upload: {completed.stderr[-800:]}')
+    compressed_size = output_path.stat().st_size
+    if compressed_size >= CLOUDINARY_PLAN_LIMIT_BYTES:
+        output_path.unlink(missing_ok=True)
+        raise RuntimeError(
+            f'MP3 sau khi nén vẫn vượt giới hạn Cloudinary ({compressed_size} bytes >= {CLOUDINARY_PLAN_LIMIT_BYTES}).'
+        )
+
+
+def transcode_video_for_cloudinary(input_path: Path, output_path: Path) -> None:
+    duration = _media_duration_seconds(input_path)
 
     target_bits_per_second = int((CLOUDINARY_SAFE_VIDEO_BYTES * 8 * 0.88) / duration)
     audio_bitrate = 64_000
@@ -791,7 +821,7 @@ def transcode_video_for_cloudinary(input_path: Path, output_path: Path) -> None:
         )
 
 
-def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str, status_callback=None) -> dict:
+def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str, status_callback=None, fallback_kind: str = 'video') -> dict:
     if resource_type == 'video':
         try:
             if status_callback:
@@ -807,20 +837,37 @@ def upload_cloudinary_media(file_path: Path, public_id: str, resource_type: str,
         except Exception as error:
             if not cloudinary_rejects_large_file(error):
                 raise
-            compressed_path = file_path.with_name(f'{file_path.stem}-cloudinary.mp4')
+            extension = 'mp3' if fallback_kind == 'audio' else 'mp4'
+            compressed_path = file_path.with_name(f'{file_path.stem}-cloudinary.{extension}')
             if status_callback:
-                status_callback('Cloudinary plan giới hạn 100 MiB; đang nén video xuống bản tương thích...')
-            try:
-                transcode_video_for_cloudinary(file_path, compressed_path)
-                if status_callback:
-                    status_callback(f'Đã nén video còn {compressed_path.stat().st_size} bytes; đang upload bản tương thích...')
-                return cloudinary.uploader.upload(
-                    str(compressed_path),
-                    resource_type='video',
-                    public_id=public_id,
-                    overwrite=False,
-                    unique_filename=False,
+                status_callback(
+                    'Cloudinary plan giới hạn 100 MiB; đang nén '
+                    f'{"MP3" if fallback_kind == "audio" else "video"} xuống bản tương thích...'
                 )
+            try:
+                if fallback_kind == 'audio':
+                    transcode_audio_for_cloudinary(file_path, compressed_path)
+                else:
+                    transcode_video_for_cloudinary(file_path, compressed_path)
+                if status_callback:
+                    status_callback(
+                        f'Đã nén {"MP3" if fallback_kind == "audio" else "video"} còn '
+                        f'{compressed_path.stat().st_size} bytes; đang upload bản tương thích...'
+                    )
+                try:
+                    return cloudinary.uploader.upload(
+                        str(compressed_path),
+                        resource_type=resource_type,
+                        public_id=public_id,
+                        overwrite=False,
+                        unique_filename=False,
+                    )
+                except Exception as fallback_error:
+                    if cloudinary_rejects_large_file(fallback_error):
+                        raise RuntimeError(
+                            f'{"MP3" if fallback_kind == "audio" else "Video"} đã nén vẫn bị Cloudinary từ chối do vượt giới hạn 100 MiB.'
+                        ) from fallback_error
+                    raise
             finally:
                 compressed_path.unlink(missing_ok=True)
     return cloudinary.uploader.upload(
@@ -940,7 +987,13 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
             update_proposal(client, proposal_id, {'file_size_bytes': file_size_bytes})
         set_import_job(job_id, message=f'Đã tải MP3 ({file_size_bytes or 0} bytes), đang upload Cloudinary với mã {media_key}...')
         public_id = f'lunu_music/{media_key}'
-        result = cloudinary.uploader.upload(str(file_path), resource_type='video', public_id=public_id, overwrite=False, unique_filename=False)
+        result = upload_cloudinary_media(
+            file_path,
+            public_id,
+            'video',
+            status_callback=lambda message: set_import_job(job_id, message=f'{message} Mã {media_key}.'),
+            fallback_kind='audio',
+        )
         secure_url = result.get('secure_url')
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url.')
