@@ -6,6 +6,10 @@
     <div v-if="mobileMenuOpen" class="mobile-menu-backdrop" aria-hidden="true" @click="mobileMenuOpen = false"></div>
     <Sidebar id="lunu-navigation" :mobile-open="mobileMenuOpen" @close="mobileMenuOpen = false" />
     <main class="main-content">
+      <div class="app-utility-bar" role="navigation" aria-label="Thanh công cụ nhanh">
+        <div class="utility-context"><span class="utility-pulse"></span><span>LISTENING ROOM</span><b>/</b><strong>{{ viewTitle }}</strong></div>
+        <button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span>⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button>
+      </div>
       <AdminView v-if="currentView === 'admin'" />
       <CinemaView v-else-if="currentView === 'cinema'" />
       <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
@@ -66,7 +70,7 @@
 </template>
 
 <script setup>
-import { onBeforeUnmount, onMounted, ref, watch } from 'vue';
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue';
 import { loadSongs, songsError, songsLoading } from './data/songs';
 import songs from './data/songs';
 import { authState, currentView } from './store/appState';
@@ -96,6 +100,7 @@ import ConfirmModal from './components/ConfirmModal.vue';
 import NotificationCenter from './components/NotificationCenter.vue';
 import { useDialog } from './composables/useDialog';
 
+const viewTitle = computed(() => ({ home: 'Tổng quan', liked: 'Yêu thích', playlists: 'Playlist', artists: 'Ca sĩ', lyrics: 'Lyrics Lab', cinema: 'LuNu Tea Room', proposals: 'Đề xuất media', account: 'Hồ sơ', rooms: 'Phòng nghe', friends: 'Bạn bè', chat: 'Chat', admin: 'Quản trị' }[currentView.value] || 'Tổng quan'));
 const player = usePlayer();
 const { playlists, selectPlaylist } = usePlaylists();
 const commandOpen = ref(false);
@@ -146,4 +151,14 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 :root[data-theme='light'] #app-container { background: radial-gradient(circle at 70% -20%, rgba(154,103,60,.13), transparent 34%), radial-gradient(circle at 0% 100%, rgba(102,89,168,.09), transparent 38%), var(--bg-deep); }
 :root[data-theme='light'] .theme-quick-toggle { background: rgba(255,250,243,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(91,67,46,.14); }
 @media (prefers-reduced-motion: reduce) { .mobile-menu-toggle, .theme-quick-toggle, .mobile-menu-backdrop { transition: none; } }
+.app-utility-bar { display: flex; align-items: center; justify-content: space-between; gap: 18px; max-width: 1440px; margin: 0 auto 14px; min-height: 34px; color: var(--text-faint); }
+.utility-context { display: flex; align-items: center; gap: 9px; min-width: 0; font: 8px var(--font-mono); letter-spacing: 1.6px; }
+.utility-context strong { overflow: hidden; color: var(--text-main); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .4px; }
+.utility-context b { color: var(--hairline); font-weight: 400; }
+.utility-pulse { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); }
+.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
+.utility-search:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }
+.utility-search > span:first-child { color: var(--gold); font-size: 15px; line-height: .7; }
+.utility-search kbd { padding: 3px 5px; border: 1px solid var(--hairline-soft); border-radius: 5px; color: var(--text-faint); font: 8px var(--font-mono); }
+@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-search { padding: 7px 8px; }.utility-search-label, .utility-search kbd { display: none; } }
 </style>
