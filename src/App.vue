@@ -155,9 +155,37 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 .utility-context strong { overflow: hidden; color: var(--text-main); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .4px; }
 .utility-context b { color: var(--hairline); font-weight: 400; }
 .utility-pulse { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); }
-.utility-actions { display: flex; align-items: center; gap: 8px; flex: none; }.utility-actions :deep(.notification-center) { position: relative; top: auto; right: auto; z-index: 1; width: auto; }.utility-actions :deep(.notification-trigger) { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.045); box-shadow: none; }.utility-actions :deep(.notification-trigger span) { font-size: 18px; }.utility-actions :deep(.notification-trigger b) { top: -4px; right: -4px; }.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
+.utility-actions { display: flex; align-items: center; gap: 8px; flex: none; }.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
 .utility-search:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }
 .utility-search > span:first-child { color: var(--gold); font-size: 15px; line-height: .7; }
 .utility-search kbd { padding: 3px 5px; border: 1px solid var(--hairline-soft); border-radius: 5px; color: var(--text-faint); font: 8px var(--font-mono); }
 @media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-actions { gap: 6px; }.utility-search { padding: 7px 8px; }.utility-search-label, .utility-search kbd { display: none; } }
+/* Mobile shell v2: phone-first navigation and floating player dock. */
+@media (max-width: 760px) {
+  #app-container { min-height: 100dvh; height: 100dvh; }
+  #app-container .main-content { padding-top: 78px; padding-bottom: calc(104px + env(safe-area-inset-bottom)); }
+  #app-container .app-utility-bar { position: fixed; z-index: 100; top: 0; right: 0; left: 0; display: flex; min-height: 62px; margin: 0; padding: max(10px, env(safe-area-inset-top)) 14px 9px 76px; border-bottom: 1px solid rgba(255,255,255,.07); background: linear-gradient(180deg, rgba(8,10,16,.97), rgba(8,10,16,.84)); backdrop-filter: blur(18px); }
+  #app-container .utility-context { gap: 7px; font-size: 8px; }
+  #app-container .utility-context strong { font-size: 10px; }
+  #app-container .utility-actions { margin-left: auto; }
+  #app-container .utility-search { width: 34px; height: 34px; padding: 0; justify-content: center; border-radius: 10px; }
+  #app-container .mobile-menu-toggle { z-index: 180; top: max(10px, env(safe-area-inset-top)); left: 14px; width: 46px; height: 36px; padding: 0; justify-content: center; border-color: rgba(245,185,122,.34); border-radius: 11px; background: rgba(18,21,30,.92); }
+  #app-container .mobile-menu-toggle b { display: none; }
+  #app-container .theme-quick-toggle { display: none; }
+  #app-container > .glass-sidebar { position: fixed; z-index: 170; top: 0; bottom: 0; left: 0; width: min(310px, 86vw); height: 100dvh; padding: max(20px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid rgba(245,185,122,.2); border-top: 0; border-radius: 0 24px 24px 0; background: linear-gradient(180deg, rgba(18,22,32,.99), rgba(8,11,17,.98)); box-shadow: 26px 0 70px rgba(0,0,0,.5); }
+  #app-container > .glass-sidebar .sidebar-brand { padding-bottom: 28px; }
+  #app-container > .glass-sidebar .nav-menu { padding-top: 2px; }
+  #app-container > .glass-sidebar .nav-menu button { min-height: 43px; border-radius: 12px; }
+  #app-container > .glass-sidebar .sidebar-note { margin-bottom: 18px; }
+  #app-container > .player-bar { position: fixed !important; z-index: 140; right: 12px; bottom: max(12px, env(safe-area-inset-bottom)); left: 12px; min-height: 68px !important; padding: 8px 11px !important; border: 1px solid rgba(245,185,122,.2); border-radius: 19px; background: rgba(16,19,28,.94); box-shadow: 0 18px 45px rgba(0,0,0,.42), 0 0 0 1px rgba(255,255,255,.03); backdrop-filter: blur(22px); }
+  #app-container > .player-bar .mini-art { width: 42px; height: 42px; border-radius: 12px; }
+  #app-container > .player-bar .track-title { font-size: 11px; }
+  #app-container > .player-bar .track-artist { margin-top: 3px; font-size: 9px; }
+  #app-container > .player-bar .play-btn { width: 40px; height: 40px; }
+}
+@media (max-width: 390px) {
+  #app-container .main-content { padding-right: 11px; padding-left: 11px; }
+  #app-container .app-utility-bar { padding-right: 11px; padding-left: 70px; }
+  #app-container > .player-bar { right: 8px; left: 8px; }
+}
 </style>

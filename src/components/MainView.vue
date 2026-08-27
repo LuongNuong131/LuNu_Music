@@ -65,4 +65,51 @@ const toggleLike = (song) => changeLike(song);
 .song-card.active { box-shadow: 0 16px 40px rgba(245,185,122,.1), inset 0 0 0 1px rgba(245,185,122,.08); }
 .song-card.active .card-index { color: var(--gold); }
 @media (max-width: 760px) { .library-toolbar { top: -14px; padding-top: 20px; } }
+/* Mobile-first content pass: clearer rhythm, touch targets and less desktop density. */
+@media (max-width: 760px) {
+  .main-view { width: 100%; }
+  .view-header { min-height: 0; padding: 24px 20px 22px; border-radius: 22px; background: linear-gradient(135deg, rgba(31,35,48,.98), rgba(13,16,24,.92)); }
+  .view-header::after { right: -62px; bottom: -70px; width: 165px; height: 165px; }
+  .view-header h1 { font-size: clamp(38px, 11vw, 52px); line-height: .93; letter-spacing: -2.5px; }
+  .view-header .lede { max-width: 310px; margin-top: 15px; font-size: 12px; line-height: 1.6; }
+  .header-actions { gap: 8px; }
+  .header-actions button { min-height: 42px; border-radius: 12px; }
+  .stats-row { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); align-items: start; gap: 10px; padding: 18px 4px 20px; }
+  .stats-row > div:not(.status-note) { display: flex; align-items: flex-start; flex-direction: column; gap: 3px; }
+  .stat-value { font-size: 22px; }
+  .stat-label { font-size: 8px !important; letter-spacing: 1px; }
+  .discovery-panel { margin: 20px 0 8px; padding: 18px 15px 15px; border-radius: 19px; }
+  .discovery-heading { gap: 14px; }
+  .discovery-heading h2 { font-size: 27px; }
+  .discovery-heading p:last-child { font-size: 10px; line-height: 1.55; }
+  .discovery-play { min-height: 40px; }
+  .recommendation-grid { grid-template-columns: 1fr; gap: 7px; margin-top: 16px; }
+  .recommendation-card { min-height: 57px; padding: 7px; border-radius: 12px; }
+  .recommendation-card:nth-child(n+4) { display: none; }
+  .recommendation-art { width: 43px; height: 43px; }
+  .recommendation-card strong { font-size: 11px; }
+  .recommendation-card small { font-size: 9px; }
+  .library-toolbar { top: 0; gap: 9px; margin-right: 0; margin-left: 0; padding: 17px 0 13px; background: linear-gradient(180deg, rgba(6,8,13,.98) 72%, rgba(6,8,13,.84) 88%, transparent); }
+  .section-heading h2 { font-size: 23px; }
+  .search-box { min-height: 42px; padding: 10px 12px; border-radius: 12px; }
+  .library-toolbar select { min-height: 42px; border-radius: 12px; }
+  .songs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+  .song-card { padding: 7px; border-radius: 15px; }
+  .cover-wrapper { border-radius: 11px; }
+  .card-play { right: 9px; bottom: 9px; width: 35px; height: 35px; opacity: 1; transform: none; }
+  .song-info { padding: 10px 2px 2px; }
+  .song-title { font-size: 11px !important; }
+  .song-artist { margin: 5px 0 0; font-size: 9px !important; }
+  .card-meta { display: none; }
+  .like-btn { width: 25px; height: 25px; font-size: 17px; }
+  .recent-section { margin-top: 34px; }
+  .recent-list { gap: 8px; }
+  .recent-item { min-height: 58px; padding: 8px; border-radius: 11px; }
+}
+@media (max-width: 380px) {
+  .songs-grid { gap: 8px; }
+  .song-card { padding: 6px; }
+  .song-title { font-size: 10px !important; }
+  .header-actions button { padding-inline: 10px; font-size: 10px; }
+}
 </style>
