@@ -3,13 +3,13 @@
   <div v-else id="app-container" class="glass-app-wrapper noise-overlay">
     <a class="skip-link" href="#main-workspace">Bỏ qua đến nội dung</a>
     <button type="button" class="mobile-menu-toggle" :aria-expanded="mobileMenuOpen" aria-controls="lunu-navigation" aria-label="Mở menu điều hướng" @click="mobileMenuOpen = true"><span></span><span></span><span></span><b>Menu</b></button>
-    <button type="button" class="theme-quick-toggle" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme">{{ themeState === 'dark' ? '☾' : '☀' }}</button>
+    <button type="button" class="theme-quick-toggle" :aria-pressed="themeState === 'light'" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme">{{ themeState === 'dark' ? '☾' : '☀' }}</button>
     <div v-if="mobileMenuOpen" class="mobile-menu-backdrop" aria-hidden="true" @click="mobileMenuOpen = false"></div>
     <Sidebar id="lunu-navigation" :mobile-open="mobileMenuOpen" @close="mobileMenuOpen = false" />
     <main id="main-workspace" class="main-content" tabindex="-1">
       <div class="app-utility-bar" role="navigation" aria-label="Thanh công cụ nhanh">
         <div class="utility-context"><span class="utility-pulse"></span><span>LISTENING ROOM</span><b>/</b><strong aria-live="polite">{{ viewTitle }}</strong></div>
-        <div class="utility-actions"><NotificationCenter compact /><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span aria-hidden="true">⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
+        <div class="utility-actions"><NotificationCenter compact /><button type="button" class="utility-theme" :aria-pressed="themeState === 'light'" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme"><span aria-hidden="true">{{ themeState === 'dark' ? '☾' : '☀' }}</span><span class="utility-theme-label">{{ themeState === 'dark' ? 'Dark' : 'Light' }}</span></button><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span aria-hidden="true">⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
       </div>
       <Transition name="workspace" mode="out-in">
         <div :key="currentView" class="workspace-view">
@@ -168,10 +168,13 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 .utility-context b { color: var(--hairline); font-weight: 400; }
 .utility-pulse { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); }
 .utility-actions { display: flex; align-items: center; gap: 8px; flex: none; }.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
-.utility-search:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }
+.utility-search:hover, .utility-theme:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }
+.utility-theme { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
+.utility-theme > span:first-child { color: var(--gold); font-size: 14px; }
+.utility-theme-label { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: .7px; text-transform: uppercase; }
 .utility-search > span:first-child { color: var(--gold); font-size: 15px; line-height: .7; }
 .utility-search kbd { padding: 3px 5px; border: 1px solid var(--hairline-soft); border-radius: 5px; color: var(--text-faint); font: 8px var(--font-mono); }
-@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-actions { gap: 6px; }.utility-search { padding: 7px 8px; }.utility-search-label, .utility-search kbd { display: none; } }
+@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-actions { gap: 6px; }.utility-theme { width: 34px; height: 34px; padding: 0; justify-content: center; }.utility-theme-label, .utility-search-label, .utility-search kbd { display: none; }.utility-search { padding: 7px 8px; } }
 /* Mobile shell v2: phone-first navigation and floating player dock. */
 @media (max-width: 760px) {
   #app-container { min-height: 100dvh; height: 100dvh; }
@@ -184,6 +187,7 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
   #app-container .mobile-menu-toggle { z-index: 180; top: max(10px, env(safe-area-inset-top)); left: 14px; width: 46px; height: 36px; padding: 0; justify-content: center; border-color: rgba(245,185,122,.34); border-radius: 11px; background: rgba(18,21,30,.92); }
   #app-container .mobile-menu-toggle b { display: none; }
   #app-container .theme-quick-toggle { display: none; }
+  #app-container .utility-theme { display: none; }
   #app-container > .glass-sidebar { position: fixed; z-index: 170; top: 0; bottom: 0; left: 0; width: min(310px, 86vw); height: 100dvh; padding: max(20px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid rgba(245,185,122,.2); border-top: 0; border-radius: 0 24px 24px 0; background: linear-gradient(180deg, rgba(18,22,32,.99), rgba(8,11,17,.98)); box-shadow: 26px 0 70px rgba(0,0,0,.5); }
   #app-container > .glass-sidebar .sidebar-brand { padding-bottom: 28px; }
   #app-container > .glass-sidebar .nav-menu { padding-top: 2px; }

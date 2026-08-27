@@ -1,7 +1,7 @@
 <template>
   <section class="main-view">
     <header class="view-header">
-      <div><p class="eyebrow">LU NU MUSIC / PERSONAL LIBRARY</p><h1 v-if="!onlyLiked">Những giai điệu<br /><em>của riêng bạn.</em></h1><h1 v-else>Những bài hát<br /><em>được yêu thích.</em></h1><p class="lede">{{ onlyLiked ? 'Những ca khúc bạn đã đánh dấu, được giữ lại trong một không gian riêng tư trên thiết bị này.' : 'Một không gian nghe nhạc tinh gọn, sâu lắng và được thiết kế để bạn ở lại lâu hơn.' }}</p></div>
+      <div><p class="eyebrow">LU NU MUSIC / PERSONAL LISTENING ROOM</p><h1 v-if="!onlyLiked"><span class="hero-greeting">{{ greeting }}, {{ listenerName }}</span><br /><em>nghe gì hôm nay?</em></h1><h1 v-else>Những bài hát<br /><em>được yêu thích.</em></h1><p class="lede">{{ onlyLiked ? 'Những ca khúc bạn đã đánh dấu, được giữ lại trong một không gian riêng tư trên thiết bị này.' : 'Một không gian nghe nhạc tinh gọn, sâu lắng và được thiết kế để bạn ở lại lâu hơn.' }}</p></div>
       <div class="header-actions"><button type="button" class="ghost-btn" @click="state.queueVisible = true">☷ <span>Hàng đợi</span></button><button type="button" class="primary-btn" :disabled="!filteredSongs.length" @click="playAll">▶ Phát tất cả</button></div>
     </header>
 
@@ -9,13 +9,13 @@
 
     <section v-if="!onlyLiked && recommendations.length" class="discovery-panel" aria-labelledby="discovery-title"><div class="discovery-heading"><div><p class="eyebrow">PERSONAL ROTATION / 01</p><h2 id="discovery-title">Dành cho <em>bạn.</em></h2><p>LuNu chọn một vòng nghe dựa trên những gì bạn đã yêu thích và thường quay lại.</p></div><button class="discovery-play" type="button" @click="playRecommendation(recommendations[0])">▶ Phát mix</button></div><div class="recommendation-grid"><button v-for="(song, index) in recommendations" :key="song.id" class="recommendation-card" type="button" @click="playRecommendation(song)"><div class="recommendation-art"><img :src="song.cover || fallbackCover" :alt="`Bìa ${song.title}`" loading="lazy" @error="handleImageError" /><span>{{ String(index + 1).padStart(2, '0') }}</span></div><div><strong>{{ song.title }}</strong><small>{{ song.artist || 'Unknown artist' }}</small></div><i>▶</i></button></div></section>
 
-    <div class="library-toolbar"><div class="section-heading"><p class="eyebrow">YOUR COLLECTION</p><h2>Thư viện âm nhạc</h2></div><label class="search-box"><span>⌕</span><input v-model="query" type="search" placeholder="Tìm bài hát hoặc nghệ sĩ..." aria-label="Tìm bài hát hoặc nghệ sĩ" /></label><select v-model="sortBy" aria-label="Sắp xếp thư viện"><option value="recent">Mới cập nhật</option><option value="title">Tên bài hát</option><option value="artist">Nghệ sĩ</option></select></div>
+    <div class="library-toolbar"><div class="section-heading"><p class="eyebrow">YOUR COLLECTION</p><h2>Thư viện âm nhạc</h2></div><label class="search-box"><span aria-hidden="true">⌕</span><input v-model="query" type="search" placeholder="Tìm bài hát hoặc nghệ sĩ..." aria-label="Tìm bài hát hoặc nghệ sĩ" /></label><select v-model="sortBy" aria-label="Sắp xếp thư viện"><option value="recent">Mới cập nhật</option><option value="title">Tên bài hát</option><option value="artist">Nghệ sĩ</option></select><div class="view-toggle" role="group" aria-label="Kiểu hiển thị thư viện"><button type="button" :class="{ active: viewMode === 'grid' }" :aria-pressed="viewMode === 'grid'" aria-label="Hiển thị dạng lưới" @click="viewMode = 'grid'">▦</button><button type="button" :class="{ active: viewMode === 'list' }" :aria-pressed="viewMode === 'list'" aria-label="Hiển thị dạng danh sách" @click="viewMode = 'list'">☷</button></div></div>
 
     <div v-if="loading" class="skeleton-grid" aria-label="Đang tải thư viện" aria-busy="true"><div v-for="n in 6" :key="n" class="skeleton-card"><div></div><span></span><small></small></div></div>
     <div v-else-if="error" class="state-card error-state" role="alert"><span aria-hidden="true">!</span><h3>Không thể tải thư viện</h3><p>{{ error }}</p><button type="button" class="ghost-btn" @click="$emit('retry')">Thử lại</button></div>
     <div v-else-if="!songs.length" class="state-card" role="status"><span aria-hidden="true">✦</span><h3>Thư viện đang chờ bản nhạc đầu tiên</h3><p>Hãy mở khu vực quản trị để thêm nhạc vào Cloudinary và Supabase.</p></div>
     <div v-else-if="!filteredSongs.length" class="state-card" role="status"><span aria-hidden="true">⌕</span><h3>Không tìm thấy kết quả</h3><p>Thử một từ khóa khác hoặc xóa bộ lọc tìm kiếm.</p></div>
-    <div v-else class="songs-grid"><article v-for="(song, index) in filteredSongs" :key="song.id" class="song-card" :class="{ active: state.currentSong?.id === song.id }"><div class="cover-wrapper"><img :src="song.cover || fallbackCover" :alt="`Bìa ${song.title}`" class="song-cover" loading="lazy" @error="handleImageError" /><div class="cover-shade"></div><button class="card-play" @click="play(song)" :aria-label="`Phát ${song.title}`">{{ state.currentSong?.id === song.id && state.isPlaying ? 'Ⅱ' : '▶' }}</button><span class="card-index">{{ String(index + 1).padStart(2, '0') }}</span></div><div class="song-info"><div class="song-topline"><h3 class="song-title">{{ song.title }}</h3><button type="button" class="like-btn" :class="{ liked: isLiked(song.id) }" :aria-pressed="isLiked(song.id)" @click="toggleLike(song)" :aria-label="isLiked(song.id) ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'">{{ isLiked(song.id) ? '♥' : '♡' }}</button></div><p class="song-artist">{{ song.artist || 'Unknown artist' }}</p><div class="card-meta"><span>{{ song.album || 'SINGLE' }}</span><div class="card-actions"><button @click="addToQueue(song)">+ Hàng đợi</button><button @click.stop="playlistMenuSong = song">+ Playlist</button></div></div></div></article></div>
+    <div v-else class="songs-grid" :class="{ 'songs-list': viewMode === 'list' }"><article v-for="(song, index) in filteredSongs" :key="song.id" class="song-card" :class="{ active: state.currentSong?.id === song.id }"><div class="cover-wrapper"><img :src="song.cover || fallbackCover" :alt="`Bìa ${song.title}`" class="song-cover" loading="lazy" @error="handleImageError" /><div class="cover-shade"></div><button class="card-play" @click="play(song)" :aria-label="`Phát ${song.title}`">{{ state.currentSong?.id === song.id && state.isPlaying ? 'Ⅱ' : '▶' }}</button><span class="card-index">{{ String(index + 1).padStart(2, '0') }}</span></div><div class="song-info"><div class="song-topline"><h3 class="song-title">{{ song.title }}</h3><button type="button" class="like-btn" :class="{ liked: isLiked(song.id) }" :aria-pressed="isLiked(song.id)" @click="toggleLike(song)" :aria-label="isLiked(song.id) ? 'Bỏ yêu thích' : 'Thêm vào yêu thích'">{{ isLiked(song.id) ? '♥' : '♡' }}</button></div><p class="song-artist">{{ song.artist || 'Unknown artist' }}</p><div class="card-meta"><span>{{ song.album || 'SINGLE' }}</span><div class="card-actions"><button @click="addToQueue(song)">+ Hàng đợi</button><button @click.stop="playlistMenuSong = song">+ Playlist</button></div></div></div></article></div>
 
     <Teleport to="body"><div v-if="playlistMenuSong" class="playlist-picker-backdrop" @click.self="playlistMenuSong = null"><section class="playlist-picker glass-panel" role="dialog" aria-modal="true" aria-label="Thêm bài hát vào playlist"><header><div><p class="eyebrow">ADD TO COLLECTION</p><h2>Thêm vào playlist</h2><p>{{ playlistMenuSong.title }}</p></div><button type="button" class="picker-close" @click="playlistMenuSong = null">×</button></header><div v-if="playlists.length" class="playlist-picker-list"><button v-for="playlist in playlists" :key="playlist.id" type="button" :disabled="hasSong(playlist, playlistMenuSong.id)" @click="addSongToPlaylist(playlist)"><span>◒</span><span><strong>{{ playlist.name }}</strong><small>{{ hasSong(playlist, playlistMenuSong.id) ? 'Đã có trong playlist' : `${playlist.songIds.length} bài hát` }}</small></span><b>{{ hasSong(playlist, playlistMenuSong.id) ? '✓' : '+' }}</b></button></div><div v-else class="picker-empty"><p>Bạn chưa có playlist nào.</p><button type="button" @click="goToPlaylists">Tạo playlist đầu tiên →</button></div></section></div></Teleport>
 
@@ -29,13 +29,21 @@ import songs from '../data/songs';
 import { useLibrary } from '../composables/useLibrary';
 import { addToQueue, playSong, playerState } from '../store/playerState';
 import { usePlaylists } from '../composables/usePlaylists';
-import { currentView } from '../store/appState';
+import { authState, currentView } from '../store/appState';
 
 const props = defineProps({ songs: { type: Array, default: () => songs }, loading: Boolean, error: { type: String, default: '' }, onlyLiked: Boolean });
 defineEmits(['retry']);
 const query = ref('');
 const sortBy = ref('recent');
+const viewMode = ref('grid');
 const fallbackCover = '/images/ChoCiu.jpg';
+const listenerName = computed(() => authState.user?.display_name || authState.user?.username || 'LuNu');
+const greeting = computed(() => {
+  const hour = new Date().getHours();
+  if (hour < 12) return 'Chào buổi sáng';
+  if (hour < 18) return 'Chào buổi chiều';
+  return 'Chào buổi tối';
+});
 const state = playerState;
 const { isLiked, toggleLike: changeLike, history, likedCount, recordPlay } = useLibrary();
 const { playlists, addSong, hasSong } = usePlaylists();
@@ -118,4 +126,29 @@ const toggleLike = (song) => changeLike(song);
   .song-title { font-size: 10px !important; }
   .header-actions button { padding-inline: 10px; font-size: 10px; }
 }
+
+.view-header h1 .hero-greeting { color: var(--text-main); font-size: .48em; font-weight: 500; letter-spacing: -.4px; }
+.view-toggle { display: inline-flex; align-items: center; gap: 2px; padding: 3px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--glass); }
+.view-toggle button { display: grid; place-items: center; width: 30px; height: 30px; border: 0; border-radius: 7px; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 14px; }
+.view-toggle button:hover, .view-toggle button.active { background: rgba(245,185,122,.12); color: var(--gold); }
+.songs-grid.songs-list { display: grid; grid-template-columns: 1fr; gap: 6px; }
+.songs-list .song-card { display: grid; grid-template-columns: 56px minmax(0, 1fr) auto; align-items: center; gap: 14px; padding: 8px 12px 8px 8px; border-radius: 13px; }
+.songs-list .cover-wrapper { width: 56px; height: 56px; }
+.songs-list .card-play { right: 7px; bottom: 7px; width: 34px; height: 34px; }
+.songs-list .card-index { top: 8px; right: 8px; bottom: auto; left: auto; z-index: 1; color: rgba(255,255,255,.85); }
+.songs-list .song-info { display: grid; grid-template-columns: minmax(0, 1.4fr) minmax(100px, .8fr) minmax(130px, auto); align-items: center; gap: 16px; padding: 0; }
+.songs-list .song-topline { min-width: 0; }
+.songs-list .song-artist { margin: 0; }
+.songs-list .card-meta { justify-content: flex-end; }
+.songs-list .song-title { font-size: 13px; }
+@media (max-width: 760px) {
+  .view-toggle { margin-left: auto; }
+  .songs-list .song-card { grid-template-columns: 46px minmax(0, 1fr) auto; gap: 9px; padding: 7px; }
+  .songs-list .cover-wrapper { width: 46px; height: 46px; }
+  .songs-list .song-info { display: block; min-width: 0; }
+  .songs-list .song-artist { margin-top: 5px; }
+  .songs-list .card-meta { display: none; }
+  .songs-list .card-play { right: 5px; bottom: 5px; width: 30px; height: 30px; }
+}
+@media (prefers-reduced-motion: reduce) { .view-toggle button, .songs-list .song-card { transition: none; } }
 </style>

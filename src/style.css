@@ -775,3 +775,22 @@ img { max-width: 100%; }
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* Utility controls keep the light room editorial and readable. */
+:root[data-theme='light'] .utility-theme {
+  border-color: rgba(80, 58, 43, .14);
+  background: rgba(255, 255, 255, .62);
+  color: var(--text-sub);
+}
+:root[data-theme='light'] .utility-theme:hover {
+  border-color: rgba(168, 102, 59, .35);
+  background: rgba(255, 255, 255, .9);
+  color: var(--text-main);
+}
+
+/* Section headings in the grouped sidebar remain legible on compact heights. */
+.nav-group .sidebar-label { user-select: none; }
+@media (max-height: 720px) and (min-width: 761px) {
+  .nav-menu { gap: 10px; }
+}

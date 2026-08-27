@@ -2,29 +2,35 @@
 <template>
   <Teleport to="body">
     <Transition name="cmd-fade">
-      <div v-if="visible" class="cmd-overlay" @click.self="emit('close')">
-        <div class="cmd-box" role="dialog" aria-modal="true">
+      <div v-if="visible" class="cmd-overlay" role="presentation" @click.self="emit('close')">
+        <div class="cmd-box" role="dialog" aria-modal="true" aria-labelledby="command-palette-title">
           <div class="cmd-input-row">
-            <span class="cmd-search-icon">⌕</span>
+            <span id="command-palette-title" class="cmd-search-icon" aria-hidden="true">⌕</span>
             <input
               ref="inputRef"
               v-model="query"
               type="text"
+              aria-controls="command-results"
+              aria-autocomplete="list"
               class="cmd-input"
+              aria-label="Tìm bài hát, playlist hoặc lệnh"
               placeholder="Tìm bài hát, playlist, hoặc gõ lệnh..."
               @keydown="onKeydown"
             />
             <span class="cmd-kbd">Esc</span>
           </div>
 
-          <div class="cmd-results" v-if="results.length">
+          <div v-if="results.length" id="command-results" class="cmd-results" role="listbox" aria-label="Kết quả tìm kiếm">
             <button
               v-for="(item, i) in results"
               :key="item.key"
               class="cmd-item"
               :class="{ active: i === activeIndex }"
+              role="option"
+              :aria-selected="i === activeIndex"
               @mouseenter="activeIndex = i"
               @click="select(item)"
+              :aria-label="`${item.title}${item.subtitle ? `, ${item.subtitle}` : ''}`"
             >
               <span class="cmd-item-icon" :class="item.type">{{ iconFor(item) }}</span>
               <span class="cmd-item-main">
