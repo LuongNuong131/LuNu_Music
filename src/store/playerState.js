@@ -39,6 +39,10 @@ export const playerState = reactive({
 
 let audioElement = null;
 let shouldAutoplay = false;
+// Navigation history is separate from the upcoming queue so Back returns to the
+// exact song that was just played, including shuffled/scoped collections.
+let backHistory = [];
+let forwardHistory = [];
 
 const persistSettings = () => {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify({
@@ -88,9 +92,20 @@ export const setAudioElement = (element) => {
   audioElement.playbackRate = playerState.playbackRate;
 };
 
+const activateSong = (song, autoplay = true) => {
+  if (!song) return;
+  playerState.currentSong = song;
+  playerState.currentTime = 0;
+  playerState.duration = 0;
+  playerState.error = '';
+  shouldAutoplay = autoplay;
+  if (audioElement && shouldAutoplay) window.setTimeout(() => playAudio(), 0);
+};
+
 export const playSong = (song, source = [], options = {}) => {
   if (!song) return;
-  const collection = Array.isArray(source) && source.length ? source : playerState.originalQueue;
+  const requestedCollection = Array.isArray(source) && source.length ? source : playerState.originalQueue;
+  const collection = requestedCollection.some((item) => String(item?.id) === String(song.id)) ? requestedCollection : [song, ...requestedCollection];
   const shouldReplaceQueue = options.replaceQueue !== false && Array.isArray(source) && source.length;
   if (shouldReplaceQueue) {
     playerState.originalQueue = [...collection];
@@ -102,14 +117,9 @@ export const playSong = (song, source = [], options = {}) => {
   } else {
     playerState.currentIndex = getIndex(playerState.originalQueue, song);
   }
-  playerState.currentSong = song;
-  playerState.currentTime = 0;
-  playerState.duration = 0;
-  playerState.error = '';
-  shouldAutoplay = options.autoplay !== false;
-  if (audioElement && shouldAutoplay) {
-    window.setTimeout(() => playAudio(), 0);
-  }
+  backHistory = [];
+  forwardHistory = [];
+  activateSong(song, options.autoplay !== false);
 };
 
 export const play = () => playAudio();
@@ -205,13 +215,20 @@ export const next = () => {
     playAudio();
     return;
   }
-  if (playerState.queue.length) {
-    const nextSong = playerState.queue.shift();
-    playerState.currentSong = nextSong;
+  if (forwardHistory.length) {
+    const currentSong = playerState.currentSong;
+    const nextSong = forwardHistory.shift();
+    if (currentSong) backHistory.push(currentSong);
     playerState.currentIndex = getIndex(playerState.originalQueue, nextSong);
-    playerState.currentTime = 0;
-    playerState.duration = 0;
-    shouldAutoplay = true;
+    activateSong(nextSong, true);
+    return;
+  }
+  if (playerState.queue.length) {
+    const currentSong = playerState.currentSong;
+    const nextSong = playerState.queue.shift();
+    if (currentSong) backHistory.push(currentSong);
+    playerState.currentIndex = getIndex(playerState.originalQueue, nextSong);
+    activateSong(nextSong, true);
     persistQueue();
     return;
   }
@@ -232,15 +249,21 @@ export const previous = () => {
     seek(0);
     return;
   }
+  if (backHistory.length) {
+    const currentSong = playerState.currentSong;
+    const previousSong = backHistory.pop();
+    if (currentSong) forwardHistory.unshift(currentSong);
+    playerState.currentIndex = getIndex(playerState.originalQueue, previousSong);
+    activateSong(previousSong, true);
+    return;
+  }
   const list = playerState.originalQueue.length ? playerState.originalQueue : [playerState.currentSong];
   const index = getIndex(list, playerState.currentSong);
   const previousSong = list[index > 0 ? index - 1 : list.length - 1];
-  if (previousSong) {
-    playerState.currentSong = previousSong;
+  if (previousSong && String(previousSong.id) !== String(playerState.currentSong.id)) {
+    forwardHistory.unshift(playerState.currentSong);
     playerState.currentIndex = getIndex(list, previousSong);
-    playerState.currentTime = 0;
-    playerState.duration = 0;
-    shouldAutoplay = true;
+    activateSong(previousSong, true);
   }
 };
 

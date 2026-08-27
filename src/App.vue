@@ -9,6 +9,7 @@
       <CinemaView v-else-if="currentView === 'cinema'" />
       <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
       <PlaylistsView v-else-if="currentView === 'playlists'" :songs="songs" @play-song="playFromLibrary" />
+      <ArtistsView v-else-if="currentView === 'artists'" :songs="songs" @play-song="playFromLibrary" />
       <ProposalView v-else-if="currentView === 'proposals'" />
       <AccountView v-else-if="currentView === 'account'" />
       <RoomsView v-else-if="currentView === 'rooms'" />
@@ -44,7 +45,7 @@
       @clear="player.clearQueue"
       @play="playFromQueue"
     />
-    <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playSong" @open-playlist="openPlaylist" @action="runCommand" />
+    <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playFromLibrary" @open-playlist="openPlaylist" @action="runCommand" />
     <NotificationCenter />
     <Toast />
     <ConfirmModal
@@ -77,6 +78,7 @@ import Sidebar from './components/Sidebar.vue';
 import MainView from './components/MainView.vue';
 import LyricsManager from './components/LyricsManager.vue';
 import PlaylistsView from './views/PlaylistsView.vue';
+import ArtistsView from './views/ArtistsView.vue';
 import ProposalView from './views/ProposalView.vue';
 import AccountView from './views/AccountView.vue';
 import RoomsView from './views/RoomsView.vue';
@@ -99,7 +101,7 @@ const mobileMenuOpen = ref(false);
 const dialog = useDialog();
 watch(mobileMenuOpen, (open) => { document.body.classList.toggle('mobile-menu-open', open); });
 
-const playFromLibrary = (song) => playSong(song, songs);
+const playFromLibrary = (song, collection = songs) => playSong(song, Array.isArray(collection) && collection.length ? collection : songs);
 const playFromQueue = (song) => playSong(song, [player.state.currentSong, ...player.state.queue].filter(Boolean));
 const openPlaylist = (playlist) => { selectPlaylist(playlist?.id); currentView.value = 'playlists'; };
 const runCommand = (action) => {

@@ -6,6 +6,7 @@
       <button :class="{ active: currentView === 'home' }" @click="navigate('home')"><span>⌂</span> Tổng quan</button>
       <button :class="{ active: currentView === 'liked' }" @click="navigate('liked')"><span>♥</span> Yêu thích</button>
       <button :class="{ active: currentView === 'playlists' }" @click="navigate('playlists')"><span>▤</span> Playlist</button>
+      <button :class="{ active: currentView === 'artists' }" @click="navigate('artists')"><span>♬</span> Ca sĩ</button>
       <button :class="{ active: currentView === 'lyrics' }" @click="navigate('lyrics')"><span>Aa</span> Lyrics Lab</button>
       <button :class="{ active: currentView === 'cinema' }" @click="navigate('cinema')"><span>▶</span> LuNu Tea Room</button>
       <button :class="{ active: currentView === 'proposals' }" @click="navigate('proposals')"><span>✧</span> Đề xuất media</button>

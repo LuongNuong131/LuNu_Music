@@ -19,7 +19,7 @@
 
     <Teleport to="body"><div v-if="playlistMenuSong" class="playlist-picker-backdrop" @click.self="playlistMenuSong = null"><section class="playlist-picker glass-panel" role="dialog" aria-modal="true" aria-label="Thêm bài hát vào playlist"><header><div><p class="eyebrow">ADD TO COLLECTION</p><h2>Thêm vào playlist</h2><p>{{ playlistMenuSong.title }}</p></div><button type="button" class="picker-close" @click="playlistMenuSong = null">×</button></header><div v-if="playlists.length" class="playlist-picker-list"><button v-for="playlist in playlists" :key="playlist.id" type="button" :disabled="hasSong(playlist, playlistMenuSong.id)" @click="addSongToPlaylist(playlist)"><span>◒</span><span><strong>{{ playlist.name }}</strong><small>{{ hasSong(playlist, playlistMenuSong.id) ? 'Đã có trong playlist' : `${playlist.songIds.length} bài hát` }}</small></span><b>{{ hasSong(playlist, playlistMenuSong.id) ? '✓' : '+' }}</b></button></div><div v-else class="picker-empty"><p>Bạn chưa có playlist nào.</p><button type="button" @click="goToPlaylists">Tạo playlist đầu tiên →</button></div></section></div></Teleport>
 
-    <section v-if="history.length" class="recent-section"><div class="section-heading"><p class="eyebrow">LISTENING HISTORY</p><h2>Nghe gần đây</h2></div><div class="recent-list"><button v-for="item in history.slice(0, 4)" :key="item.id" class="recent-item" @click="play(item.song)"><img :src="item.song.cover || fallbackCover" :alt="item.song.title" /><span><strong>{{ item.song.title }}</strong><small>{{ item.song.artist }}</small></span><b>▶</b></button></div></section>
+    <section v-if="!onlyLiked && history.length" class="recent-section"><div class="section-heading"><p class="eyebrow">LISTENING HISTORY</p><h2>Nghe gần đây</h2></div><div class="recent-list"><button v-for="item in history.slice(0, 4)" :key="item.id" class="recent-item" @click="play(item.song)"><img :src="item.song.cover || fallbackCover" :alt="item.song.title" /><span><strong>{{ item.song.title }}</strong><small>{{ item.song.artist }}</small></span><b>▶</b></button></div></section>
   </section>
 </template>
 
@@ -51,7 +51,7 @@ const filteredSongs = computed(() => {
   const list = props.songs.filter((song) => (!props.onlyLiked || isLiked(song.id)) && (!normalized || `${song.title} ${song.artist}`.toLowerCase().includes(normalized)));
   return [...list].sort((a, b) => sortBy.value === 'title' ? a.title.localeCompare(b.title) : sortBy.value === 'artist' ? (a.artist || '').localeCompare(b.artist || '') : 0);
 });
-const play = (song) => { playSong(song, props.songs); recordPlay(song); };
+const play = (song) => { const scopedSongs = props.onlyLiked ? filteredSongs.value : props.songs; playSong(song, scopedSongs); recordPlay(song); };
 const playAll = () => { if (filteredSongs.value[0]) play(filteredSongs.value[0]); };
 const toggleLike = (song) => changeLike(song);
 </script>
