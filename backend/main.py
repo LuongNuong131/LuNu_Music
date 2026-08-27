@@ -278,6 +278,17 @@ class RoomSettingsRequest(BaseModel):
         return value.strip()
 
 
+class FriendTargetRequest(BaseModel):
+    user_id: str = Field(min_length=1, max_length=80)
+
+
+class PrivacySettingsRequest(BaseModel):
+    allow_friend_requests: Literal['everyone', 'friends_of_friends', 'nobody'] = 'everyone'
+    allow_direct_messages: Literal['friends', 'room_members', 'nobody'] = 'friends'
+    show_online_status: bool = True
+    show_current_room: bool = False
+
+
 def require_supabase() -> Client:
     if supabase is None:
         raise HTTPException(status_code=503, detail='Supabase chưa được cấu hình trên server.')
@@ -1265,6 +1276,149 @@ async def health() -> dict:
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
     }
+
+
+def social_users_map(client: Client, user_ids: list[str]) -> dict:
+    if not user_ids:
+        return {}
+    try:
+        rows = client.table('users').select('id,username,role,display_name,avatar_url,bio').in_('id', user_ids).limit(50).execute().data or []
+    except Exception:
+        rows = client.table('users').select('id,username,role').in_('id', user_ids).limit(50).execute().data or []
+    return {str(row.get('id')): public_user_payload(row) for row in rows}
+
+
+def friendship_payload(row: dict, users: dict, current_user_id: str) -> dict:
+    other_id = row.get('addressee_id') if str(row.get('requester_id')) == str(current_user_id) else row.get('requester_id')
+    return {**row, 'other_user': users.get(str(other_id), {'id': other_id, 'username': 'member', 'display_name': 'Member', 'avatar_url': '', 'role': 'user', 'bio': ''}), 'direction': 'outgoing' if str(row.get('requester_id')) == str(current_user_id) else 'incoming'}
+
+
+@app.get('/api/users/search')
+async def search_users(q: str = Query(default='', min_length=0, max_length=80), client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> list:
+    query = re.sub(r'[^a-zA-Z0-9À-ỹ _.-]', '', q).strip()
+    if len(query) < 2:
+        return []
+    try:
+        response = client.table('users').select(PROFILE_COLUMNS).or_(f'username.ilike.%{query}%,display_name.ilike.%{query}%').neq('id', current_user['id']).limit(20).execute()
+    except Exception:
+        response = client.table('users').select('id,username,role').ilike('username', f'%{query}%').neq('id', current_user['id']).limit(20).execute()
+    return [public_user_payload(row) for row in (response.data or [])]
+
+
+@app.get('/api/friends')
+async def get_friends(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        rows = client.table('friendships').select('id,requester_id,addressee_id,status,created_at,updated_at,accepted_at').or_(f'requester_id.eq.{current_user["id"]},addressee_id.eq.{current_user["id"]}').order('updated_at', desc=True).limit(100).execute().data or []
+        ids = list({str(row.get('requester_id')) for row in rows} | {str(row.get('addressee_id')) for row in rows})
+        users = social_users_map(client, ids)
+        return {'items': [friendship_payload(row, users, str(current_user['id'])) for row in rows], 'friends': [friendship_payload(row, users, str(current_user['id'])) for row in rows if row.get('status') == 'accepted']}
+    except Exception as error:
+        raise HTTPException(status_code=503, detail='Friend system chưa được bật. Admin cần chạy supabase/social_friends.sql trước.') from error
+
+
+@app.post('/api/friends/requests', status_code=status.HTTP_201_CREATED)
+async def send_friend_request(request: FriendTargetRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    target_id = str(request.user_id)
+    if target_id == str(current_user['id']):
+        raise HTTPException(status_code=400, detail='Bạn không thể tự gửi lời mời kết bạn cho mình.')
+    target = client.table('users').select('id,username,role,display_name,avatar_url,bio').eq('id', target_id).limit(1).execute().data or []
+    if not target:
+        raise HTTPException(status_code=404, detail='Không tìm thấy user này.')
+    blocked = client.table('blocks').select('id').or_(f'and(blocker_id.eq.{current_user["id"]},blocked_id.eq.{target_id}),and(blocker_id.eq.{target_id},blocked_id.eq.{current_user["id"]})').limit(1).execute().data or []
+    if blocked:
+        raise HTTPException(status_code=403, detail='Không thể gửi lời mời do một trong hai tài khoản đang chặn nhau.')
+    existing = client.table('friendships').select('id,status,requester_id,addressee_id').or_(f'and(requester_id.eq.{current_user["id"]},addressee_id.eq.{target_id}),and(requester_id.eq.{target_id},addressee_id.eq.{current_user["id"]})').limit(1).execute().data or []
+    if existing:
+        row = existing[0]
+        if row.get('status') == 'rejected':
+            updated = client.table('friendships').update({'requester_id': current_user['id'], 'addressee_id': target_id, 'status': 'pending', 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', row['id']).select('*').execute().data or []
+            friendship = (updated or [row])[0]
+        else:
+            raise HTTPException(status_code=409, detail='Hai tài khoản đã có một quan hệ hoặc lời mời đang tồn tại.')
+    else:
+        friendship = (client.table('friendships').insert({'requester_id': current_user['id'], 'addressee_id': target_id, 'status': 'pending'}).select('*').execute().data or [None])[0]
+    try:
+        notify_users(client, [target_id], 'Lời mời kết bạn mới', f'{current_user.get("display_name") or current_user.get("username", "Một user")} muốn kết bạn với bạn.', 'friend-request', f'friendship:{friendship["id"]}')
+    except Exception as error:
+        print(f'⚠️ Không thể tạo notification friend request: {error}')
+    return {'success': True, 'friendship': friendship, 'message': 'Đã gửi lời mời kết bạn.'}
+
+
+@app.post('/api/friends/requests/{friendship_id}/accept')
+async def accept_friend_request(friendship_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    row = (client.table('friendships').select('*').eq('id', friendship_id).eq('addressee_id', current_user['id']).eq('status', 'pending').limit(1).execute().data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail='Không tìm thấy lời mời đang chờ.')
+    updated = (client.table('friendships').update({'status': 'accepted', 'accepted_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat(), 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', friendship_id).select('*').execute().data or [row])[0]
+    try:
+        notify_users(client, [row['requester_id']], 'Lời mời kết bạn đã được chấp nhận', f'{current_user.get("display_name") or current_user.get("username", "User")} đã chấp nhận lời mời của bạn.', 'friend-accepted', f'friendship:{friendship_id}')
+    except Exception as error:
+        print(f'⚠️ Không thể tạo notification friend accepted: {error}')
+    return {'success': True, 'friendship': updated, 'message': 'Đã trở thành bạn bè.'}
+
+
+@app.post('/api/friends/requests/{friendship_id}/reject')
+async def reject_friend_request(friendship_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    row = (client.table('friendships').select('*').eq('id', friendship_id).eq('addressee_id', current_user['id']).eq('status', 'pending').limit(1).execute().data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail='Không tìm thấy lời mời đang chờ.')
+    client.table('friendships').update({'status': 'rejected', 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', friendship_id).execute()
+    return {'success': True, 'message': 'Đã từ chối lời mời.'}
+
+
+@app.post('/api/friends/requests/{friendship_id}/cancel')
+async def cancel_friend_request(friendship_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    row = (client.table('friendships').select('id').eq('id', friendship_id).eq('requester_id', current_user['id']).eq('status', 'pending').limit(1).execute().data or [None])[0]
+    if not row:
+        raise HTTPException(status_code=404, detail='Không tìm thấy lời mời do bạn gửi.')
+    client.table('friendships').update({'status': 'cancelled', 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', friendship_id).execute()
+    return {'success': True, 'message': 'Đã hủy lời mời kết bạn.'}
+
+
+@app.delete('/api/friends/{user_id}')
+async def remove_friend(user_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    result = client.table('friendships').delete().eq('status', 'accepted').or_(f'and(requester_id.eq.{current_user["id"]},addressee_id.eq.{user_id}),and(requester_id.eq.{user_id},addressee_id.eq.{current_user["id"]})').execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail='Không tìm thấy quan hệ bạn bè.')
+    return {'success': True, 'message': 'Đã hủy kết bạn.'}
+
+
+@app.post('/api/blocks/{user_id}')
+async def block_user(user_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    if str(user_id) == str(current_user['id']):
+        raise HTTPException(status_code=400, detail='Bạn không thể tự chặn mình.')
+    target = client.table('users').select('id').eq('id', user_id).limit(1).execute().data or []
+    if not target:
+        raise HTTPException(status_code=404, detail='Không tìm thấy user này.')
+    client.table('blocks').upsert({'blocker_id': current_user['id'], 'blocked_id': user_id}, on_conflict='blocker_id,blocked_id').execute()
+    client.table('friendships').delete().or_(f'and(requester_id.eq.{current_user["id"]},addressee_id.eq.{user_id}),and(requester_id.eq.{user_id},addressee_id.eq.{current_user["id"]})').execute()
+    return {'success': True, 'message': 'Đã chặn user và xóa quan hệ bạn bè nếu có.'}
+
+
+@app.delete('/api/blocks/{user_id}')
+async def unblock_user(user_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    client.table('blocks').delete().eq('blocker_id', current_user['id']).eq('blocked_id', user_id).execute()
+    return {'success': True, 'message': 'Đã bỏ chặn user.'}
+
+
+@app.get('/api/me/privacy')
+async def get_privacy_settings(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        row = (client.table('users').select('privacy_settings').eq('id', current_user['id']).limit(1).execute().data or [{}])[0]
+        settings = row.get('privacy_settings') or {}
+    except Exception:
+        settings = {}
+    return {'settings': {**{'allow_friend_requests': 'everyone', 'allow_direct_messages': 'friends', 'show_online_status': True, 'show_current_room': False}, **settings}}
+
+
+@app.patch('/api/me/privacy')
+async def update_privacy_settings(request: PrivacySettingsRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    settings = request.model_dump()
+    try:
+        client.table('users').update({'privacy_settings': settings, 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', current_user['id']).execute()
+    except Exception as error:
+        raise HTTPException(status_code=503, detail='Privacy settings chưa được bật. Admin cần chạy supabase/user_profiles.sql trước.') from error
+    return {'success': True, 'settings': settings, 'message': 'Đã lưu quyền riêng tư.'}
 
 
 @app.get('/api/rooms')

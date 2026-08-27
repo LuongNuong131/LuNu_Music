@@ -5,6 +5,7 @@ BEGIN;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS display_name text;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS avatar_url text;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS bio text;
+ALTER TABLE public.users ADD COLUMN IF NOT EXISTS privacy_settings jsonb NOT NULL DEFAULT '{}'::jsonb;
 ALTER TABLE public.users ADD COLUMN IF NOT EXISTS updated_at timestamptz NOT NULL DEFAULT now();
 
 UPDATE public.users

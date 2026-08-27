@@ -145,6 +145,18 @@ export const updateListeningRoom = (id, room) => request(`/rooms/${encodeURIComp
 export const leaveListeningRoom = (id) => request(`/rooms/${encodeURIComponent(id)}/leave`, { method: 'POST' });
 export const closeListeningRoom = (id) => request(`/rooms/${encodeURIComponent(id)}/close`, { method: 'POST' });
 
+export const searchUsers = (query) => request(`/users/search?q=${encodeURIComponent(query)}`);
+export const getFriends = () => request('/friends');
+export const sendFriendRequest = (userId) => request('/friends/requests', { method: 'POST', body: JSON.stringify({ user_id: userId }) });
+export const acceptFriendRequest = (id) => request(`/friends/requests/${encodeURIComponent(id)}/accept`, { method: 'POST' });
+export const rejectFriendRequest = (id) => request(`/friends/requests/${encodeURIComponent(id)}/reject`, { method: 'POST' });
+export const cancelFriendRequest = (id) => request(`/friends/requests/${encodeURIComponent(id)}/cancel`, { method: 'POST' });
+export const removeFriend = (userId) => request(`/friends/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+export const blockUser = (userId) => request(`/blocks/${encodeURIComponent(userId)}`, { method: 'POST' });
+export const unblockUser = (userId) => request(`/blocks/${encodeURIComponent(userId)}`, { method: 'DELETE' });
+export const getPrivacySettings = () => request('/me/privacy');
+export const updatePrivacySettings = (settings) => request('/me/privacy', { method: 'PATCH', body: JSON.stringify(settings) });
+
 export const getMyProfile = () => request('/me');
 
 export const updateMyProfile = (profile) => request('/me/profile', {

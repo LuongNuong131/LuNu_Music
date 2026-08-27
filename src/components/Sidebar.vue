@@ -11,6 +11,7 @@
       <button :class="{ active: currentView === 'proposals' }" @click="currentView = 'proposals'"><span>✧</span> Đề xuất media</button>
       <button :class="{ active: currentView === 'account' }" @click="currentView = 'account'"><span>◎</span> Hồ sơ</button>
       <button :class="{ active: currentView === 'rooms' }" @click="currentView = 'rooms'"><span>◉</span> Phòng nghe</button>
+      <button :class="{ active: currentView === 'friends' }" @click="currentView = 'friends'"><span>♧</span> Bạn bè</button>
       <button v-if="authState.user?.role === 'admin'" :class="{ active: currentView === 'admin' }" @click="currentView = 'admin'"><span>✦</span> Quản trị</button>
     </nav>
     <div class="sidebar-note"><span class="note-orb">◖</span><div><small>NOW CURATING</small><p>Những âm thanh<br />đáng nhớ.</p></div></div>
