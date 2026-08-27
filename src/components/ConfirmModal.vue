@@ -3,8 +3,8 @@
   <Teleport to="body">
     <Transition name="modal">
       <div v-if="visible" class="modal-overlay" @click.self="cancel">
-        <div class="modal-card" role="dialog" aria-modal="true">
-          <h3 class="modal-title">{{ title }}</h3>
+        <div class="modal-card" role="dialog" aria-modal="true" aria-labelledby="confirm-modal-title">
+          <h3 id="confirm-modal-title" class="modal-title">{{ title }}</h3>
           <p v-if="message" class="modal-message">{{ message }}</p>
 
           <input
@@ -18,8 +18,9 @@
           />
 
           <div class="modal-actions">
-            <button class="btn-ghost" @click="cancel">{{ cancelLabel }}</button>
+            <button type="button" class="btn-ghost" @click="cancel">{{ cancelLabel }}</button>
             <button
+              type="button"
               class="btn-solid"
               :class="{ danger }"
               @click="confirm"
@@ -85,7 +86,8 @@ const cancel = () => emit('cancel');
 .modal-card {
   width: 320px;
   max-width: 100%;
-  background: linear-gradient(180deg, var(--panel-bg) 0%, #100d08 100%);
+  background: linear-gradient(145deg, color-mix(in srgb, var(--glass-bg) 92%, transparent), color-mix(in srgb, var(--panel-bg) 82%, #100d08));
+  backdrop-filter: blur(32px) saturate(1.24);
   border: 1px solid var(--hairline);
   border-radius: 14px;
   padding: 24px;
@@ -139,7 +141,7 @@ const cancel = () => emit('cancel');
   font-size: 13px;
   font-weight: 700;
   cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
+  transition: transform 180ms var(--spring), opacity 180ms var(--spring), box-shadow 180ms var(--spring-soft);
 }
 
 .btn-ghost {
@@ -177,11 +179,11 @@ const cancel = () => emit('cancel');
 /* Entrance / exit animation */
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.2s ease;
+  transition: opacity 260ms var(--spring-soft);
 }
 .modal-enter-active .modal-card,
 .modal-leave-active .modal-card {
-  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease;
+  transition: transform 420ms var(--spring), opacity 280ms var(--spring-soft);
 }
 .modal-enter-from,
 .modal-leave-to {
@@ -189,7 +191,7 @@ const cancel = () => emit('cancel');
 }
 .modal-enter-from .modal-card,
 .modal-leave-to .modal-card {
-  transform: scale(0.94) translateY(8px);
+  transform: scale(.94) translateY(14px);
   opacity: 0;
 }
 </style>

@@ -99,7 +99,7 @@ const labelFor = (type) => {
   background: linear-gradient(135deg, rgba(39, 31, 22, 0.98), rgba(16, 13, 8, 0.98));
   border: 1px solid color-mix(in srgb, var(--toast-color) 28%, var(--hairline));
   border-radius: 16px;
-  box-shadow: 0 18px 45px rgba(0, 0, 0, 0.48), 0 3px 12px rgba(0, 0, 0, 0.24);
+  box-shadow: 0 22px 58px rgba(0, 0, 0, 0.48), 0 0 28px var(--toast-soft), 0 3px 12px rgba(0, 0, 0, 0.24);
   backdrop-filter: blur(18px);
   isolation: isolate;
 }
@@ -190,7 +190,7 @@ const labelFor = (type) => {
   background: transparent;
   border: 1px solid transparent;
   border-radius: 9px;
-  transition: color 160ms ease, background 160ms ease, border-color 160ms ease, transform 160ms ease;
+  transition: color 180ms var(--spring-soft), background 180ms var(--spring-soft), border-color 180ms var(--spring-soft), transform 180ms var(--spring);
 }
 
 .toast-close:hover,
@@ -209,13 +209,13 @@ const labelFor = (type) => {
 .toast-enter-active,
 .toast-leave-active,
 .toast-move {
-  transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1), transform 180ms cubic-bezier(0.23, 1, 0.32, 1);
+  transition: opacity 280ms var(--spring-soft), transform 420ms var(--spring);
 }
 
 .toast-enter-from,
 .toast-leave-to {
   opacity: 0;
-  transform: translateY(12px) scale(0.96);
+  transform: translateY(18px) scale(.94);
 }
 
 .toast-leave-active {

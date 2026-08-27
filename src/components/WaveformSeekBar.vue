@@ -7,6 +7,7 @@
     <div
       v-if="peaks.length && !loading"
       class="wf-bars"
+      :class="{ dragging }"
       ref="barsRef"
       @mousedown="startDrag"
       @touchstart="startDrag"
@@ -14,6 +15,9 @@
       :aria-valuenow="Math.round(currentTime)"
       :aria-valuemax="Math.round(duration)"
       tabindex="0"
+      aria-label="Tiến trình bài hát dạng waveform"
+      :aria-valuetext="`${formatTime(currentTime)} trên ${formatTime(duration)}`"
+      @keydown="onKeydown"
     >
       <span
         v-for="(p, i) in peaks"
@@ -58,6 +62,7 @@ const props = defineProps({
 const emit = defineEmits(['seek']);
 
 const barsRef = ref(null);
+const dragging = ref(false);
 const progress = computed(() => (props.duration ? props.currentTime / props.duration : 0));
 
 // Chấp nhận cả MouseEvent (clientX trực tiếp) lẫn TouchEvent (clientX nằm trong touches[0])
@@ -75,6 +80,7 @@ const seekToEvent = (e) => {
 };
 
 const startDrag = (e) => {
+  dragging.value = true;
   if (e.type === 'touchstart') e.preventDefault(); // tránh cuộn trang khi kéo tua trên mobile
   seekToEvent(e);
 
@@ -83,6 +89,7 @@ const startDrag = (e) => {
     seekToEvent(ev);
   };
   const onUp = () => {
+    dragging.value = false;
     window.removeEventListener('mousemove', onMove);
     window.removeEventListener('mouseup', onUp);
     window.removeEventListener('touchmove', onMove);
@@ -93,6 +100,15 @@ const startDrag = (e) => {
   window.addEventListener('mouseup', onUp);
   window.addEventListener('touchmove', onMove, { passive: false });
   window.addEventListener('touchend', onUp);
+};
+
+const onKeydown = (event) => {
+  if (!props.duration) return;
+  const step = event.shiftKey ? 10 : 5;
+  if (event.key === 'ArrowRight') { event.preventDefault(); emit('seek', Math.min(props.duration, props.currentTime + step)); }
+  if (event.key === 'ArrowLeft') { event.preventDefault(); emit('seek', Math.max(0, props.currentTime - step)); }
+  if (event.key === 'Home') { event.preventDefault(); emit('seek', 0); }
+  if (event.key === 'End') { event.preventDefault(); emit('seek', props.duration); }
 };
 
 const formatTime = (time) => {
@@ -121,6 +137,7 @@ const formatTime = (time) => {
 }
 
 .wf-bars {
+  position: relative;
   flex: 1;
   height: 40px;
   display: flex;
@@ -129,18 +146,35 @@ const formatTime = (time) => {
   cursor: pointer;
   padding: 4px 0;
   touch-action: none;
+  transition: filter .22s var(--spring-soft), transform .22s var(--spring-soft);
 }
+
+.wf-bars::before {
+  position: absolute;
+  inset: 10px 0;
+  content: '';
+  border-radius: 999px;
+  background: var(--aurora-mesh-one);
+  filter: blur(13px);
+  opacity: 0;
+  transition: opacity .22s var(--spring-soft);
+}
+.wf-bars.dragging { filter: saturate(1.3); transform: scaleY(1.08); }
+.wf-bars.dragging::before, .wf-bars:hover::before { opacity: .9; }
 
 .wf-bar {
   flex: 1;
   min-width: 2px;
   border-radius: 2px;
   background: rgba(245, 240, 230, 0.14);
-  transition: background 0.15s ease;
+  position: relative;
+  z-index: 1;
+  transition: background .22s var(--spring-soft), height .22s var(--spring-soft);
 }
 
 .wf-bar.played {
-  background: linear-gradient(180deg, var(--gold-bright), var(--gold-dim));
+  background: linear-gradient(180deg, var(--aurora-primary), var(--gold-dim));
+  box-shadow: 0 0 7px var(--aurora-mesh-one);
 }
 
 .wf-bars:hover .wf-bar {

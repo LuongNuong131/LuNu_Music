@@ -27,11 +27,12 @@ export const normalizeLyrics = (value) => {
   if (typeof value !== 'string') return '';
   const clean = value.replace(/^\uFEFF/, '').replace(/\r\n/g, '\n').trim();
   const plain = clean.replace(/\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]\s*/g, '').replace(/\n{3,}/g, '\n\n').trim();
-  return PLACEHOLDER_VALUES.has(plain.toLowerCase()) ? '' : plain;
+  if (!plain || PLACEHOLDER_VALUES.has(plain.toLowerCase())) return '';
+  return clean;
 };
 
 export const hasLyrics = (value) => normalizeLyrics(value).length > 0;
-export const isTimedLyrics = () => false;
+export const isTimedLyrics = (value) => /\[\d{1,3}:\d{2}(?:\.\d{1,3})?\]/.test(typeof value === 'string' ? value : '');
 
 export const parseLyrics = (value, offsetMs = 0) => {
   const raw = normalizeLyrics(value);
@@ -107,7 +108,7 @@ export const lookupLyrics = async (song, options = {}) => {
 
 export const resolveLyrics = async (song, options = {}) => {
   const stored = getStoredLyrics(song?.id);
-  if (stored?.content) return { ...stored, status: stored.source === 'manual' ? 'manual' : 'metadata', mode: 'plain' };
+  if (stored?.content) return { ...stored, status: stored.source === 'manual' ? 'manual' : 'metadata', mode: getLyricsMode(stored.content) };
 
   const metadataLyrics = normalizeLyrics(song?.lyrics || song?.metadata?.lyrics || song?.metadata?.unsyncedLyrics || '');
   if (metadataLyrics) return { content: metadataLyrics, source: 'metadata', offsetMs: 0, status: 'metadata', mode: getLyricsMode(metadataLyrics) };
