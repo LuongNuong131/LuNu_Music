@@ -8,7 +8,7 @@
     <main class="main-content">
       <div class="app-utility-bar" role="navigation" aria-label="Thanh công cụ nhanh">
         <div class="utility-context"><span class="utility-pulse"></span><span>LISTENING ROOM</span><b>/</b><strong>{{ viewTitle }}</strong></div>
-        <button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span>⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button>
+        <div class="utility-actions"><NotificationCenter compact /><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span>⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
       </div>
       <AdminView v-if="currentView === 'admin'" />
       <CinemaView v-else-if="currentView === 'cinema'" />
@@ -51,7 +51,6 @@
       @play="playFromQueue"
     />
     <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playFromLibrary" @open-playlist="openPlaylist" @action="runCommand" />
-    <NotificationCenter />
     <Toast />
     <ConfirmModal
       :visible="dialog.state.visible"
@@ -156,9 +155,9 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 .utility-context strong { overflow: hidden; color: var(--text-main); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .4px; }
 .utility-context b { color: var(--hairline); font-weight: 400; }
 .utility-pulse { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); }
-.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
+.utility-actions { display: flex; align-items: center; gap: 8px; flex: none; }.utility-actions :deep(.notification-center) { position: relative; top: auto; right: auto; z-index: 1; width: auto; }.utility-actions :deep(.notification-trigger) { width: 34px; height: 34px; border-radius: 10px; background: rgba(255,255,255,.045); box-shadow: none; }.utility-actions :deep(.notification-trigger span) { font-size: 18px; }.utility-actions :deep(.notification-trigger b) { top: -4px; right: -4px; }.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
 .utility-search:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }
 .utility-search > span:first-child { color: var(--gold); font-size: 15px; line-height: .7; }
 .utility-search kbd { padding: 3px 5px; border: 1px solid var(--hairline-soft); border-radius: 5px; color: var(--text-faint); font: 8px var(--font-mono); }
-@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-search { padding: 7px 8px; }.utility-search-label, .utility-search kbd { display: none; } }
+@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-actions { gap: 6px; }.utility-search { padding: 7px 8px; }.utility-search-label, .utility-search kbd { display: none; } }
 </style>
