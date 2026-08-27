@@ -122,3 +122,9 @@ Listening Room dùng migration `supabase/listening_rooms.sql`, tạo `listening_
 Frontend có workspace **Phòng nghe** với tạo phòng private/public, invite code, giới hạn thành viên, tham gia/rời phòng, chuyển host khi host rời, queue phòng và trạng thái playback. User chỉ đồng bộ bài phòng vào player sau khi bấm **Đồng bộ bài này vào player của tôi**; việc mở hoặc tham gia phòng không tự động đổi bài đang phát.
 
 Các API room gồm `GET /api/rooms`, `POST /api/rooms`, `POST /api/rooms/join`, `GET /api/rooms/{id}`, `PATCH /api/rooms/{id}/state`, `PATCH /api/rooms/{id}`, `POST /api/rooms/{id}/leave` và `POST /api/rooms/{id}/close`. Polling hiện tại dùng chu kỳ thưa để cập nhật room state; khi realtime channel được triển khai sau này, channel chỉ thay thế lớp truyền state, không thay đổi player core.
+
+### Playback sync update
+
+Host broadcast trạng thái room khi bài, play/pause, queue hoặc vị trí thay đổi theo chu kỳ ngắn; thành viên chỉ nhận và áp dụng khi đã bật **Đồng bộ với phòng**. State dùng `state_version`, `updated_at`, `position_seconds` và server-time calculation để tránh áp dụng state cũ và giảm drift. Khi host dừng, thành viên đã opt-in sẽ pause; khi host đổi bài, thành viên sẽ tải bài mới vào player hiện tại.
+
+Luồng hiện tại dùng polling fallback khoảng 2,5 giây, chưa phải Supabase Realtime/WebSocket. Đây là quyết định an toàn tạm thời để không đưa connection lifecycle mới vào player core. Khi bổ sung Realtime, chỉ thay transport của room state, không thay đổi audio element hoặc queue cá nhân.
