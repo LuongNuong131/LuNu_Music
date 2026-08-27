@@ -239,6 +239,45 @@ class AdminUserProfileRequest(BaseModel):
         return value.strip()
 
 
+class CreateRoomRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    visibility: Literal['private', 'public'] = 'private'
+    max_members: int = Field(default=8, ge=2, le=50)
+
+    @field_validator('name')
+    @classmethod
+    def normalize_room_name(cls, value: str) -> str:
+        return value.strip()
+
+
+class JoinRoomRequest(BaseModel):
+    invite_code: str = Field(min_length=4, max_length=24)
+
+    @field_validator('invite_code')
+    @classmethod
+    def normalize_invite_code(cls, value: str) -> str:
+        return value.strip().upper()
+
+
+class RoomStateRequest(BaseModel):
+    current_song: Optional[dict] = None
+    queue: list[dict] = Field(default_factory=list, max_length=100)
+    is_playing: bool = False
+    position_seconds: float = Field(default=0, ge=0, le=86400)
+    expected_version: Optional[int] = Field(default=None, ge=0)
+
+
+class RoomSettingsRequest(BaseModel):
+    name: str = Field(min_length=1, max_length=120)
+    visibility: Literal['private', 'public'] = 'private'
+    max_members: int = Field(default=8, ge=2, le=50)
+
+    @field_validator('name')
+    @classmethod
+    def normalize_settings_name(cls, value: str) -> str:
+        return value.strip()
+
+
 def require_supabase() -> Client:
     if supabase is None:
         raise HTTPException(status_code=503, detail='Supabase chưa được cấu hình trên server.')
@@ -1168,6 +1207,56 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
         shutil.rmtree(temp_dir, ignore_errors=True)
 
 
+def normalize_room_media(item: Optional[dict]) -> Optional[dict]:
+    if not isinstance(item, dict):
+        return None
+    allowed = ('id', 'title', 'artist', 'cover', 'url', 'audio_url', 'audioUrl', 'media_key')
+    payload = {}
+    for key in allowed:
+        value = item.get(key)
+        if value is not None and value != '':
+            payload[key] = str(value)[:1000]
+    return payload or None
+
+
+def room_snapshot(client: Client, room: dict) -> dict:
+    member_rows = client.table('room_members').select('id,room_id,user_id,role,joined_at,last_seen_at').eq('room_id', room['id']).order('joined_at').limit(50).execute().data or []
+    user_ids = [row.get('user_id') for row in member_rows if row.get('user_id')]
+    users_by_id = {}
+    if user_ids:
+        user_rows = client.table('users').select('id,username,role,display_name,avatar_url').in_('id', user_ids).limit(50).execute().data or []
+        users_by_id = {str(row['id']): public_user_payload(row) for row in user_rows}
+    members = [{**row, 'user': users_by_id.get(str(row.get('user_id')), {'id': row.get('user_id'), 'username': 'member', 'display_name': 'Member', 'avatar_url': '', 'role': 'user', 'bio': ''})} for row in member_rows]
+    return {
+        'id': room.get('id'), 'name': room.get('name'), 'invite_code': room.get('invite_code'),
+        'host_id': room.get('host_id'), 'visibility': room.get('visibility', 'private'),
+        'max_members': room.get('max_members', 8), 'status': room.get('status', 'active'),
+        'current_song': room.get('current_song'), 'queue': room.get('queue') or [],
+        'is_playing': bool(room.get('is_playing')), 'position_seconds': float(room.get('position_seconds') or 0),
+        'state_version': int(room.get('state_version') or 0), 'created_at': room.get('created_at'),
+        'updated_at': room.get('updated_at'), 'members': members,
+    }
+
+
+def get_room(client: Client, room_id: str) -> dict:
+    response = client.table('listening_rooms').select('*').eq('id', room_id).limit(1).execute()
+    room = (response.data or [None])[0]
+    if not room:
+        raise HTTPException(status_code=404, detail='Không tìm thấy phòng nghe.')
+    if room.get('status') != 'active':
+        raise HTTPException(status_code=410, detail='Phòng nghe này đã đóng.')
+    return room
+
+
+def get_room_member(client: Client, room_id: str, user_id: str) -> Optional[dict]:
+    response = client.table('room_members').select('id,room_id,user_id,role,joined_at,last_seen_at').eq('room_id', room_id).eq('user_id', user_id).limit(1).execute()
+    return (response.data or [None])[0]
+
+
+def make_invite_code() -> str:
+    return re.sub(r'[^A-Z0-9]', '', secrets.token_urlsafe(8).upper())[:10]
+
+
 @app.get('/api/health')
 async def health() -> dict:
     return {
@@ -1176,6 +1265,136 @@ async def health() -> dict:
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
     }
+
+
+@app.get('/api/rooms')
+async def list_listening_rooms(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> list:
+    try:
+        memberships = client.table('room_members').select('room_id').eq('user_id', current_user['id']).limit(50).execute().data or []
+        member_room_ids = {str(row.get('room_id')) for row in memberships if row.get('room_id')}
+        rooms = client.table('listening_rooms').select('*').eq('status', 'active').order('updated_at', desc=True).limit(50).execute().data or []
+        visible = [room for room in rooms if room.get('visibility') == 'public' or str(room.get('id')) in member_room_ids]
+        return [room_snapshot(client, room) for room in visible]
+    except Exception as error:
+        raise HTTPException(status_code=503, detail='Listening Room chưa được bật. Admin cần chạy supabase/listening_rooms.sql trước.') from error
+
+
+@app.post('/api/rooms', status_code=status.HTTP_201_CREATED)
+async def create_listening_room(request: CreateRoomRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        invite_code = ''
+        for _ in range(5):
+            candidate = make_invite_code()
+            duplicate = client.table('listening_rooms').select('id').eq('invite_code', candidate).limit(1).execute().data or []
+            if not duplicate:
+                invite_code = candidate
+                break
+        if not invite_code:
+            raise RuntimeError('Không thể tạo mã mời duy nhất.')
+        inserted = client.table('listening_rooms').insert({
+            'name': request.name, 'invite_code': invite_code, 'host_id': current_user['id'],
+            'visibility': request.visibility, 'max_members': request.max_members,
+        }).select('*').execute()
+        room = (inserted.data or [None])[0]
+        if not room:
+            raise RuntimeError('Supabase không trả về phòng vừa tạo.')
+        client.table('room_members').insert({'room_id': room['id'], 'user_id': current_user['id'], 'role': 'host'}).execute()
+        return {'success': True, 'room': room_snapshot(client, room), 'message': f'Đã tạo phòng “{request.name}”.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=f'Không thể tạo phòng nghe: {error}') from error
+
+
+@app.post('/api/rooms/join')
+async def join_listening_room(request: JoinRoomRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        response = client.table('listening_rooms').select('*').eq('invite_code', request.invite_code).eq('status', 'active').limit(1).execute()
+        room = (response.data or [None])[0]
+        if not room:
+            raise HTTPException(status_code=404, detail='Mã mời không hợp lệ hoặc phòng đã đóng.')
+        member = get_room_member(client, room['id'], str(current_user['id']))
+        if not member:
+            members = client.table('room_members').select('id').eq('room_id', room['id']).limit(51).execute().data or []
+            if len(members) >= int(room.get('max_members') or 8):
+                raise HTTPException(status_code=409, detail='Phòng đã đủ số thành viên.')
+            client.table('room_members').insert({'room_id': room['id'], 'user_id': current_user['id'], 'role': 'member'}).execute()
+        else:
+            client.table('room_members').update({'last_seen_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', member['id']).execute()
+        return {'success': True, 'room': room_snapshot(client, room), 'message': f'Đã vào phòng “{room.get("name", "") }”.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=f'Không thể vào phòng nghe: {error}') from error
+
+
+@app.get('/api/rooms/{room_id}')
+async def get_listening_room(room_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    room = get_room(client, room_id)
+    member = get_room_member(client, room_id, str(current_user['id']))
+    if not member:
+        raise HTTPException(status_code=403, detail='Bạn chưa tham gia phòng nghe này.')
+    client.table('room_members').update({'last_seen_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', member['id']).execute()
+    return room_snapshot(client, room)
+
+
+@app.patch('/api/rooms/{room_id}/state')
+async def update_listening_room_state(room_id: str, request: RoomStateRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    room = get_room(client, room_id)
+    member = get_room_member(client, room_id, str(current_user['id']))
+    if not member:
+        raise HTTPException(status_code=403, detail='Bạn chưa tham gia phòng nghe này.')
+    if member.get('role') not in {'host', 'co_host'}:
+        raise HTTPException(status_code=403, detail='Chỉ host hoặc co-host được điều khiển phòng.')
+    current_song = normalize_room_media(request.current_song)
+    queue = [item for item in (normalize_room_media(item) for item in request.queue) if item]
+    next_version = int(room.get('state_version') or 0) + 1
+    payload = {'current_song': current_song, 'queue': queue, 'is_playing': request.is_playing, 'position_seconds': request.position_seconds, 'state_version': next_version, 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}
+    query = client.table('listening_rooms').update(payload).eq('id', room_id).eq('status', 'active')
+    if request.expected_version is not None:
+        query = query.eq('state_version', request.expected_version)
+    updated = query.select('*').execute().data or []
+    if not updated:
+        raise HTTPException(status_code=409, detail='Trạng thái phòng vừa thay đổi. Hãy đồng bộ lại trước khi điều khiển tiếp.')
+    return {'success': True, 'room': room_snapshot(client, updated[0]), 'message': 'Đã đồng bộ trạng thái phòng.'}
+
+
+@app.patch('/api/rooms/{room_id}')
+async def update_listening_room(room_id: str, request: RoomSettingsRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    room = get_room(client, room_id)
+    if str(room.get('host_id')) != str(current_user['id']):
+        raise HTTPException(status_code=403, detail='Chỉ host được chỉnh cài đặt phòng.')
+    updated = client.table('listening_rooms').update({'name': request.name, 'visibility': request.visibility, 'max_members': request.max_members, 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', room_id).select('*').execute().data or []
+    if not updated:
+        raise HTTPException(status_code=404, detail='Không tìm thấy phòng nghe.')
+    return {'success': True, 'room': room_snapshot(client, updated[0]), 'message': 'Đã cập nhật cài đặt phòng.'}
+
+
+@app.post('/api/rooms/{room_id}/leave')
+async def leave_listening_room(room_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    room = get_room(client, room_id)
+    member = get_room_member(client, room_id, str(current_user['id']))
+    if not member:
+        raise HTTPException(status_code=403, detail='Bạn chưa tham gia phòng nghe này.')
+    client.table('room_members').delete().eq('id', member['id']).execute()
+    if str(room.get('host_id')) == str(current_user['id']):
+        remaining = client.table('room_members').select('id,user_id').eq('room_id', room_id).order('joined_at').limit(1).execute().data or []
+        if remaining:
+            next_host = remaining[0]
+            client.table('room_members').update({'role': 'host'}).eq('id', next_host['id']).execute()
+            client.table('listening_rooms').update({'host_id': next_host['user_id'], 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', room_id).execute()
+        else:
+            client.table('listening_rooms').update({'status': 'closed', 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', room_id).execute()
+    return {'success': True, 'message': 'Đã rời phòng nghe.'}
+
+
+@app.post('/api/rooms/{room_id}/close')
+async def close_listening_room(room_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    room = get_room(client, room_id)
+    if str(room.get('host_id')) != str(current_user['id']) and current_user.get('role') != 'admin':
+        raise HTTPException(status_code=403, detail='Chỉ host hoặc admin được đóng phòng.')
+    client.table('listening_rooms').update({'status': 'closed', 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', room_id).execute()
+    return {'success': True, 'message': 'Đã đóng phòng nghe.'}
 
 
 @app.post('/api/media-proposals', status_code=status.HTTP_201_CREATED)

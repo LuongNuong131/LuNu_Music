@@ -136,6 +136,15 @@ export const cleanupNotifications = (beforeDays = 30) => request(`/notifications
 
 export const getHealth = () => request('/health');
 
+export const getListeningRooms = () => request('/rooms');
+export const createListeningRoom = (room) => request('/rooms', { method: 'POST', body: JSON.stringify({ name: room.name, visibility: room.visibility || 'private', max_members: Number(room.max_members) || 8 }) });
+export const joinListeningRoom = (inviteCode) => request('/rooms/join', { method: 'POST', body: JSON.stringify({ invite_code: inviteCode }) });
+export const getListeningRoom = (id) => request(`/rooms/${encodeURIComponent(id)}`);
+export const updateListeningRoomState = (id, state) => request(`/rooms/${encodeURIComponent(id)}/state`, { method: 'PATCH', body: JSON.stringify({ current_song: state.current_song || null, queue: state.queue || [], is_playing: Boolean(state.is_playing), position_seconds: Number(state.position_seconds) || 0, expected_version: state.expected_version ?? null }) });
+export const updateListeningRoom = (id, room) => request(`/rooms/${encodeURIComponent(id)}`, { method: 'PATCH', body: JSON.stringify({ name: room.name, visibility: room.visibility || 'private', max_members: Number(room.max_members) || 8 }) });
+export const leaveListeningRoom = (id) => request(`/rooms/${encodeURIComponent(id)}/leave`, { method: 'POST' });
+export const closeListeningRoom = (id) => request(`/rooms/${encodeURIComponent(id)}/close`, { method: 'POST' });
+
 export const getMyProfile = () => request('/me');
 
 export const updateMyProfile = (profile) => request('/me/profile', {

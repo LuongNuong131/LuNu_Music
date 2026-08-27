@@ -114,3 +114,11 @@ Tính năng **Hồ sơ** dùng migration `supabase/user_profiles.sql`, bổ sung
 Frontend chỉ gọi các API profile thông qua backend Render: `GET /api/me`, `PATCH /api/me/profile`, `POST /api/me/avatar` và `POST /api/me/password`. Avatar được upload server-side lên Cloudinary, giới hạn 5 MiB và chỉ nhận JPG, PNG hoặc WebP; không đưa Cloudinary secret ra Vercel. Admin có thể xem và cập nhật display name, avatar URL, bio và role trong tab **Tài khoản**.
 
 Lớp Account Center được tách khỏi player. Không sửa `PlayerBar.vue`, `src/store/playerState.js`, audio element, queue cá nhân hoặc URL media khi triển khai profile. Sau khi Vercel deploy, user có thể mở mục **Hồ sơ**; nếu profile schema chưa được migrate, app vẫn giữ dữ liệu auth cũ và hiển thị hướng dẫn rõ ràng.
+
+## Listening Room
+
+Listening Room dùng migration `supabase/listening_rooms.sql`, tạo `listening_rooms` và `room_members` mà không thay đổi bảng `songs`, `cinema_videos`, player state hoặc queue cá nhân. Chạy migration một lần trong Supabase SQL Editor trước khi tạo phòng.
+
+Frontend có workspace **Phòng nghe** với tạo phòng private/public, invite code, giới hạn thành viên, tham gia/rời phòng, chuyển host khi host rời, queue phòng và trạng thái playback. User chỉ đồng bộ bài phòng vào player sau khi bấm **Đồng bộ bài này vào player của tôi**; việc mở hoặc tham gia phòng không tự động đổi bài đang phát.
+
+Các API room gồm `GET /api/rooms`, `POST /api/rooms`, `POST /api/rooms/join`, `GET /api/rooms/{id}`, `PATCH /api/rooms/{id}/state`, `PATCH /api/rooms/{id}`, `POST /api/rooms/{id}/leave` và `POST /api/rooms/{id}/close`. Polling hiện tại dùng chu kỳ thưa để cập nhật room state; khi realtime channel được triển khai sau này, channel chỉ thay thế lớp truyền state, không thay đổi player core.
