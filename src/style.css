@@ -395,3 +395,44 @@ button, input, select, textarea { min-width: 0; }
 @media (prefers-reduced-motion: reduce) {
   .main-content > section { animation: none; }
 }
+
+
+/* Readability pass v4: larger type scale for the workspace while leaving the player untouched. */
+.main-content { font-size: 13px; }
+.main-content .eyebrow, .main-content .panel-kicker { font-size: 10px !important; letter-spacing: 1.7px; }
+.main-content button, .main-content input, .main-content select, .main-content textarea { font-size: 12px; }
+.main-content .song-title, .main-content .track-copy strong, .main-content .person-copy strong, .main-content .conversation-row strong, .main-content .artist-card strong, .main-content .list-item strong, .main-content .proposal-row strong { font-size: 13px !important; }
+.main-content .song-artist, .main-content .track-copy small, .main-content .person-copy span, .main-content .conversation-row span, .main-content .artist-card small, .main-content .list-item small, .main-content .proposal-row small { font-size: 11px !important; }
+.main-content .lede, .main-content .chat-header p:last-child, .main-content .detail-head p:last-child, .main-content .room-description, .main-content .section-description { font-size: 13px; line-height: 1.7; }
+.main-content .stat-label, .main-content .card-meta, .main-content .track-album, .main-content .track-year { font-size: 10px !important; }
+
+/* Chat Hub premium readability and hierarchy. */
+.main-content .chat-header h1 { font-size: clamp(44px, 5.4vw, 68px); }
+.main-content .chat-layout { border-color: rgba(245, 185, 122, .16); background: linear-gradient(135deg, rgba(255,255,255,.065), rgba(255,255,255,.018)); }
+.main-content .chat-header p:last-child { max-width: 680px; font-size: 14px; }
+.main-content .panel-heading h2, .main-content .message-heading h2 { font-size: 27px; }
+.main-content .conversation-row { min-height: 58px; padding: 11px 10px; }
+.main-content .conversation-row strong { font-size: 13px !important; }
+.main-content .conversation-row span { font-size: 10px !important; }
+.main-content .message-list { gap: 13px; padding-top: 22px; }
+.main-content .message-bubble { padding: 13px 16px; border-radius: 15px 15px 15px 5px; box-shadow: 0 8px 20px rgba(0,0,0,.1); }
+.main-content .message-bubble.mine { border-radius: 15px 15px 5px 15px; box-shadow: 0 10px 24px rgba(245,185,122,.09); }
+.main-content .message-meta strong { font-size: 11px; }
+.main-content .message-meta time { font-size: 10px; }
+.main-content .message-bubble p { margin-top: 9px; font-size: 14px; line-height: 1.62; }
+.main-content .file-attachment strong, .main-content .attachment-draft strong { font-size: 12px; }
+.main-content .file-attachment small, .main-content .attachment-draft small { font-size: 10px; }
+.main-content .composer textarea { min-height: 58px; font-size: 14px; line-height: 1.55; }
+.main-content .composer-footer, .main-content .composer-footer button { font-size: 11px; }
+.main-content .composer-footer button { padding: 11px 17px; }
+.main-content .message-actions button { font-size: 10px; }
+.main-content .empty-chat strong, .main-content .message-empty h2 { font-size: 19px; }
+.main-content .empty-chat small, .main-content .message-empty p { font-size: 11px; }
+
+@media (max-width: 760px) {
+  .main-content .chat-header h1 { font-size: clamp(38px, 12vw, 52px); }
+  .main-content .chat-header p:last-child { font-size: 12px; }
+  .main-content .panel-heading h2, .main-content .message-heading h2 { font-size: 22px; }
+  .main-content .message-bubble p { font-size: 13px; }
+  .main-content .composer textarea { font-size: 13px; }
+}
