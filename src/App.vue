@@ -1,6 +1,6 @@
 <template>
   <div v-if="!authState.user || !authState.token" id="login-container"><Login /></div>
-  <div v-else id="app-container" class="glass-app-wrapper">
+  <div v-else id="app-container" class="glass-app-wrapper noise-overlay">
     <button type="button" class="mobile-menu-toggle" :aria-expanded="mobileMenuOpen" aria-controls="lunu-navigation" @click="mobileMenuOpen = true"><span></span><span></span><span></span><b>Menu</b></button>
     <div v-if="mobileMenuOpen" class="mobile-menu-backdrop" aria-hidden="true" @click="mobileMenuOpen = false"></div>
     <Sidebar id="lunu-navigation" :mobile-open="mobileMenuOpen" @close="mobileMenuOpen = false" />

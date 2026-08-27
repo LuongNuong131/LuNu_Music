@@ -25,7 +25,7 @@ import cloudinary
 import cloudinary.uploader
 import yt_dlp
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from supabase import Client, create_client
@@ -58,6 +58,11 @@ CLOUDINARY_PLAN_LIMIT_BYTES = 100 * 1024 * 1024
 CLOUDINARY_SAFE_VIDEO_BYTES = 92 * 1024 * 1024
 VIDEO_TRANSCODE_TIMEOUT_SECONDS = int(os.getenv('LUNU_VIDEO_TRANSCODE_TIMEOUT_SECONDS', '900'))
 RENDER_MAX_DOWNLOAD_BYTES = int(os.getenv('LUNU_RENDER_MAX_DOWNLOAD_BYTES', str(450 * 1024 * 1024)))
+CHAT_ATTACHMENT_MAX_BYTES = int(os.getenv('LUNU_CHAT_ATTACHMENT_MAX_BYTES', str(25 * 1024 * 1024)))
+CHAT_ATTACHMENT_MAX_FILENAME = 160
+CHAT_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
+CHAT_FILE_MIMES = {'application/pdf', 'text/plain', 'text/csv', 'application/json', 'application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
+CHAT_EXTENSION_MIMES = {'.jpg': 'image/jpeg', '.jpeg': 'image/jpeg', '.png': 'image/png', '.webp': 'image/webp', '.gif': 'image/gif', '.pdf': 'application/pdf', '.txt': 'text/plain', '.csv': 'text/csv', '.json': 'application/json', '.zip': 'application/zip', '.docx': 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', '.xlsx': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', '.pptx': 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
 
 SUPABASE_URL = os.getenv('SUPABASE_URL', '').strip()
 SUPABASE_KEY = os.getenv('SUPABASE_KEY', '').strip()
@@ -81,7 +86,8 @@ if SUPABASE_URL and SUPABASE_KEY:
 else:
     print('⚠️ Thiếu SUPABASE_URL hoặc SUPABASE_KEY; API database sẽ trả lỗi cấu hình.')
 
-if all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
+cloudinary_configured = all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET'))
+if cloudinary_configured:
     cloudinary.config(
         cloud_name=os.getenv('CLOUDINARY_CLOUD_NAME'),
         api_key=os.getenv('CLOUDINARY_API_KEY'),
@@ -519,6 +525,73 @@ def delete_cloudinary_asset(url: str, resource_type: str = 'video') -> None:
     if not public_id:
         return
     cloudinary.uploader.destroy(public_id, resource_type=resource_type, invalidate=True)
+
+
+def sanitize_chat_filename(filename: str) -> str:
+    clean = Path(filename or 'attachment').name
+    clean = ''.join(char for char in clean if ord(char) >= 32 and ord(char) != 127)
+    clean = re.sub(r'[^A-Za-z0-9._() -]+', '_', clean).strip(' .')
+    return clean[:CHAT_ATTACHMENT_MAX_FILENAME] or 'attachment'
+
+
+def validate_chat_attachment(filename: str, content_type: str, header: bytes) -> tuple[str, str]:
+    suffix = Path(filename).suffix.lower()
+    mime = (content_type or '').split(';', 1)[0].strip().lower()
+    mime = mime if mime in CHAT_IMAGE_MIMES | CHAT_FILE_MIMES else CHAT_EXTENSION_MIMES.get(suffix, '')
+    if mime not in CHAT_IMAGE_MIMES | CHAT_FILE_MIMES:
+        raise HTTPException(status_code=415, detail='Định dạng tệp chưa được hỗ trợ. Chỉ nhận ảnh phổ biến, PDF, TXT, CSV, JSON, ZIP và Office.')
+    if mime == 'image/jpeg' and not header.startswith(b'\xff\xd8\xff'):
+        raise HTTPException(status_code=415, detail='Tệp JPEG không hợp lệ.')
+    if mime == 'image/png' and not header.startswith(b'\x89PNG\r\n\x1a\n'):
+        raise HTTPException(status_code=415, detail='Tệp PNG không hợp lệ.')
+    if mime == 'image/gif' and not header.startswith((b'GIF87a', b'GIF89a')):
+        raise HTTPException(status_code=415, detail='Tệp GIF không hợp lệ.')
+    if mime == 'image/webp' and not (header.startswith(b'RIFF') and header[8:12] == b'WEBP'):
+        raise HTTPException(status_code=415, detail='Tệp WebP không hợp lệ.')
+    if mime == 'application/pdf' and not header.startswith(b'%PDF'):
+        raise HTTPException(status_code=415, detail='Tệp PDF không hợp lệ.')
+    if mime in {'application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'} and not header.startswith(b'PK'):
+        raise HTTPException(status_code=415, detail='Tệp Office/ZIP không hợp lệ.')
+    return mime, 'image' if mime in CHAT_IMAGE_MIMES else 'file'
+
+
+def upload_chat_attachment(file_path: Path, public_id: str, resource_type: str) -> dict:
+    if not cloudinary_configured:
+        raise HTTPException(status_code=503, detail='Cloudinary chưa được cấu hình để nhận tệp chat.')
+    return cloudinary.uploader.upload_large(str(file_path), resource_type=resource_type, public_id=public_id, overwrite=False, unique_filename=False, chunk_size=10 * 1024 * 1024)
+
+
+def delete_chat_attachment(public_id: str, resource_type: str) -> None:
+    if not public_id:
+        return
+    cloudinary.uploader.destroy(public_id, resource_type=resource_type if resource_type in {'image', 'raw', 'video'} else 'raw', invalidate=True)
+
+
+async def read_chat_upload(file: UploadFile) -> tuple[Path, str, str, int, str]:
+    filename = sanitize_chat_filename(file.filename or 'attachment')
+    first_chunk = await file.read(8192)
+    if not first_chunk:
+        raise HTTPException(status_code=400, detail='Tệp đính kèm đang trống.')
+    mime, kind = validate_chat_attachment(filename, file.content_type or '', first_chunk)
+    temp_handle, temp_name = tempfile.mkstemp(prefix='lunu-chat-', suffix=Path(filename).suffix.lower())
+    os.close(temp_handle)
+    temp_path = Path(temp_name)
+    size = 0
+    try:
+        with temp_path.open('wb') as output:
+            chunk = first_chunk
+            while chunk:
+                size += len(chunk)
+                if size > CHAT_ATTACHMENT_MAX_BYTES:
+                    raise HTTPException(status_code=413, detail=f'Tệp quá lớn. Giới hạn attachment chat là {CHAT_ATTACHMENT_MAX_BYTES // (1024 * 1024)} MiB.')
+                output.write(chunk)
+                chunk = await file.read(1024 * 1024)
+        return temp_path, filename, mime, size, kind
+    except Exception:
+        temp_path.unlink(missing_ok=True)
+        raise
+    finally:
+        await file.close()
 
 
 def strip_legacy_song_fields(song: dict) -> dict:
@@ -1380,10 +1453,19 @@ def chat_message_payload(row: dict, users: dict) -> dict:
     return {**row, 'sender': users.get(sender_id, {'id': sender_id, 'username': 'member', 'display_name': 'Member', 'avatar_url': '', 'role': 'user', 'bio': ''})}
 
 
-def cleanup_expired_chat_messages(client: Client) -> int:
+def cleanup_expired_chat_messages(client: Client, limit: int = 100) -> int:
     cutoff = datetime.now(ZoneInfo('UTC')).isoformat()
-    response = client.table('chat_messages').delete().lte('expires_at', cutoff).execute()
-    return len(response.data or [])
+    rows = client.table('chat_messages').select('id,attachment_public_id,attachment_resource_type').lte('expires_at', cutoff).order('expires_at').limit(limit).execute().data or []
+    deleted = 0
+    for row in rows:
+        try:
+            if row.get('attachment_public_id'):
+                delete_chat_attachment(row['attachment_public_id'], row.get('attachment_resource_type') or 'raw')
+            client.table('chat_messages').delete().eq('id', row['id']).execute()
+            deleted += 1
+        except Exception as error:
+            print(f'⚠️ Không thể dọn attachment chat {row.get("id")}: {error}')
+    return deleted
 
 
 async def broadcast_chat_event(conversation_id: str, event: dict) -> None:
@@ -1406,6 +1488,7 @@ async def health() -> dict:
         'supabase_configured': supabase is not None,
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
+        'chat_attachment_max_bytes': CHAT_ATTACHMENT_MAX_BYTES,
     }
 
 
@@ -1649,7 +1732,7 @@ async def list_chat_messages(conversation_id: str, limit: int = Query(default=10
     try:
         assert_chat_access(client, conversation_id, str(current_user['id']))
         now = datetime.now(ZoneInfo('UTC')).isoformat()
-        rows = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at').eq('conversation_id', conversation_id).gt('expires_at', now).is_('deleted_at', 'null').order('created_at', desc=False).limit(limit).execute().data or []
+        rows = client.table('chat_messages').select('id,conversation_id,sender_id,body,created_at,expires_at,attachment_url,attachment_public_id,attachment_resource_type,attachment_name,attachment_mime,attachment_size_bytes').eq('conversation_id', conversation_id).gt('expires_at', now).is_('deleted_at', 'null').order('created_at', desc=False).limit(limit).execute().data or []
         sender_ids = list({str(row.get('sender_id')) for row in rows if row.get('sender_id')})
         users = social_users_map(client, sender_ids)
         return {'items': [chat_message_payload(row, users) for row in rows], 'expires_after_minutes': 60}
@@ -1684,15 +1767,79 @@ async def send_chat_message(conversation_id: str, request: ChatMessageRequest, c
         raise HTTPException(status_code=502, detail='Không thể gửi tin nhắn lúc này.') from error
 
 
+@app.post('/api/chat/conversations/{conversation_id}/attachments', status_code=status.HTTP_201_CREATED)
+async def send_chat_attachment(conversation_id: str, file: UploadFile = File(...), body: str = Form(default=''), client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    assert_chat_access(client, conversation_id, str(current_user['id']))
+    enforce_chat_send_rate_limit(str(current_user['id']))
+    caption = (body or '').strip()
+    if len(caption) > 2000:
+        raise HTTPException(status_code=422, detail='Chú thích tệp không được vượt quá 2000 ký tự.')
+    temp_path = None
+    uploaded = None
+    attachment_public_id = ''
+    resource_type = 'raw'
+    try:
+        temp_path, filename, mime, size, kind = await read_chat_upload(file)
+        resource_type = 'image' if kind == 'image' else 'raw'
+        extension = Path(filename).suffix.lower() if resource_type == 'raw' else ''
+        public_id = f'lunu_chat/{conversation_id}/{uuid.uuid4().hex}{extension}'
+        uploaded = await asyncio.to_thread(upload_chat_attachment, temp_path, public_id, resource_type)
+        secure_url = uploaded.get('secure_url') or uploaded.get('url')
+        attachment_public_id = uploaded.get('public_id') or public_id
+        if not secure_url:
+            raise RuntimeError('Cloudinary không trả về URL attachment.')
+        expires_at = (datetime.now(ZoneInfo('UTC')) + timedelta(minutes=60)).isoformat()
+        row = (client.table('chat_messages').insert({
+            'conversation_id': conversation_id,
+            'sender_id': current_user['id'],
+            'body': caption or filename,
+            'expires_at': expires_at,
+            'attachment_url': secure_url,
+            'attachment_public_id': attachment_public_id,
+            'attachment_resource_type': resource_type,
+            'attachment_name': filename,
+            'attachment_mime': mime,
+            'attachment_size_bytes': size,
+        }).select('id,conversation_id,sender_id,body,created_at,expires_at,attachment_url,attachment_public_id,attachment_resource_type,attachment_name,attachment_mime,attachment_size_bytes').execute().data or [None])[0]
+        if not row:
+            raise RuntimeError('Supabase không trả về attachment message.')
+        client.table('conversations').update({'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', conversation_id).execute()
+        message = chat_message_payload(row, {str(current_user['id']): public_user_payload(current_user)})
+        await broadcast_chat_event(conversation_id, {'event': 'message_created', 'message': message})
+        return {'success': True, 'message': message}
+    except HTTPException:
+        if attachment_public_id:
+            try:
+                await asyncio.to_thread(delete_chat_attachment, attachment_public_id, resource_type)
+            except Exception as cleanup_error:
+                print(f'⚠️ Không thể rollback attachment chat: {cleanup_error}')
+        raise
+    except Exception as error:
+        if attachment_public_id:
+            try:
+                await asyncio.to_thread(delete_chat_attachment, attachment_public_id, resource_type)
+            except Exception as cleanup_error:
+                print(f'⚠️ Không thể rollback attachment chat: {cleanup_error}')
+        print(f'⚠️ Chat attachment send failed: {error}')
+        if any(is_missing_table_error(error, table) for table in ('chat_messages', 'conversations', 'conversation_members')):
+            raise HTTPException(status_code=503, detail='Chat attachment chưa được bật. Admin cần chạy supabase/chat_messages.sql và supabase/chat_attachments.sql.') from error
+        raise HTTPException(status_code=502, detail='Không thể gửi tệp chat lúc này.') from error
+    finally:
+        if temp_path:
+            temp_path.unlink(missing_ok=True)
+
+
 @app.delete('/api/chat/messages/{message_id}')
 async def delete_chat_message(message_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
     try:
-        row = (client.table('chat_messages').select('id,conversation_id,sender_id').eq('id', message_id).limit(1).execute().data or [None])[0]
+        row = (client.table('chat_messages').select('id,conversation_id,sender_id,attachment_public_id,attachment_resource_type').eq('id', message_id).limit(1).execute().data or [None])[0]
         if not row:
             raise HTTPException(status_code=404, detail='Không tìm thấy tin nhắn.')
         assert_chat_access(client, str(row['conversation_id']), str(current_user['id']))
         if str(row.get('sender_id')) != str(current_user['id']) and current_user.get('role') != 'admin':
             raise HTTPException(status_code=403, detail='Bạn không có quyền xóa tin nhắn này.')
+        if row.get('attachment_public_id'):
+            await asyncio.to_thread(delete_chat_attachment, row['attachment_public_id'], row.get('attachment_resource_type') or 'raw')
         client.table('chat_messages').delete().eq('id', message_id).execute()
         await broadcast_chat_event(row['conversation_id'], {'event': 'message_deleted', 'message_id': message_id})
         return {'success': True, 'message': 'Đã xóa tin nhắn cho mọi người.'}

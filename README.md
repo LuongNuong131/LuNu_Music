@@ -318,3 +318,12 @@ The repository does not currently declare a formal open-source license. Code, ar
   LuNu Music project README
   Inspired by the presentation language of github.com/LuongNuong131.
 -->
+
+
+## Chat attachments và premium UI
+
+Chat Hub hỗ trợ gửi ảnh JPG/PNG/WebP/GIF và các tệp PDF, TXT, CSV, JSON, ZIP cùng một số định dạng Office. File được gửi qua backend, kiểm tra MIME/magic bytes, giới hạn mặc định 25 MiB mỗi attachment rồi upload lên Cloudinary bằng resource type phù hợp. Metadata attachment được lưu cùng `chat_messages`, broadcast qua WebSocket và được xóa cùng message sau 60 phút; cleanup xóa asset Cloudinary trước khi xóa row database hoạt động.
+
+Để bật tính năng này, chạy `supabase/chat_messages.sql` trước rồi chạy `supabase/chat_attachments.sql` trong Supabase SQL Editor. Frontend không chứa Cloudinary secret. Nếu chưa chạy migration attachment, chat chữ vẫn có thể dùng nhưng gửi/đọc attachment sẽ báo cần bật schema.
+
+LuNu Music cũng có lớp premium visual refresh dùng chung cho workspace: ambient grid, glass hierarchy, focus state, spacing responsive, card elevation, typography rhythm và mobile-safe modal/notification layout. Lớp này không thay đổi audio element, player bar, queue persistence hay media URL.

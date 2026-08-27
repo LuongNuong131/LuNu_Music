@@ -6,7 +6,7 @@ const readToken = () => localStorage.getItem('lunu_access_token');
 
 const request = async (path, options = {}) => {
   const headers = new Headers(options.headers || {});
-  if (!headers.has('Content-Type') && options.body) headers.set('Content-Type', 'application/json');
+  if (!headers.has('Content-Type') && options.body && !(options.body instanceof FormData)) headers.set('Content-Type', 'application/json');
   const token = readToken();
   if (token) headers.set('Authorization', `Bearer ${token}`);
   let response;
@@ -170,6 +170,7 @@ export const createDirectChat = (userId) => request('/chat/conversations/direct'
 export const createRoomChat = (roomId) => request(`/chat/conversations/room/${encodeURIComponent(roomId)}`, { method: 'POST', body: JSON.stringify({}) });
 export const getChatMessages = (conversationId, limit = 100) => request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages?limit=${encodeURIComponent(limit)}`);
 export const sendChatMessage = (conversationId, body) => request(`/chat/conversations/${encodeURIComponent(conversationId)}/messages`, { method: 'POST', body: JSON.stringify({ body }) });
+export const sendChatAttachment = (conversationId, file, body = '') => { const formData = new FormData(); formData.append('file', file); formData.append('body', body); return request(`/chat/conversations/${encodeURIComponent(conversationId)}/attachments`, { method: 'POST', body: formData }); };
 export const deleteChatMessage = (messageId) => request(`/chat/messages/${encodeURIComponent(messageId)}`, { method: 'DELETE' });
 export const reportChatMessage = (messageId, reason) => request(`/chat/messages/${encodeURIComponent(messageId)}/report`, { method: 'POST', body: JSON.stringify({ reason }) });
 export const cleanupChatMessages = () => request('/chat/cleanup', { method: 'DELETE' });
