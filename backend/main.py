@@ -1973,11 +1973,14 @@ async def review_admin_chat_report(report_id: str, request: ChatReportStatusRequ
 
 
 @app.delete('/api/admin/chat-reports/cleanup')
-async def cleanup_admin_chat_reports(before_days: int = Query(default=30, ge=1, le=3650), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+async def cleanup_admin_chat_reports(before_days: int = Query(default=0, ge=0, le=3650), client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
     cutoff = (datetime.now(ZoneInfo('UTC')) - timedelta(days=before_days)).isoformat()
     try:
-        result = client.table('chat_reports').delete().in_('status', ['reviewed', 'dismissed']).lt('created_at', cutoff).execute()
-        return {'success': True, 'deleted_count': len(result.data or [])}
+        targets = client.table('chat_reports').select('id').in_('status', ['reviewed', 'dismissed']).lt('created_at', cutoff).limit(1000).execute().data or []
+        ids = [row.get('id') for row in targets if row.get('id')]
+        if ids:
+            client.table('chat_reports').delete().in_('id', ids).execute()
+        return {'success': True, 'deleted_count': len(ids)}
     except Exception as error:
         if is_missing_table_error(error, 'chat_reports'):
             return {'success': True, 'deleted_count': 0, 'available': False}
