@@ -8,6 +8,7 @@
       <LyricsManager v-else-if="currentView === 'lyrics'" :songs="songs" @play-song="playFromLibrary" />
       <PlaylistsView v-else-if="currentView === 'playlists'" :songs="songs" @play-song="playFromLibrary" />
       <ProposalView v-else-if="currentView === 'proposals'" />
+      <AccountView v-else-if="currentView === 'account'" />
       <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
     </main>
     <PlayerBar />
@@ -71,6 +72,7 @@ import MainView from './components/MainView.vue';
 import LyricsManager from './components/LyricsManager.vue';
 import PlaylistsView from './views/PlaylistsView.vue';
 import ProposalView from './views/ProposalView.vue';
+import AccountView from './views/AccountView.vue';
 import PlayerBar from './components/PlayerBar.vue';
 import NowPlayingView from './components/NowPlayingView.vue';
 import QueuePanel from './components/QueuePanel.vue';

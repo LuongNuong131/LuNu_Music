@@ -24,7 +24,7 @@ import cloudinary
 import cloudinary.uploader
 import yt_dlp
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, status
+from fastapi import BackgroundTasks, Depends, FastAPI, File, Header, HTTPException, Query, UploadFile, status
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, field_validator
 from supabase import Client, create_client
@@ -212,6 +212,33 @@ class UserRequest(BaseModel):
         return value.strip().lower()
 
 
+class ProfileUpdateRequest(BaseModel):
+    display_name: str = Field(default='', max_length=120)
+    bio: str = Field(default='', max_length=280)
+
+    @field_validator('display_name', 'bio')
+    @classmethod
+    def normalize_profile_text(cls, value: str) -> str:
+        return value.strip()
+
+
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(min_length=1, max_length=256)
+    new_password: str = Field(min_length=8, max_length=256)
+
+
+class AdminUserProfileRequest(BaseModel):
+    display_name: str = Field(default='', max_length=120)
+    avatar_url: str = Field(default='', max_length=1000)
+    bio: str = Field(default='', max_length=280)
+    role: str = Field(default='user', pattern=r'^(user|admin)$')
+
+    @field_validator('display_name', 'avatar_url', 'bio')
+    @classmethod
+    def normalize_admin_profile_text(cls, value: str) -> str:
+        return value.strip()
+
+
 def require_supabase() -> Client:
     if supabase is None:
         raise HTTPException(status_code=503, detail='Supabase chưa được cấu hình trên server.')
@@ -283,6 +310,43 @@ async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
     if current_user.get('role') != 'admin':
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail='Bạn không có quyền quản trị.')
     return current_user
+
+
+PROFILE_COLUMNS = 'id,username,role,display_name,avatar_url,bio'
+
+
+def public_user_payload(record: dict) -> dict:
+    return {
+        'id': record.get('id'),
+        'username': record.get('username', ''),
+        'role': record.get('role', 'user'),
+        'display_name': record.get('display_name') or record.get('username', ''),
+        'avatar_url': record.get('avatar_url') or '',
+        'bio': record.get('bio') or '',
+    }
+
+
+def get_profile_record(client: Client, user_id: str) -> dict:
+    try:
+        response = client.table('users').select(PROFILE_COLUMNS).eq('id', user_id).limit(1).execute()
+        record = (response.data or [None])[0]
+    except Exception:
+        response = client.table('users').select('id,username,role').eq('id', user_id).limit(1).execute()
+        record = (response.data or [None])[0]
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Không tìm thấy tài khoản.')
+    return record
+
+
+def update_profile_record(client: Client, user_id: str, payload: dict) -> dict:
+    try:
+        response = client.table('users').update(payload).eq('id', user_id).select(PROFILE_COLUMNS).execute()
+    except Exception as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail='Profile chưa được bật. Admin cần chạy supabase/user_profiles.sql trước.') from error
+    record = (response.data or [None])[0]
+    if not record:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail='Không tìm thấy tài khoản.')
+    return record
 
 
 def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'web', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None) -> dict:
@@ -1606,7 +1670,7 @@ async def login(req: LoginRequest, client: Client = Depends(require_supabase)) -
                 client.table('users').update({'password_hash': password_hash(req.password)}).eq('id', record['id']).execute()
             except Exception as migration_error:
                 print('⚠️ Không thể ghi password_hash; tiếp tục tương thích schema cũ:', migration_error)
-        user = {'id': record['id'], 'username': record['username'], 'role': record.get('role', 'user')}
+        user = public_user_payload(record)
         return {'success': True, 'user': user, 'access_token': issue_token(str(user['id']), user['role'])}
     except HTTPException:
         raise
@@ -1614,12 +1678,97 @@ async def login(req: LoginRequest, client: Client = Depends(require_supabase)) -
         raise HTTPException(status_code=502, detail=f'Lỗi đăng nhập: {error}')
 
 
+@app.get('/api/me')
+async def get_my_profile(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    return {'user': public_user_payload(get_profile_record(client, str(current_user['id'])))}
+
+
+@app.patch('/api/me/profile')
+async def update_my_profile(request: ProfileUpdateRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    record = update_profile_record(client, str(current_user['id']), {
+        'display_name': request.display_name or current_user.get('username', ''),
+        'bio': request.bio,
+        'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat(),
+    })
+    return {'success': True, 'user': public_user_payload(record), 'message': 'Đã cập nhật hồ sơ cá nhân.'}
+
+
+@app.post('/api/me/password')
+async def change_my_password(request: PasswordChangeRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        response = client.table('users').select('id,password_hash,password').eq('id', current_user['id']).limit(1).execute()
+    except Exception:
+        response = client.table('users').select('id,password').eq('id', current_user['id']).limit(1).execute()
+    record = (response.data or [None])[0]
+    if not record:
+        raise HTTPException(status_code=404, detail='Không tìm thấy tài khoản.')
+    stored = record.get('password_hash') or record.get('password') or ''
+    if not verify_password(request.current_password, stored):
+        raise HTTPException(status_code=400, detail='Mật khẩu hiện tại không chính xác.')
+    if request.current_password == request.new_password:
+        raise HTTPException(status_code=400, detail='Mật khẩu mới phải khác mật khẩu hiện tại.')
+    hashed = password_hash(request.new_password)
+    try:
+        client.table('users').update({'password_hash': hashed, 'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', current_user['id']).execute()
+    except Exception:
+        client.table('users').update({'password': hashed}).eq('id', current_user['id']).execute()
+    return {'success': True, 'message': 'Đã đổi mật khẩu. Các phiên đăng nhập cũ vẫn còn hiệu lực trong thời gian token.'}
+
+
+@app.post('/api/me/avatar')
+async def upload_my_avatar(file: UploadFile = File(...), client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    if not file.content_type or not file.content_type.startswith('image/'):
+        raise HTTPException(status_code=415, detail='Avatar phải là file hình ảnh.')
+    contents = await file.read(5 * 1024 * 1024 + 1)
+    if len(contents) > 5 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail='Avatar không được lớn hơn 5 MiB.')
+    if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
+        raise HTTPException(status_code=503, detail='Cloudinary chưa được cấu hình trên server.')
+    try:
+        result = cloudinary.uploader.upload(
+            contents,
+            resource_type='image',
+            folder='lunu_avatars',
+            public_id=f'user_{current_user["id"]}',
+            overwrite=True,
+            invalidate=True,
+        )
+        avatar_url = result.get('secure_url')
+        if not avatar_url:
+            raise RuntimeError('Cloudinary không trả về secure_url cho avatar.')
+        record = update_profile_record(client, str(current_user['id']), {
+            'avatar_url': avatar_url,
+            'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat(),
+        })
+        return {'success': True, 'user': public_user_payload(record), 'message': 'Đã cập nhật ảnh đại diện.'}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể cập nhật avatar: {error}') from error
+
+
 @app.get('/api/users')
 async def get_users(client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> list:
     try:
-        return (client.table('users').select('id, username, role').order('username').execute()).data or []
-    except Exception as error:
-        raise HTTPException(status_code=502, detail=f'Không thể tải users: {error}')
+        records = (client.table('users').select(PROFILE_COLUMNS).order('username').execute()).data or []
+    except Exception:
+        try:
+            records = (client.table('users').select('id, username, role').order('username').execute()).data or []
+        except Exception as error:
+            raise HTTPException(status_code=502, detail=f'Không thể tải users: {error}')
+    return [public_user_payload(record) for record in records]
+
+
+@app.patch('/api/users/{user_id}/profile')
+async def update_user_profile(user_id: str, request: AdminUserProfileRequest, client: Client = Depends(require_supabase), _: dict = Depends(require_admin)) -> dict:
+    record = update_profile_record(client, user_id, {
+        'display_name': request.display_name,
+        'avatar_url': request.avatar_url,
+        'bio': request.bio,
+        'role': request.role,
+        'updated_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat(),
+    })
+    return {'success': True, 'user': public_user_payload(record), 'message': 'Đã cập nhật hồ sơ tài khoản.'}
 
 
 @app.post('/api/users/add')

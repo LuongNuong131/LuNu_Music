@@ -26,6 +26,12 @@ export const loginUser = (payload) => {
   if (authState.token) localStorage.setItem(TOKEN_KEY, authState.token);
 };
 
+export const updateAuthUser = (user) => {
+  if (!user) return;
+  authState.user = { ...authState.user, ...user };
+  localStorage.setItem(USER_KEY, JSON.stringify(authState.user));
+};
+
 export const logoutUser = () => {
   authState.user = null;
   authState.token = '';

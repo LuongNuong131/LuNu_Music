@@ -135,3 +135,33 @@ export const clearReadNotifications = () => request('/notifications/clear-read',
 export const cleanupNotifications = (beforeDays = 30) => request(`/notifications/cleanup?before_days=${encodeURIComponent(beforeDays)}`, { method: 'DELETE' });
 
 export const getHealth = () => request('/health');
+
+export const getMyProfile = () => request('/me');
+
+export const updateMyProfile = (profile) => request('/me/profile', {
+  method: 'PATCH',
+  body: JSON.stringify({
+    display_name: profile.display_name || '',
+    bio: profile.bio || '',
+  }),
+});
+
+export const changeMyPassword = (currentPassword, newPassword) => request('/me/password', {
+  method: 'POST',
+  body: JSON.stringify({ current_password: currentPassword, new_password: newPassword }),
+});
+
+export const uploadMyAvatar = (file) => {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request('/me/avatar', { method: 'POST', body: formData });
+};
+
+export const updateUserProfile = (id, profile) => request(`/users/${encodeURIComponent(id)}/profile`, {
+  method: 'PATCH',
+  body: JSON.stringify({
+    display_name: profile.display_name || '',
+    bio: profile.bio || '',
+    role: profile.role || 'user',
+  }),
+});

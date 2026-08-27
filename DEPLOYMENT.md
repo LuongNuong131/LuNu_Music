@@ -106,3 +106,11 @@ Nếu log audio hiển thị `Error parsing server response (413)` kèm HTML `ng
 ### Chẩn đoán lỗi `Maximum is 104857600`
 
 Nếu log hiển thị `File size too large. Got ... Maximum is 104857600`, đó là giới hạn 100 MiB của Cloudinary plan hoặc endpoint upload thường. Bản backend mới sẽ thử upload chunk, nhận diện lỗi này, nén video xuống dưới giới hạn rồi upload lại. Log thành công phải có các bước sau theo thứ tự: video tải xong, `đang upload ... theo chunk`, nếu plan từ chối thì `đang nén video`, sau đó `đang upload bản tương thích` và cuối cùng ghi metadata Supabase. Nếu sau deploy không thấy các câu trạng thái mới mà vẫn lỗi ngay ở 100 MiB, Render chưa chạy đúng commit hoặc đang dùng sai Root Directory/Dockerfile; hãy kiểm tra commit deploy là commit mới nhất trên `master` và dùng **Clear build cache & deploy**.
+
+## Account Center và user profile
+
+Tính năng **Hồ sơ** dùng migration `supabase/user_profiles.sql`, bổ sung `display_name`, `avatar_url`, `bio` và `updated_at` vào bảng `users` theo kiểu additive. Chạy migration một lần trong Supabase SQL Editor trước khi lưu profile. Nếu chưa chạy migration, tài khoản cũ vẫn đăng nhập được nhưng thao tác lưu profile sẽ báo cần bật profile schema.
+
+Frontend chỉ gọi các API profile thông qua backend Render: `GET /api/me`, `PATCH /api/me/profile`, `POST /api/me/avatar` và `POST /api/me/password`. Avatar được upload server-side lên Cloudinary, giới hạn 5 MiB và chỉ nhận JPG, PNG hoặc WebP; không đưa Cloudinary secret ra Vercel. Admin có thể xem và cập nhật display name, avatar URL, bio và role trong tab **Tài khoản**.
+
+Lớp Account Center được tách khỏi player. Không sửa `PlayerBar.vue`, `src/store/playerState.js`, audio element, queue cá nhân hoặc URL media khi triển khai profile. Sau khi Vercel deploy, user có thể mở mục **Hồ sơ**; nếu profile schema chưa được migrate, app vẫn giữ dữ liệu auth cũ và hiển thị hướng dẫn rõ ràng.
