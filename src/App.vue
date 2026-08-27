@@ -15,6 +15,7 @@
       <FriendsView v-else-if="currentView === 'friends'" />
       <MainView v-else :songs="songs" :only-liked="currentView === 'liked'" :loading="songsLoading" :error="songsError" @retry="loadSongs" />
     </main>
+    <RoomSyncBridge />
     <PlayerBar />
     <NowPlayingView
       :visible="player.state.nowPlayingVisible"
@@ -80,6 +81,7 @@ import AccountView from './views/AccountView.vue';
 import RoomsView from './views/RoomsView.vue';
 import FriendsView from './views/FriendsView.vue';
 import PlayerBar from './components/PlayerBar.vue';
+import RoomSyncBridge from './components/RoomSyncBridge.vue';
 import NowPlayingView from './components/NowPlayingView.vue';
 import QueuePanel from './components/QueuePanel.vue';
 import CommandPalette from './components/CommandPalette.vue';
