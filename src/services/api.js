@@ -209,7 +209,7 @@ export const updateUserProfile = (id, profile) => request(`/users/${encodeURICom
 });
 
 
-export const getAIConcierge = (message, history = []) => request('/ai/concierge', {
+export const getAIConcierge = (message, history = [], previousInteractionId = null) => request('/ai/concierge', {
   method: 'POST',
-  body: JSON.stringify({ message, history }),
+  body: JSON.stringify({ message, history, previous_interaction_id: previousInteractionId }),
 });

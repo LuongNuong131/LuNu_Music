@@ -2810,11 +2810,14 @@ AI_RATE_LIMIT_WINDOW_SECONDS = 60.0
 ai_request_windows: dict[str, deque[float]] = {}
 ai_key_cursor = 0
 ai_key_lock = asyncio.Lock()
+ai_catalog_cache: dict = {'expires_at': 0.0, 'data': []}
+AI_CATALOG_CACHE_SECONDS = 45.0
 
 
 class AIConciergeRequest(BaseModel):
     message: str = Field(min_length=2, max_length=1200)
     history: list[dict] = Field(default_factory=list, max_length=8)
+    previous_interaction_id: Optional[str] = Field(default=None, max_length=160)
 
     @field_validator('message')
     @classmethod
@@ -2851,11 +2854,14 @@ def gemini_api_keys() -> list[str]:
 
 
 def ai_catalog_payload(client: Client) -> list[dict]:
+    now = time.monotonic()
+    if ai_catalog_cache['data'] and now < ai_catalog_cache['expires_at']:
+        return ai_catalog_cache['data']
     try:
         rows = client.table('songs').select('id,title,artist,url,cover,lyrics').order('title').limit(300).execute().data or []
     except Exception as error:
         raise HTTPException(status_code=503, detail=f'Không thể đọc catalog để AI gợi ý: {error}') from error
-    return [
+    payload = [
         {
             'id': str(row.get('id')),
             'title': str(row.get('title') or '').strip(),
@@ -2865,8 +2871,10 @@ def ai_catalog_payload(client: Client) -> list[dict]:
             'lyrics': str(row.get('lyrics') or '').strip(),
         }
         for row in rows
-        if row.get('id') and row.get('title')
+        if row.get('id') and row.get('title') and row.get('url')
     ]
+    ai_catalog_cache.update({'expires_at': now + AI_CATALOG_CACHE_SECONDS, 'data': payload})
+    return payload
 
 
 AI_RESPONSE_SCHEMA = {
@@ -2923,17 +2931,20 @@ def parse_ai_json(text: str) -> dict:
     return result
 
 
-async def call_gemini_concierge(prompt: str) -> dict:
+async def call_gemini_concierge(prompt: str, previous_interaction_id: Optional[str] = None) -> dict:
     global ai_key_cursor
     keys = gemini_api_keys()
     if not keys:
         raise HTTPException(status_code=503, detail='AI Concierge chưa được cấu hình. Hãy thêm GEMINI_API_KEY_1..10 hoặc GEMINI_API_KEYS trên backend.')
-    request_body = json.dumps({
+    request_payload = {
         'model': GEMINI_MODEL,
         'input': prompt,
-        'store': False,
+        'generation_config': {'thinking_level': 'low'},
         'response_format': {'type': 'text', 'mime_type': 'application/json', 'schema': AI_RESPONSE_SCHEMA},
-    }).encode('utf-8')
+    }
+    if previous_interaction_id:
+        request_payload['previous_interaction_id'] = previous_interaction_id.strip()
+    request_body = json.dumps(request_payload).encode('utf-8')
     async with ai_key_lock:
         start = ai_key_cursor % len(keys)
         ai_key_cursor = (start + 1) % len(keys)
@@ -2949,7 +2960,9 @@ async def call_gemini_concierge(prompt: str) -> dict:
         try:
             with urllib.request.urlopen(request, timeout=45) as response:
                 payload = json.loads(response.read().decode('utf-8'))
-            return parse_ai_json(extract_gemini_output_text(payload))
+            parsed = parse_ai_json(extract_gemini_output_text(payload))
+            parsed['_interaction_id'] = str(payload.get('id') or payload.get('interaction_id') or '')
+            return parsed
         except urllib.error.HTTPError as error:
             body = error.read().decode('utf-8', errors='replace')
             last_error = f'Gemini HTTP {error.code}'
@@ -2974,7 +2987,7 @@ async def ai_concierge(request: AIConciergeRequest, client: Client = Depends(req
 
     catalog = ai_catalog_payload(client)
     catalog_by_id = {item['id']: item for item in catalog}
-    history_text = '\n'.join(f"{item['role']}: {item['content']}" for item in request.history)
+    history_text = '(Gemini đang tiếp tục interaction trước đó.)' if request.previous_interaction_id else '\n'.join(f"{item['role']}: {item['content']}" for item in request.history)
     catalog_text = '\n'.join(f"{item['id']} | {item['title']} | {item['artist']}" for item in catalog)
     prompt = f'''Bạn là LuNu Music Concierge, một người bạn am hiểu âm nhạc và nói tiếng Việt tự nhiên.
 Hãy lắng nghe tâm trạng người dùng, trả lời ngắn gọn có sự đồng cảm, rồi gợi ý từ 1 đến 5 bài phù hợp.
@@ -2992,7 +3005,8 @@ CATALOG:
 {catalog_text}
 
 Trả về JSON đúng schema, không markdown.'''
-    result = await call_gemini_concierge(prompt)
+    result = await call_gemini_concierge(prompt, request.previous_interaction_id)
+    interaction_id = str(result.pop('_interaction_id', '') or '')
     raw_recommendations = result.get('recommendations') if isinstance(result.get('recommendations'), list) else []
     recommendations = []
     seen_ids = set()
@@ -3011,4 +3025,7 @@ Trả về JSON đúng schema, không markdown.'''
         'mood': str(result.get('mood') or 'your mood')[:80],
         'recommendations': recommendations,
         'model': GEMINI_MODEL,
+        'interaction_id': interaction_id or None,
+        'grounded_in_catalog': True,
+        'context_mode': 'previous_interaction' if request.previous_interaction_id else 'history_snapshot',
     }

@@ -11,7 +11,7 @@
                 <h2 id="concierge-title">Chọn nhạc theo mood.</h2>
               </div>
             </div>
-            <button type="button" class="concierge-close" aria-label="Đóng AI Concierge" @click="close">×</button>
+            <div class="concierge-header-actions"><button v-if="messages.length" type="button" class="concierge-reset" aria-label="Bắt đầu cuộc trò chuyện mới" title="Cuộc trò chuyện mới" @click="resetConversation">↺</button><button type="button" class="concierge-close" aria-label="Đóng AI Concierge" @click="close">×</button></div>
           </header>
 
           <div ref="messageList" class="concierge-messages">
@@ -28,7 +28,7 @@
               <div v-if="item.role === 'assistant'" class="assistant-avatar">✦</div>
               <div class="message-content">
                 <p class="message-copy">{{ item.content }}</p>
-                <span v-if="item.mood" class="mood-pill">{{ item.mood }}</span>
+                <div v-if="item.mood" class="mood-pill">{{ item.mood }}</div><div v-if="item.grounded" class="grounded-label">Đã đối chiếu thư viện LuNu</div>
                 <div v-if="item.recommendations?.length" class="ai-recommendations">
                   <div class="recommendation-heading"><span>GỢI Ý CHO BẠN</span><small>{{ item.recommendations.length }} bài</small></div>
                   <div class="ai-song-list">
@@ -71,6 +71,7 @@ const draft = ref('');
 const loading = ref(false);
 const error = ref('');
 const messages = ref([]);
+const interactionId = ref(null);
 const messageList = ref(null);
 const inputRef = ref(null);
 const quickPrompts = ['Nay t buồn, cho t nhạc thất tình', 'Cho t nhạc chill để làm việc', 'T muốn nghe gì đó thật tích cực'];
@@ -80,6 +81,7 @@ const scrollToBottom = async () => {
   if (messageList.value) messageList.value.scrollTop = messageList.value.scrollHeight;
 };
 const close = () => emit('close');
+const resetConversation = () => { messages.value = []; interactionId.value = null; error.value = ''; draft.value = ''; nextTick(() => inputRef.value?.focus()); };
 const sendPrompt = async (value) => {
   const content = String(value || '').trim();
   if (!content || loading.value) return;
@@ -90,8 +92,9 @@ const sendPrompt = async (value) => {
   loading.value = true;
   await scrollToBottom();
   try {
-    const response = await getAIConcierge(content, history);
-    messages.value.push({ role: 'assistant', content: response.message, mood: response.mood, recommendations: response.recommendations || [] });
+    const response = await getAIConcierge(content, history, interactionId.value);
+    interactionId.value = response.interaction_id || interactionId.value;
+    messages.value.push({ role: 'assistant', content: response.message, mood: response.mood, recommendations: response.recommendations || [], grounded: response.grounded_in_catalog });
   } catch (cause) {
     error.value = cause.message || 'AI đang bận một chút. Thử lại sau nhé.';
   } finally {
@@ -108,16 +111,16 @@ watch(() => props.visible, async (visible) => {
     inputRef.value?.focus();
   }
 });
-onBeforeUnmount(() => { messages.value = []; });
+onBeforeUnmount(() => { messages.value = []; interactionId.value = null; });
 </script>
 
 <style scoped>
 .concierge-overlay { position: fixed; inset: 0; z-index: 410; display: flex; justify-content: flex-end; padding: 18px; background: rgba(4, 6, 11, .58); backdrop-filter: blur(12px); }
 .concierge-panel { display: flex; flex-direction: column; width: min(470px, 100%); height: min(760px, calc(100vh - 36px)); overflow: hidden; border: 1px solid rgba(245,185,122,.23); border-radius: 24px; background: linear-gradient(145deg, rgba(23,27,39,.98), rgba(10,13,21,.99)); box-shadow: 0 30px 90px rgba(0,0,0,.5), 0 0 0 1px rgba(255,255,255,.025); }
 .concierge-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 18px; padding: 25px 24px 19px; border-bottom: 1px solid rgba(255,255,255,.07); }
-.concierge-brand { display: flex; align-items: center; gap: 12px; }.concierge-orb { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 12px; background: linear-gradient(135deg, var(--gold-bright), var(--coral)); color: #161017; box-shadow: 0 10px 26px rgba(245,185,122,.2); }.concierge-kicker,.concierge-eyebrow,.recommendation-heading span { margin: 0; color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1.7px; }.concierge-header h2 { margin-top: 6px; color: var(--text-main); font: 500 25px var(--font-display); letter-spacing: -.6px; }.concierge-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--glass); color: var(--text-main); cursor: pointer; font-size: 22px; }.concierge-close:hover { color: var(--gold); background: var(--glass-strong); }
+.concierge-brand { display: flex; align-items: center; gap: 12px; }.concierge-header-actions { display: flex; align-items: center; gap: 7px; }.concierge-reset { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--glass); color: var(--text-sub); cursor: pointer; font-size: 17px; }.concierge-reset:hover { color: var(--gold); background: var(--glass-strong); }.concierge-orb { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 12px; background: linear-gradient(135deg, var(--gold-bright), var(--coral)); color: #161017; box-shadow: 0 10px 26px rgba(245,185,122,.2); }.concierge-kicker,.concierge-eyebrow,.recommendation-heading span { margin: 0; color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1.7px; }.concierge-header h2 { margin-top: 6px; color: var(--text-main); font: 500 25px var(--font-display); letter-spacing: -.6px; }.concierge-close { display: grid; place-items: center; width: 32px; height: 32px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--glass); color: var(--text-main); cursor: pointer; font-size: 22px; }.concierge-close:hover { color: var(--gold); background: var(--glass-strong); }
 .concierge-messages { flex: 1; min-height: 0; overflow: auto; padding: 23px 20px 15px; }.concierge-welcome { padding: 13px 6px 12px; }.concierge-welcome h3 { margin-top: 16px; color: var(--text-main); font: 500 36px/1 var(--font-display); letter-spacing: -1.8px; }.concierge-welcome h3 em { color: var(--gold-bright); font-style: italic; }.concierge-welcome-copy { max-width: 330px; margin-top: 17px; color: var(--text-sub); font-size: 11px; line-height: 1.55; }.quick-prompts { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 24px; }.quick-prompts button { padding: 9px 11px; border: 1px solid var(--hairline); border-radius: 99px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font-size: 10px; text-align: left; }.quick-prompts button:hover { border-color: rgba(245,185,122,.35); background: rgba(245,185,122,.08); color: var(--text-main); }
-.concierge-message { display: flex; gap: 9px; margin: 15px 0; }.concierge-message.user { justify-content: flex-end; }.assistant-avatar { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-top: 3px; border-radius: 8px; background: rgba(245,185,122,.14); color: var(--gold); font-size: 13px; }.message-content { max-width: 91%; }.message-copy { padding: 11px 13px; border: 1px solid var(--hairline-soft); border-radius: 14px 14px 14px 4px; background: rgba(255,255,255,.045); color: var(--text-main); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }.user .message-copy { border-color: rgba(245,185,122,.18); border-radius: 14px 14px 4px 14px; background: linear-gradient(135deg, rgba(245,185,122,.18), rgba(245,185,122,.07)); }.mood-pill { display: inline-block; margin: 7px 0 0 3px; color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; }
+.concierge-message { display: flex; gap: 9px; margin: 15px 0; }.concierge-message.user { justify-content: flex-end; }.assistant-avatar { display: grid; place-items: center; flex: none; width: 24px; height: 24px; margin-top: 3px; border-radius: 8px; background: rgba(245,185,122,.14); color: var(--gold); font-size: 13px; }.message-content { max-width: 91%; }.message-copy { padding: 11px 13px; border: 1px solid var(--hairline-soft); border-radius: 14px 14px 14px 4px; background: rgba(255,255,255,.045); color: var(--text-main); font-size: 11px; line-height: 1.55; white-space: pre-wrap; }.user .message-copy { border-color: rgba(245,185,122,.18); border-radius: 14px 14px 4px 14px; background: linear-gradient(135deg, rgba(245,185,122,.18), rgba(245,185,122,.07)); }.mood-pill { display: inline-block; margin: 7px 0 0 3px; color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; }.grounded-label { display: inline-block; margin: 7px 0 0 8px; color: var(--mint); font: 8px var(--font-mono); letter-spacing: .3px; }
 .ai-recommendations { margin-top: 13px; }.recommendation-heading { display: flex; align-items: center; justify-content: space-between; padding: 0 3px 8px; }.recommendation-heading small { color: var(--text-faint); font: 8px var(--font-mono); }.ai-song-list { display: grid; gap: 7px; }.ai-song-card { display: flex; align-items: center; gap: 9px; padding: 8px; border: 1px solid var(--hairline-soft); border-radius: 13px; background: rgba(255,255,255,.035); }.ai-song-card img { width: 43px; height: 43px; flex: none; border-radius: 9px; object-fit: cover; }.ai-song-info { display: flex; flex: 1; flex-direction: column; min-width: 0; }.ai-song-info strong,.ai-song-info span,.ai-song-info small { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.ai-song-info strong { color: var(--text-main); font-size: 10px; }.ai-song-info span { margin-top: 3px; color: var(--text-sub); font-size: 9px; }.ai-song-info small { margin-top: 5px; color: var(--text-faint); font-size: 8px; }.ai-song-actions { display: flex; gap: 5px; flex: none; }.ai-play,.ai-queue { display: grid; place-items: center; width: 29px; height: 29px; border: 1px solid var(--hairline); border-radius: 9px; cursor: pointer; }.ai-play { background: var(--gold-bright); color: #171019; }.ai-queue { background: transparent; color: var(--gold); font-size: 18px; }.ai-play:hover,.ai-queue:hover { transform: translateY(-1px); }
 .concierge-thinking { display: flex; align-items: center; gap: 6px; padding: 10px 4px; color: var(--text-faint); font-size: 10px; }.thinking-orb { color: var(--gold); }.concierge-thinking i { width: 3px; height: 3px; border-radius: 50%; background: var(--gold); animation: concierge-blink 1s ease-in-out infinite; }.concierge-thinking i:nth-last-child(2) { animation-delay: .16s; }.concierge-thinking i:last-child { animation-delay: .32s; } @keyframes concierge-blink { 0%,100% { opacity: .25; transform: translateY(0); } 50% { opacity: 1; transform: translateY(-2px); } }
 .concierge-composer { padding: 14px 18px max(17px, env(safe-area-inset-bottom)); border-top: 1px solid rgba(255,255,255,.07); background: rgba(8,10,16,.38); }.composer-hint { display: flex; align-items: center; gap: 7px; margin: 0 3px 9px; }.composer-hint span { color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1px; }.composer-hint small { color: var(--text-faint); font-size: 9px; }.composer-form { display: flex; align-items: center; gap: 8px; padding: 6px 7px 6px 13px; border: 1px solid var(--hairline); border-radius: 14px; background: rgba(255,255,255,.05); }.composer-form:focus-within { border-color: rgba(245,185,122,.5); box-shadow: 0 0 0 3px rgba(245,185,122,.08); }.composer-form input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--text-main); font-size: 11px; }.composer-form input::placeholder { color: var(--text-faint); }.composer-form button { display: grid; place-items: center; width: 34px; height: 34px; border: 0; border-radius: 10px; background: var(--gold-bright); color: #171019; cursor: pointer; font-size: 18px; }.composer-form button:disabled { opacity: .35; cursor: not-allowed; }.concierge-error { margin: 8px 3px 0; color: var(--crimson); font-size: 9px; line-height: 1.4; }.concierge-fade-enter-active,.concierge-fade-leave-active { transition: opacity .22s ease; }.concierge-fade-enter-from,.concierge-fade-leave-to { opacity: 0; }.concierge-fade-enter-active .concierge-panel,.concierge-fade-leave-active .concierge-panel { transition: transform .28s var(--ease-out); }.concierge-fade-enter-from .concierge-panel,.concierge-fade-leave-to .concierge-panel { transform: translateX(35px); }
