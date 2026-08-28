@@ -16,6 +16,7 @@ import unicodedata
 from collections import deque
 from datetime import datetime, timedelta
 from zoneinfo import ZoneInfo
+import urllib.error
 import urllib.parse
 import urllib.request
 from pathlib import Path
@@ -2799,3 +2800,215 @@ async def delete_user(user_id: str, client: Client = Depends(require_supabase), 
         return {'success': True, 'message': 'Đã thu hồi tài khoản.'}
     except Exception as error:
         raise HTTPException(status_code=502, detail=f'Không thể xóa tài khoản: {error}')
+
+
+# AI Music Concierge ---------------------------------------------------------
+# Keys are intentionally read only from server-side environment variables.
+GEMINI_MODEL = os.getenv('GEMINI_MODEL', 'gemini-3.7-flash').strip() or 'gemini-3.7-flash'
+AI_RATE_LIMIT_COUNT = int(os.getenv('LUNU_AI_RATE_LIMIT_COUNT', '12'))
+AI_RATE_LIMIT_WINDOW_SECONDS = 60.0
+ai_request_windows: dict[str, deque[float]] = {}
+ai_key_cursor = 0
+ai_key_lock = asyncio.Lock()
+
+
+class AIConciergeRequest(BaseModel):
+    message: str = Field(min_length=2, max_length=1200)
+    history: list[dict] = Field(default_factory=list, max_length=8)
+
+    @field_validator('message')
+    @classmethod
+    def normalize_ai_message(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator('history')
+    @classmethod
+    def normalize_ai_history(cls, value: list[dict]) -> list[dict]:
+        clean = []
+        for item in value[-8:]:
+            if not isinstance(item, dict):
+                continue
+            role = str(item.get('role') or '').strip().lower()
+            content = str(item.get('content') or '').strip()
+            if role in {'user', 'assistant'} and content:
+                clean.append({'role': role, 'content': content[:1200]})
+        return clean
+
+
+def gemini_api_keys() -> list[str]:
+    values = []
+    csv_value = os.getenv('GEMINI_API_KEYS', '')
+    if csv_value:
+        values.extend(part.strip() for part in csv_value.split(',') if part.strip())
+    for index in range(1, 11):
+        value = os.getenv(f'GEMINI_API_KEY_{index}', '').strip()
+        if value:
+            values.append(value)
+    single = os.getenv('GEMINI_API_KEY', '').strip()
+    if single:
+        values.append(single)
+    return list(dict.fromkeys(values))
+
+
+def ai_catalog_payload(client: Client) -> list[dict]:
+    try:
+        rows = client.table('songs').select('id,title,artist,url,cover,lyrics').order('title').limit(300).execute().data or []
+    except Exception as error:
+        raise HTTPException(status_code=503, detail=f'Không thể đọc catalog để AI gợi ý: {error}') from error
+    return [
+        {
+            'id': str(row.get('id')),
+            'title': str(row.get('title') or '').strip(),
+            'artist': str(row.get('artist') or '').strip(),
+            'url': str(row.get('url') or '').strip(),
+            'cover': str(row.get('cover') or DEFAULT_COVER).strip(),
+            'lyrics': str(row.get('lyrics') or '').strip(),
+        }
+        for row in rows
+        if row.get('id') and row.get('title')
+    ]
+
+
+AI_RESPONSE_SCHEMA = {
+    'type': 'object',
+    'properties': {
+        'message': {'type': 'string', 'description': 'Một câu trả lời ngắn, đồng cảm bằng tiếng Việt.'},
+        'mood': {'type': 'string', 'description': 'Nhãn tâm trạng ngắn bằng tiếng Việt.'},
+        'recommendations': {
+            'type': 'array',
+            'items': {
+                'type': 'object',
+                'properties': {
+                    'song_id': {'type': 'string', 'description': 'ID chính xác lấy từ catalog.'},
+                    'reason': {'type': 'string', 'description': 'Lý do gợi ý ngắn bằng tiếng Việt.'},
+                },
+                'required': ['song_id', 'reason'],
+            },
+        },
+    },
+    'required': ['message', 'mood', 'recommendations'],
+}
+
+
+def extract_gemini_output_text(payload: dict) -> str:
+    direct = payload.get('output_text')
+    if isinstance(direct, str) and direct.strip():
+        return direct.strip()
+    output = payload.get('output') or []
+    if isinstance(output, list):
+        chunks = []
+        for item in output:
+            if not isinstance(item, dict):
+                continue
+            if isinstance(item.get('text'), str):
+                chunks.append(item['text'])
+            content = item.get('content')
+            if isinstance(content, list):
+                chunks.extend(part.get('text', '') for part in content if isinstance(part, dict) and isinstance(part.get('text'), str))
+        if chunks:
+            return ''.join(chunks).strip()
+    return ''
+
+
+def parse_ai_json(text: str) -> dict:
+    candidate = text.strip()
+    if candidate.startswith('```'):
+        candidate = re.sub(r'^```(?:json)?\s*|\s*```$', '', candidate, flags=re.IGNORECASE | re.DOTALL).strip()
+    try:
+        result = json.loads(candidate)
+    except json.JSONDecodeError as error:
+        raise HTTPException(status_code=502, detail='Gemini trả về dữ liệu không đúng định dạng. Hãy thử lại.') from error
+    if not isinstance(result, dict):
+        raise HTTPException(status_code=502, detail='Gemini trả về recommendation không hợp lệ.')
+    return result
+
+
+async def call_gemini_concierge(prompt: str) -> dict:
+    global ai_key_cursor
+    keys = gemini_api_keys()
+    if not keys:
+        raise HTTPException(status_code=503, detail='AI Concierge chưa được cấu hình. Hãy thêm GEMINI_API_KEY_1..10 hoặc GEMINI_API_KEYS trên backend.')
+    request_body = json.dumps({
+        'model': GEMINI_MODEL,
+        'input': prompt,
+        'store': False,
+        'response_format': {'type': 'text', 'mime_type': 'application/json', 'schema': AI_RESPONSE_SCHEMA},
+    }).encode('utf-8')
+    async with ai_key_lock:
+        start = ai_key_cursor % len(keys)
+        ai_key_cursor = (start + 1) % len(keys)
+    last_error = None
+    for offset in range(len(keys)):
+        key = keys[(start + offset) % len(keys)]
+        request = urllib.request.Request(
+            'https://generativelanguage.googleapis.com/v1beta/interactions',
+            data=request_body,
+            headers={'Content-Type': 'application/json', 'x-goog-api-key': key, 'User-Agent': 'LuNuMusic/3.0'},
+            method='POST',
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=45) as response:
+                payload = json.loads(response.read().decode('utf-8'))
+            return parse_ai_json(extract_gemini_output_text(payload))
+        except urllib.error.HTTPError as error:
+            body = error.read().decode('utf-8', errors='replace')
+            last_error = f'Gemini HTTP {error.code}'
+            if error.code not in {401, 403, 408, 429} and error.code < 500:
+                raise HTTPException(status_code=502, detail='Gemini từ chối yêu cầu. Kiểm tra model hoặc API key.') from error
+            print(f'⚠️ Gemini key slot {(start + offset) % len(keys) + 1} failed: {error.code} {body[:240]}')
+        except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+            last_error = str(error)
+    raise HTTPException(status_code=503, detail=f'AI Concierge tạm thời không khả dụng ({last_error or "không có key hoạt động"}).')
+
+
+@app.post('/api/ai/concierge')
+async def ai_concierge(request: AIConciergeRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    user_key = str(current_user.get('id') or current_user.get('username') or 'anonymous')
+    now = time.monotonic()
+    window = ai_request_windows.setdefault(user_key, deque())
+    while window and now - window[0] > AI_RATE_LIMIT_WINDOW_SECONDS:
+        window.popleft()
+    if len(window) >= AI_RATE_LIMIT_COUNT:
+        raise HTTPException(status_code=429, detail='Bạn đã dùng AI khá nhiều trong một phút. Hãy đợi một chút rồi thử lại.')
+    window.append(now)
+
+    catalog = ai_catalog_payload(client)
+    catalog_by_id = {item['id']: item for item in catalog}
+    history_text = '\n'.join(f"{item['role']}: {item['content']}" for item in request.history)
+    catalog_text = '\n'.join(f"{item['id']} | {item['title']} | {item['artist']}" for item in catalog)
+    prompt = f'''Bạn là LuNu Music Concierge, một người bạn am hiểu âm nhạc và nói tiếng Việt tự nhiên.
+Hãy lắng nghe tâm trạng người dùng, trả lời ngắn gọn có sự đồng cảm, rồi gợi ý từ 1 đến 5 bài phù hợp.
+Chỉ được chọn song_id xuất hiện chính xác trong CATALOG bên dưới. Không tự bịa bài hát, nghệ sĩ hoặc ID.
+Nếu người dùng hỏi ngoài âm nhạc, vẫn trả lời lịch sự và đưa về việc chọn nhạc.
+Không chẩn đoán sức khỏe tâm thần, không đưa lời khuyên nguy hiểm.
+
+LỊCH SỬ:
+{history_text or '(chưa có)'}
+
+TIN NHẮN MỚI:
+{request.message}
+
+CATALOG:
+{catalog_text}
+
+Trả về JSON đúng schema, không markdown.'''
+    result = await call_gemini_concierge(prompt)
+    raw_recommendations = result.get('recommendations') if isinstance(result.get('recommendations'), list) else []
+    recommendations = []
+    seen_ids = set()
+    for item in raw_recommendations[:5]:
+        if not isinstance(item, dict):
+            continue
+        song_id = str(item.get('song_id') or '')
+        if song_id in seen_ids or song_id not in catalog_by_id:
+            continue
+        song = catalog_by_id[song_id]
+        seen_ids.add(song_id)
+        recommendations.append({**song, 'reason': str(item.get('reason') or 'Hợp với mood hiện tại.')[:240]})
+    return {
+        'success': True,
+        'message': str(result.get('message') or 'Tớ đã chọn vài bài hợp với mood của bạn.')[:500],
+        'mood': str(result.get('mood') or 'your mood')[:80],
+        'recommendations': recommendations,
+        'model': GEMINI_MODEL,
+    }

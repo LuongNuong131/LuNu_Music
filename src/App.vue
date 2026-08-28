@@ -9,7 +9,7 @@
     <main id="main-workspace" class="main-content" tabindex="-1">
       <div class="app-utility-bar" role="navigation" aria-label="Thanh công cụ nhanh">
         <div class="utility-context"><span class="utility-pulse"></span><span>LISTENING ROOM</span><b>/</b><strong aria-live="polite">{{ viewTitle }}</strong></div>
-        <div class="utility-actions"><NotificationCenter compact /><button type="button" class="utility-theme" :aria-pressed="themeState === 'light'" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme"><span aria-hidden="true">{{ themeState === 'dark' ? '☾' : '☀' }}</span><span class="utility-theme-label">{{ themeState === 'dark' ? 'Dark' : 'Light' }}</span></button><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span aria-hidden="true">⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
+        <div class="utility-actions"><button type="button" class="utility-ai" aria-label="Mở AI Music Concierge" @click="conciergeOpen = true"><span>✦</span><span class="utility-ai-label">AI Concierge</span></button><NotificationCenter compact /><button type="button" class="utility-theme" :aria-pressed="themeState === 'light'" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" :title="themeState === 'dark' ? 'Light mode' : 'Dark mode'" @click="toggleTheme"><span aria-hidden="true">{{ themeState === 'dark' ? '☾' : '☀' }}</span><span class="utility-theme-label">{{ themeState === 'dark' ? 'Dark' : 'Light' }}</span></button><button type="button" class="utility-search" aria-label="Mở tìm kiếm nhanh" @click="commandOpen = true"><span aria-hidden="true">⌕</span><span class="utility-search-label">Tìm nhanh</span><kbd>⌘ K</kbd></button></div>
       </div>
       <Transition name="workspace" mode="out-in">
         <div :key="currentView" class="workspace-view">
@@ -56,6 +56,7 @@
       @play="playFromQueue"
     />
     <CommandPalette :visible="commandOpen" :songs="songs" :playlists="playlists" @close="commandOpen = false" @play-song="playFromLibrary" @open-playlist="openPlaylist" @action="runCommand" />
+    <AIConcierge :visible="conciergeOpen" @close="conciergeOpen = false" @play-song="playFromLibrary" @queue-song="queueFromConcierge" />
     <Toast />
     <ConfirmModal
       :visible="dialog.state.visible"
@@ -99,6 +100,7 @@ import RoomSyncBridge from './components/RoomSyncBridge.vue';
 import NowPlayingView from './components/NowPlayingView.vue';
 import QueuePanel from './components/QueuePanel.vue';
 import CommandPalette from './components/CommandPalette.vue';
+import AIConcierge from './components/AIConcierge.vue';
 import Toast from './components/Toast.vue';
 import ConfirmModal from './components/ConfirmModal.vue';
 import NotificationCenter from './components/NotificationCenter.vue';
@@ -108,6 +110,7 @@ const viewTitle = computed(() => ({ home: 'Tổng quan', liked: 'Yêu thích', p
 const player = usePlayer();
 const { playlists, selectPlaylist } = usePlaylists();
 const commandOpen = ref(false);
+const conciergeOpen = ref(false);
 const mobileMenuOpen = ref(false);
 const dialog = useDialog();
 watch(mobileMenuOpen, (open) => { document.body.classList.toggle('mobile-menu-open', open); });
@@ -118,6 +121,7 @@ watch(() => player.state.currentSong?.cover, (cover) => {
 
 const playFromLibrary = (song, collection = songs) => playSong(song, Array.isArray(collection) && collection.length ? collection : songs);
 const playFromQueue = (song) => playSong(song, [player.state.currentSong, ...player.state.queue].filter(Boolean));
+const queueFromConcierge = (song) => player.addToQueue(song);
 const openPlaylist = (playlist) => { selectPlaylist(playlist?.id); currentView.value = 'playlists'; };
 const runCommand = (action) => {
   if (action === 'home') currentView.value = 'home';
@@ -171,14 +175,8 @@ onBeforeUnmount(() => { window.removeEventListener('keydown', onKeydown); docume
 .utility-context strong { overflow: hidden; color: var(--text-main); font-weight: 500; text-overflow: ellipsis; white-space: nowrap; letter-spacing: .4px; }
 .utility-context b { color: var(--hairline); font-weight: 400; }
 .utility-pulse { width: 6px; height: 6px; flex: none; border-radius: 50%; background: var(--mint); box-shadow: 0 0 12px var(--mint); }
-.utility-actions { display: flex; align-items: center; gap: 8px; flex: none; }.utility-search { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
-.utility-search:hover, .utility-theme:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }
-.utility-theme { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }
-.utility-theme > span:first-child { color: var(--gold); font-size: 14px; }
-.utility-theme-label { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: .7px; text-transform: uppercase; }
-.utility-search > span:first-child { color: var(--gold); font-size: 15px; line-height: .7; }
-.utility-search kbd { padding: 3px 5px; border: 1px solid var(--hairline-soft); border-radius: 5px; color: var(--text-faint); font: 8px var(--font-mono); }
-@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-actions { gap: 6px; }.utility-theme { width: 34px; height: 34px; padding: 0; justify-content: center; }.utility-theme-label, .utility-search-label, .utility-search kbd { display: none; }.utility-search { padding: 7px 8px; } }
+.utility-actions { display: flex; align-items: center; gap: 8px; flex: none; }.utility-ai { display: inline-flex; align-items: center; gap: 6px; padding: 7px 9px; border: 1px solid rgba(245,185,122,.25); border-radius: 9px; background: rgba(245,185,122,.08); color: var(--gold); cursor: pointer; font: 10px var(--font-body); }.utility-ai > span:first-child { font-size: 14px; line-height: .7; }.utility-ai:hover { border-color: rgba(245,185,122,.5); background: rgba(245,185,122,.14); color: var(--gold-bright); }.utility-search, .utility-theme { display: inline-flex; align-items: center; gap: 8px; flex: none; padding: 7px 9px; border: 1px solid var(--hairline-soft); border-radius: 9px; background: rgba(255,255,255,.035); color: var(--text-sub); cursor: pointer; font: 10px var(--font-body); }.utility-search:hover, .utility-theme:hover { border-color: rgba(245,185,122,.34); background: rgba(245,185,122,.07); color: var(--text-main); }.utility-theme { gap: 6px; }.utility-theme > span:first-child, .utility-search > span:first-child { color: var(--gold); font-size: 15px; line-height: .7; }.utility-theme-label { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: .7px; text-transform: uppercase; }.utility-search kbd { padding: 3px 5px; border: 1px solid var(--hairline-soft); border-radius: 5px; color: var(--text-faint); font: 8px var(--font-mono); }
+@media (max-width: 760px) { .app-utility-bar { margin: 0 4px 12px; min-height: 25px; }.utility-context > span:not(.utility-pulse), .utility-context b { display: none; }.utility-actions { gap: 6px; }.utility-ai, .utility-theme, .utility-search { width: 34px; height: 34px; padding: 0; justify-content: center; }.utility-ai-label, .utility-theme-label, .utility-search-label, .utility-search kbd { display: none; } }
 /* Mobile shell v2: phone-first navigation and floating player dock. */
 @media (max-width: 760px) {
   #app-container { min-height: 100dvh; height: 100dvh; }

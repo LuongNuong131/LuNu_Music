@@ -207,3 +207,9 @@ export const updateUserProfile = (id, profile) => request(`/users/${encodeURICom
     role: profile.role || 'user',
   }),
 });
+
+
+export const getAIConcierge = (message, history = []) => request('/ai/concierge', {
+  method: 'POST',
+  body: JSON.stringify({ message, history }),
+});
