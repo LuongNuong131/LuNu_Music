@@ -471,6 +471,10 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
         },
         'source_address': '0.0.0.0',
         'socket_timeout': 30,
+        'retries': 3,
+        'extractor_retries': 3,
+        'fragment_retries': 3,
+        'check_formats': 'selected',
     }
     if is_download:
         cookie_path = Path(os.getenv('YOUTUBE_COOKIES_PATH', '')).expanduser() if os.getenv('YOUTUBE_COOKIES_PATH', '').strip() else Path.cwd() / 'cookies.txt'
@@ -490,8 +494,6 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
                 'outtmpl': output_template or str(Path(temp_dir) / '%(id)s.%(ext)s'),
                 'postprocessors': postprocessors if postprocessors is not None else [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'mp3', 'preferredquality': '192'}],
                 'merge_output_format': 'mp4',
-                'retries': 3,
-                'fragment_retries': 3,
                 'continuedl': True,
             })
             if max_filesize:
@@ -1156,13 +1158,16 @@ def run_ffmpeg(input_path: Path, output_path: Path, mode: str) -> None:
 def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
     url = f'https://www.youtube.com/watch?v={video_id}'
     profiles = [
-        ('web', 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best'),
+        # YouTube periodically breaks one client family; use diverse profiles.
+        ('web_embedded', 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best'),
+        ('mweb', 'best[acodec!=none]/best'),
+        ('web', 'best[acodec!=none]/best'),
         ('tv', 'best[acodec!=none]/best'),
-        ('ios', 'best[acodec!=none]/best'),
     ] if mode == 'song' else [
-        ('web', 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'),
+        ('web_embedded', 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'),
+        ('mweb', 'best[height<=360][filesize<450M]/best[height<=360]'),
+        ('web', 'best[height<=360][filesize<450M]/best[height<=360]'),
         ('tv', 'best[height<=360][filesize<450M]/best[height<=360]'),
-        ('ios', 'best[height<=360][filesize<450M]/best[height<=360]'),
     ]
     errors = []
     for profile_index, (client, selector) in enumerate(profiles):
@@ -1226,7 +1231,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
                 errors.append(f'{client}: {error}')
             for item in available_media_files(temp_dir, video_id):
                 item.unlink(missing_ok=True)
-    raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-3:]))
+    raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-4:]) + '. Hãy cập nhật yt-dlp/EJS và kiểm tra cookie YouTube nếu IP Render bị challenge.')
 
 
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
@@ -1547,6 +1552,13 @@ def playlist_payload(row: dict) -> dict:
     }
 
 
+def ensure_playlist_name_available(client: Client, user_id: str, name: str, exclude_id: Optional[str] = None) -> None:
+    rows = client.table('user_playlists').select('id,name').eq('user_id', user_id).execute().data or []
+    duplicate = next((row for row in rows if str(row.get('name') or '').casefold() == name.casefold() and str(row.get('id')) != str(exclude_id or '')), None)
+    if duplicate:
+        raise HTTPException(status_code=409, detail='Bạn đã có playlist cùng tên trong tài khoản này.')
+
+
 @app.get('/api/playlists')
 async def get_playlists(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> list:
     try:
@@ -1566,6 +1578,7 @@ async def create_playlist(request: PlaylistRequest, client: Client = Depends(req
         except ValueError:
             pass
     try:
+        ensure_playlist_name_available(client, current_user['id'], request.name)
         row = (client.table('user_playlists').insert(payload).select('id,user_id,name,description,song_ids,created_at,updated_at').execute().data or [None])[0]
         if not row:
             raise RuntimeError('Supabase không trả về playlist vừa tạo.')
@@ -1578,6 +1591,7 @@ async def create_playlist(request: PlaylistRequest, client: Client = Depends(req
 async def update_playlist(playlist_id: str, request: PlaylistRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
     payload = {'name': request.name, 'description': request.description, 'song_ids': request.song_ids, 'updated_at': datetime.now(ZoneInfo('UTC')).isoformat()}
     try:
+        ensure_playlist_name_available(client, current_user['id'], request.name, playlist_id)
         row = (client.table('user_playlists').update(payload).eq('id', playlist_id).eq('user_id', current_user['id']).select('id,user_id,name,description,song_ids,created_at,updated_at').execute().data or [None])[0]
         if not row:
             raise HTTPException(status_code=404, detail='Không tìm thấy playlist.')
