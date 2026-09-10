@@ -334,6 +334,23 @@ class ChatReportStatusRequest(BaseModel):
     status: Literal['reviewed', 'dismissed']
 
 
+class PlaylistRequest(BaseModel):
+    id: Optional[str] = Field(default=None, max_length=80)
+    name: str = Field(min_length=1, max_length=80)
+    description: str = Field(default='', max_length=160)
+    song_ids: list[str] = Field(default_factory=list, max_length=1000)
+
+    @field_validator('name', 'description')
+    @classmethod
+    def normalize_playlist_text(cls, value: str) -> str:
+        return value.strip()
+
+    @field_validator('song_ids')
+    @classmethod
+    def normalize_playlist_song_ids(cls, value: list[str]) -> list[str]:
+        return list(dict.fromkeys(str(song_id) for song_id in value if str(song_id).strip()))
+
+
 def require_supabase() -> Client:
     if supabase is None:
         raise HTTPException(status_code=503, detail='Supabase chưa được cấu hình trên server.')
@@ -1517,6 +1534,71 @@ async def health() -> dict:
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
         'chat_attachment_max_bytes': CHAT_ATTACHMENT_MAX_BYTES,
     }
+
+
+def playlist_payload(row: dict) -> dict:
+    return {
+        'id': row.get('id'),
+        'name': row.get('name', ''),
+        'description': row.get('description', ''),
+        'songIds': row.get('song_ids') if isinstance(row.get('song_ids'), list) else [],
+        'createdAt': row.get('created_at'),
+        'updatedAt': row.get('updated_at'),
+    }
+
+
+@app.get('/api/playlists')
+async def get_playlists(client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> list:
+    try:
+        rows = client.table('user_playlists').select('id,user_id,name,description,song_ids,created_at,updated_at').eq('user_id', current_user['id']).order('updated_at', desc=True).execute().data or []
+        return [playlist_payload(row) for row in rows]
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể tải playlist: {error}') from error
+
+
+@app.post('/api/playlists', status_code=status.HTTP_201_CREATED)
+async def create_playlist(request: PlaylistRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    payload = {'user_id': current_user['id'], 'name': request.name, 'description': request.description, 'song_ids': request.song_ids}
+    if request.id:
+        try:
+            uuid.UUID(request.id)
+            payload['id'] = request.id
+        except ValueError:
+            pass
+    try:
+        row = (client.table('user_playlists').insert(payload).select('id,user_id,name,description,song_ids,created_at,updated_at').execute().data or [None])[0]
+        if not row:
+            raise RuntimeError('Supabase không trả về playlist vừa tạo.')
+        return playlist_payload(row)
+    except Exception as error:
+        raise HTTPException(status_code=409, detail=f'Không thể tạo playlist: {error}') from error
+
+
+@app.patch('/api/playlists/{playlist_id}')
+async def update_playlist(playlist_id: str, request: PlaylistRequest, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    payload = {'name': request.name, 'description': request.description, 'song_ids': request.song_ids, 'updated_at': datetime.now(ZoneInfo('UTC')).isoformat()}
+    try:
+        row = (client.table('user_playlists').update(payload).eq('id', playlist_id).eq('user_id', current_user['id']).select('id,user_id,name,description,song_ids,created_at,updated_at').execute().data or [None])[0]
+        if not row:
+            raise HTTPException(status_code=404, detail='Không tìm thấy playlist.')
+        return playlist_payload(row)
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể cập nhật playlist: {error}') from error
+
+
+@app.delete('/api/playlists/{playlist_id}')
+async def delete_playlist(playlist_id: str, client: Client = Depends(require_supabase), current_user: dict = Depends(get_current_user)) -> dict:
+    try:
+        result = client.table('user_playlists').delete().eq('id', playlist_id).eq('user_id', current_user['id']).select('id').execute()
+        if not result.data:
+            raise HTTPException(status_code=404, detail='Không tìm thấy playlist.')
+        return {'success': True}
+    except HTTPException:
+        raise
+    except Exception as error:
+        raise HTTPException(status_code=502, detail=f'Không thể xóa playlist: {error}') from error
 
 
 def social_users_map(client: Client, user_ids: list[str]) -> dict:

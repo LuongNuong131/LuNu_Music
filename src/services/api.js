@@ -144,6 +144,17 @@ export const cleanupNotifications = (beforeDays = 30) => request(`/notifications
 
 export const getHealth = () => request('/health');
 
+export const getPlaylists = () => request('/playlists');
+export const createPlaylist = (playlist, id = null) => request('/playlists', {
+  method: 'POST',
+  body: JSON.stringify({ id, name: playlist.name, description: playlist.description || '', song_ids: playlist.song_ids || [] }),
+});
+export const updatePlaylist = (id, playlist) => request(`/playlists/${encodeURIComponent(id)}`, {
+  method: 'PATCH',
+  body: JSON.stringify({ name: playlist.name, description: playlist.description || '', song_ids: playlist.song_ids || [] }),
+});
+export const deletePlaylist = (id) => request(`/playlists/${encodeURIComponent(id)}`, { method: 'DELETE' });
+
 export const getListeningRooms = () => request('/rooms');
 export const createListeningRoom = (room) => request('/rooms', { method: 'POST', body: JSON.stringify({ name: room.name, visibility: room.visibility || 'private', max_members: Number(room.max_members) || 8 }) });
 export const joinListeningRoom = (inviteCode) => request('/rooms/join', { method: 'POST', body: JSON.stringify({ invite_code: inviteCode }) });
