@@ -477,7 +477,8 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
         'check_formats': 'selected',
     }
     if is_download:
-        cookie_path = Path(os.getenv('YOUTUBE_COOKIES_PATH', '')).expanduser() if os.getenv('YOUTUBE_COOKIES_PATH', '').strip() else Path.cwd() / 'cookies.txt'
+        configured_cookie_path = os.getenv('YOUTUBE_COOKIES_PATH', '').strip()
+        cookie_path = Path(configured_cookie_path).expanduser() if configured_cookie_path else None
         cookies_b64 = os.getenv('YOUTUBE_COOKIES_B64', '').strip()
         if cookies_b64:
             cookie_path = Path(tempfile.gettempdir()) / 'lunu-youtube-cookies.txt'
@@ -485,8 +486,16 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
                 cookie_path.write_bytes(base64.b64decode(cookies_b64))
             except Exception as error:
                 raise RuntimeError(f'YOUTUBE_COOKIES_B64 không hợp lệ: {error}')
-        if cookie_path.exists():
-            opts['cookiefile'] = str(cookie_path)
+        if cookie_path and cookie_path.exists():
+            # Render Secret Files are mounted read-only, but yt-dlp may update
+            # the Netscape cookie jar while handling YouTube challenges. Always
+            # give yt-dlp a writable copy instead of the mounted source file.
+            writable_cookie_path = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-{os.getpid()}.txt'
+            try:
+                shutil.copyfile(cookie_path, writable_cookie_path)
+            except OSError as error:
+                raise RuntimeError(f'Không thể chuẩn bị file cookie YouTube: {error}') from error
+            opts['cookiefile'] = str(writable_cookie_path)
         if temp_dir:
             opts.update({
                 'format': format_selector or 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best',
