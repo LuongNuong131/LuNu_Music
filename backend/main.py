@@ -60,6 +60,9 @@ CLOUDINARY_SAFE_VIDEO_BYTES = 92 * 1024 * 1024
 VIDEO_TRANSCODE_TIMEOUT_SECONDS = int(os.getenv('LUNU_VIDEO_TRANSCODE_TIMEOUT_SECONDS', '900'))
 RENDER_MAX_DOWNLOAD_BYTES = int(os.getenv('LUNU_RENDER_MAX_DOWNLOAD_BYTES', str(450 * 1024 * 1024)))
 CHAT_ATTACHMENT_MAX_BYTES = int(os.getenv('LUNU_CHAT_ATTACHMENT_MAX_BYTES', str(25 * 1024 * 1024)))
+YOUTUBE_CLIENTS = tuple(dict.fromkeys(
+    item.strip() for item in os.getenv('YOUTUBE_PLAYER_CLIENTS', 'web_embedded,mweb,web,tv').split(',') if item.strip()
+)) or ('web_embedded', 'mweb', 'web', 'tv')
 CHAT_ATTACHMENT_MAX_FILENAME = 160
 CHAT_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 CHAT_FILE_MIMES = {'application/pdf', 'text/plain', 'text/csv', 'application/json', 'application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
@@ -461,6 +464,46 @@ def update_profile_record(client: Client, user_id: str, payload: dict) -> dict:
     return record
 
 
+def _youtube_cookie_file() -> Optional[Path]:
+    """Materialize a validated, writable Netscape cookie jar for yt-dlp."""
+    configured_path = os.getenv('YOUTUBE_COOKIES_PATH', '').strip()
+    cookies_b64 = os.getenv('YOUTUBE_COOKIES_B64', '').strip()
+    source: Optional[Path] = Path(configured_path).expanduser() if configured_path else None
+    if cookies_b64:
+        source = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-source-{os.getpid()}.txt'
+        try:
+            decoded = base64.b64decode(cookies_b64, validate=True)
+            source.write_bytes(decoded)
+        except Exception as error:
+            raise RuntimeError(f'YOUTUBE_COOKIES_B64 không hợp lệ: {error}') from error
+    if not source or not source.is_file():
+        return None
+    try:
+        content = source.read_text(encoding='utf-8', errors='replace')
+    except OSError as error:
+        raise RuntimeError(f'Không đọc được cookie YouTube: {error}') from error
+    if '# Netscape HTTP Cookie File' not in content and '#HttpOnly_' not in content:
+        raise RuntimeError('Cookie YouTube không phải Netscape cookie export. Hãy export lại bằng extension hỗ trợ Netscape format.')
+    writable = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-{os.getpid()}-{secrets.token_hex(4)}.txt'
+    try:
+        shutil.copyfile(source, writable)
+    except OSError as error:
+        raise RuntimeError(f'Không thể chuẩn bị file cookie YouTube: {error}') from error
+    return writable
+
+
+def youtube_cookie_status() -> dict:
+    configured_path = os.getenv('YOUTUBE_COOKIES_PATH', '').strip()
+    has_b64 = bool(os.getenv('YOUTUBE_COOKIES_B64', '').strip())
+    path_exists = bool(configured_path and Path(configured_path).expanduser().is_file())
+    configured = has_b64 or path_exists
+    return {
+        'configured': configured,
+        'source': 'base64' if has_b64 else ('file' if path_exists else None),
+        'valid_format': None,
+    }
+
+
 def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'web', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None) -> dict:
     opts = {
         'extractor_args': {'youtube': {'player_client': [client]}},
@@ -477,25 +520,9 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
         'check_formats': 'selected',
     }
     if is_download:
-        configured_cookie_path = os.getenv('YOUTUBE_COOKIES_PATH', '').strip()
-        cookie_path = Path(configured_cookie_path).expanduser() if configured_cookie_path else None
-        cookies_b64 = os.getenv('YOUTUBE_COOKIES_B64', '').strip()
-        if cookies_b64:
-            cookie_path = Path(tempfile.gettempdir()) / 'lunu-youtube-cookies.txt'
-            try:
-                cookie_path.write_bytes(base64.b64decode(cookies_b64))
-            except Exception as error:
-                raise RuntimeError(f'YOUTUBE_COOKIES_B64 không hợp lệ: {error}')
-        if cookie_path and cookie_path.exists():
-            # Render Secret Files are mounted read-only, but yt-dlp may update
-            # the Netscape cookie jar while handling YouTube challenges. Always
-            # give yt-dlp a writable copy instead of the mounted source file.
-            writable_cookie_path = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-{os.getpid()}.txt'
-            try:
-                shutil.copyfile(cookie_path, writable_cookie_path)
-            except OSError as error:
-                raise RuntimeError(f'Không thể chuẩn bị file cookie YouTube: {error}') from error
-            opts['cookiefile'] = str(writable_cookie_path)
+        cookie_path = _youtube_cookie_file()
+        if cookie_path:
+            opts['cookiefile'] = str(cookie_path)
         if temp_dir:
             opts.update({
                 'format': format_selector or 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best',
@@ -1166,18 +1193,9 @@ def run_ffmpeg(input_path: Path, output_path: Path, mode: str) -> None:
 
 def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
     url = f'https://www.youtube.com/watch?v={video_id}'
-    profiles = [
-        # YouTube periodically breaks one client family; use diverse profiles.
-        ('web_embedded', 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best'),
-        ('mweb', 'best[acodec!=none]/best'),
-        ('web', 'best[acodec!=none]/best'),
-        ('tv', 'best[acodec!=none]/best'),
-    ] if mode == 'song' else [
-        ('web_embedded', 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'),
-        ('mweb', 'best[height<=360][filesize<450M]/best[height<=360]'),
-        ('web', 'best[height<=360][filesize<450M]/best[height<=360]'),
-        ('tv', 'best[height<=360][filesize<450M]/best[height<=360]'),
-    ]
+    audio_selector = 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best'
+    video_selector = 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'
+    profiles = [(client, audio_selector if mode == 'song' else video_selector) for client in YOUTUBE_CLIENTS]
     errors = []
     for profile_index, (client, selector) in enumerate(profiles):
         if profile_index:
@@ -1236,11 +1254,17 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
             error_text = str(error)
             if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
                 errors.append(f'{client}: Render không có route mạng tới stream YouTube (Errno 101); đã thử lại với IPv4/backoff')
+            elif 'Sign in to confirm' in error_text or 'not a bot' in error_text or 'challenge' in error_text.lower():
+                if youtube_cookie_status()['configured']:
+                    errors.append(f'{client}: YouTube challenge; cookie đã được cấu hình nhưng có thể hết hạn hoặc không cùng phiên đăng nhập')
+                else:
+                    errors.append(f'{client}: YouTube challenge; Render chưa có YOUTUBE_COOKIES_B64 hoặc YOUTUBE_COOKIES_PATH')
             else:
                 errors.append(f'{client}: {error}')
             for item in available_media_files(temp_dir, video_id):
                 item.unlink(missing_ok=True)
-    raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-4:]) + '. Hãy cập nhật yt-dlp/EJS và kiểm tra cookie YouTube nếu IP Render bị challenge.')
+    cookie_hint = 'Đã có cookie nhưng cookie có thể hết hạn/không đúng phiên.' if youtube_cookie_status()['configured'] else 'Render chưa được cấp Netscape cookie qua YOUTUBE_COOKIES_B64 hoặc YOUTUBE_COOKIES_PATH.'
+    raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-4:]) + f'. {cookie_hint} Kiểm tra /api/health rồi export cookie YouTube mới nếu IP Render bị challenge.')
 
 
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
@@ -1541,12 +1565,26 @@ async def broadcast_chat_event(conversation_id: str, event: dict) -> None:
 
 @app.get('/api/health')
 async def health() -> dict:
+    cookie_info = youtube_cookie_status()
+    try:
+        cookie_path = _youtube_cookie_file()
+        cookie_info['valid_format'] = bool(cookie_path)
+        if cookie_path:
+            cookie_path.unlink(missing_ok=True)
+    except Exception as error:
+        cookie_info['valid_format'] = False
+        cookie_info['error'] = str(error)
     return {
         'ok': True,
         'supabase_configured': supabase is not None,
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
         'chat_attachment_max_bytes': CHAT_ATTACHMENT_MAX_BYTES,
+        'yt_dlp_version': getattr(getattr(yt_dlp, 'version', None), '__version__', None),
+        'youtube_clients': list(YOUTUBE_CLIENTS),
+        'youtube_cookie': cookie_info,
+        'js_runtime': 'node',
+        'ejs_remote_components': ['ejs:github'],
     }
 
 

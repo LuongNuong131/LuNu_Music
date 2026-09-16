@@ -1,7 +1,7 @@
 fastapi
 uvicorn
-yt-dlp>=2026.8.19
-yt-dlp-ejs>=0.8.0
+yt-dlp>=2026.8.19,<2027
+yt-dlp-ejs>=0.8.0,<1
 cloudinary
 supabase
 python-dotenv
