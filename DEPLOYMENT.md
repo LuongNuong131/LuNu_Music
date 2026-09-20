@@ -17,6 +17,7 @@ Các biến bắt buộc:
 | `SUPABASE_URL` | Project URL của Supabase |
 | `SUPABASE_KEY` | Server-side key tương ứng với policy/schema hiện tại |
 | `YOUTUBE_API_KEY` | **Khuyến nghị** — YouTube Data API v3 key để tìm kiếm ổn định, không phụ thuộc kết quả yt-dlp/YouTube theo IP Render |
+| `YOUTUBE_API_TIMEOUT_SECONDS` | Tùy chọn — timeout gọi YouTube Data API, mặc định `20` giây |
 | `YOUTUBE_COOKIES_B64` | Tùy chọn — cookies.txt Netscape được mã hóa base64 cho video bị YouTube yêu cầu xác minh |
 | `LUNU_SONG_START_SEQUENCE` | Mặc định `199`, thứ tự đầu tiên sau 188 bài legacy |
 | `CLOUDINARY_CLOUD_NAME` | Cloud name |
@@ -26,6 +27,25 @@ Các biến bắt buộc:
 | `CORS_ORIGINS` | Domain Vercel, phân cách bằng dấu phẩy; có thể thêm `http://localhost:5173` khi dev |
 
 Không đưa `SUPABASE_KEY`, Cloudinary API secret hoặc `LUNU_AUTH_SECRET` vào Vercel/frontend. Frontend chỉ nhận `VITE_API_URL`.
+
+### Đặt YouTube API key trên Render
+
+API key phải đặt ở **backend Render**, không đặt trong Vercel và không đặt trong file Vue. Trong Render mở **Dashboard → chọn Web Service backend → Environment → Add Environment Variable**, nhập:
+
+```text
+Key:   YOUTUBE_API_KEY
+Value: AIz...API_KEY bạn vừa tạo...
+```
+
+Sau đó bấm **Save Changes** và chọn **Manual Deploy → Deploy latest commit** (hoặc chờ Render tự deploy). Không thêm dấu ngoặc kép, không thêm khoảng trắng đầu/cuối và không commit key vào GitHub. Trong Google Cloud Console, project chứa key phải bật **YouTube Data API v3**; nên giới hạn key theo API này và HTTP referrer/IP phù hợp với kiến trúc của bạn.
+
+Sau khi deploy, mở:
+
+```text
+https://<tên-service-render>.onrender.com/api/health
+```
+
+Response cần có `youtube_data_api.configured: true` và `youtube_data_api.search_source: "youtube-data-api-first"`. Nếu vẫn là `false`, key đang đặt nhầm service, chưa Save, hoặc Render chưa redeploy. API key này giúp **tìm kiếm video** ổn định; nó không thay thế cookie/session khi tải MP3/MP4 từ YouTube.
 
 ## Supabase schema tương thích
 
@@ -37,7 +57,7 @@ Nếu database đã bật RLS, cần tạo policy server-side phù hợp với c
 
 ## Tìm kiếm YouTube ổn định
 
-Backend hiện có nhiều fallback không cần key: yt-dlp, YouTube Music structured search, YouTube HTML parser, accent-stripped variants, retry và deduplicate. Downloader cũng bật Node.js và `yt-dlp-ejs`; nếu một video vẫn trả `Sign in to confirm you’re not a bot`, có thể đặt `YOUTUBE_COOKIES_B64` từ file Netscape `cookies.txt` của tài khoản được phép truy cập. Không commit file cookies và không gửi cookie qua chat. Tuy nhiên YouTube có thể trả kết quả khác nhau theo IP/region của Render. Để kết quả ổn định cho các tên bài tiếng Việt như `cao ốc 20`, tạo một API key trong Google Cloud Console, bật **YouTube Data API v3**, rồi đặt `YOUTUBE_API_KEY` trong Render. Backend sẽ ưu tiên endpoint chính thức trước các fallback và không đưa key này ra frontend.
+Backend ưu tiên YouTube Data API v3 cho tìm kiếm, sau đó mới dùng các fallback như yt-dlp, YouTube Music structured search, HTML parser, accent-stripped variants và deduplicate. Lỗi key không hợp lệ, API chưa bật hoặc hết quota hiện được chuyển thành thông báo dễ chẩn đoán trong log/backend. Downloader vẫn bật Node.js và `yt-dlp-ejs`; nếu một video vẫn trả `Sign in to confirm you’re not a bot`, API key tìm kiếm không thể sửa lỗi tải media. Khi đó chỉ dùng cookie Netscape của tài khoản có quyền truy cập hoặc chuyển việc tải sang worker/máy có phiên và IP phù hợp. Không commit file cookies hoặc API key và không gửi cookie qua chat.
 
 ## LuNu Cinema và vòng đời Cloudinary
 

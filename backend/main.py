@@ -63,6 +63,8 @@ CHAT_ATTACHMENT_MAX_BYTES = int(os.getenv('LUNU_CHAT_ATTACHMENT_MAX_BYTES', str(
 YOUTUBE_CLIENTS = tuple(dict.fromkeys(
     item.strip() for item in os.getenv('YOUTUBE_PLAYER_CLIENTS', 'web_embedded,mweb,web,tv').split(',') if item.strip()
 )) or ('web_embedded', 'mweb', 'web', 'tv')
+YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '').strip()
+YOUTUBE_API_TIMEOUT_SECONDS = int(os.getenv('YOUTUBE_API_TIMEOUT_SECONDS', '20'))
 CHAT_ATTACHMENT_MAX_FILENAME = 160
 CHAT_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 CHAT_FILE_MIMES = {'application/pdf', 'text/plain', 'text/csv', 'application/json', 'application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
@@ -721,22 +723,45 @@ def search_lrclib(track_name: str, artist_name: str) -> list[dict]:
     return results[:5]
 
 
+def youtube_data_api_request(params: dict) -> dict:
+    """Call the official API and turn Google errors into actionable messages."""
+    request_params = {**params, 'key': YOUTUBE_API_KEY}
+    encoded = urllib.parse.urlencode(request_params)
+    request = urllib.request.Request(
+        f'https://www.googleapis.com/youtube/v3/search?{encoded}',
+        headers={'User-Agent': 'LuNu Music API/2.1', 'Accept': 'application/json'},
+    )
+    try:
+        with urllib.request.urlopen(request, timeout=YOUTUBE_API_TIMEOUT_SECONDS) as response:
+            payload = json.loads(response.read().decode('utf-8'))
+    except urllib.error.HTTPError as error:
+        try:
+            error_payload = json.loads(error.read().decode('utf-8'))
+        except (OSError, UnicodeDecodeError, json.JSONDecodeError):
+            error_payload = {}
+        reason = (((error_payload.get('error') or {}).get('errors') or [{}])[0]).get('reason')
+        if reason in {'keyInvalid', 'forbidden'}:
+            raise RuntimeError('YouTube Data API key không hợp lệ hoặc API chưa được bật trong Google Cloud.') from error
+        if reason in {'quotaExceeded', 'dailyLimitExceeded', 'rateLimitExceeded'}:
+            raise RuntimeError('YouTube Data API đã hết quota hôm nay; hãy kiểm tra quota hoặc đợi ngày kế tiếp.') from error
+        raise RuntimeError(f'YouTube Data API trả HTTP {error.code}{f" ({reason})" if reason else ""}.') from error
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise RuntimeError(f'Không thể kết nối YouTube Data API: {error}') from error
+    if not isinstance(payload, dict):
+        raise RuntimeError('YouTube Data API trả dữ liệu không hợp lệ.')
+    return payload
+
+
 def search_youtube_channel_api(query: str) -> list[dict]:
-    api_key = os.getenv('YOUTUBE_API_KEY', '').strip()
+    api_key = YOUTUBE_API_KEY
     if not api_key:
         return []
-    channel_params = urllib.parse.urlencode({'part': 'snippet', 'type': 'channel', 'maxResults': 1, 'q': query, 'regionCode': 'VN', 'relevanceLanguage': 'vi', 'key': api_key})
-    channel_request = urllib.request.Request(f'https://www.googleapis.com/youtube/v3/search?{channel_params}', headers={'User-Agent': 'LuNu Music API/1.0'})
-    with urllib.request.urlopen(channel_request, timeout=20) as response:
-        channel_payload = json.loads(response.read().decode('utf-8'))
+    channel_payload = youtube_data_api_request({'part': 'snippet', 'type': 'channel', 'maxResults': 1, 'q': query, 'regionCode': 'VN', 'relevanceLanguage': 'vi'})
     channel_items = channel_payload.get('items') or []
     channel_id = ((channel_items[0].get('id') or {}).get('channelId')) if channel_items else None
     if not channel_id:
         return []
-    params = urllib.parse.urlencode({'part': 'snippet', 'type': 'video', 'channelId': channel_id, 'order': 'date', 'maxResults': 10, 'regionCode': 'VN', 'relevanceLanguage': 'vi', 'key': api_key})
-    request = urllib.request.Request(f'https://www.googleapis.com/youtube/v3/search?{params}', headers={'User-Agent': 'LuNu Music API/1.0'})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+    payload = youtube_data_api_request({'part': 'snippet', 'type': 'video', 'channelId': channel_id, 'order': 'date', 'maxResults': 10, 'regionCode': 'VN', 'relevanceLanguage': 'vi'})
     results = []
     channel_title = (channel_items[0].get('snippet') or {}).get('channelTitle') or query
     for item in payload.get('items') or []:
@@ -750,13 +775,10 @@ def search_youtube_channel_api(query: str) -> list[dict]:
 
 
 def search_youtube_data_api(query: str) -> list[dict]:
-    api_key = os.getenv('YOUTUBE_API_KEY', '').strip()
+    api_key = YOUTUBE_API_KEY
     if not api_key:
         return []
-    params = urllib.parse.urlencode({'part': 'snippet', 'type': 'video', 'maxResults': 10, 'q': query, 'regionCode': 'VN', 'relevanceLanguage': 'vi', 'key': api_key})
-    request = urllib.request.Request(f'https://www.googleapis.com/youtube/v3/search?{params}', headers={'User-Agent': 'LuNu Music API/1.0'})
-    with urllib.request.urlopen(request, timeout=20) as response:
-        payload = json.loads(response.read().decode('utf-8'))
+    payload = youtube_data_api_request({'part': 'snippet', 'type': 'video', 'maxResults': 10, 'q': query, 'regionCode': 'VN', 'relevanceLanguage': 'vi'})
     results = []
     for item in payload.get('items', []):
         video_id = (item.get('id') or {}).get('videoId')
@@ -1577,6 +1599,11 @@ async def health() -> dict:
     return {
         'ok': True,
         'supabase_configured': supabase is not None,
+        'youtube_data_api': {
+            'configured': bool(YOUTUBE_API_KEY),
+            'search_source': 'youtube-data-api-first' if YOUTUBE_API_KEY else 'fallbacks-only',
+            'timeout_seconds': YOUTUBE_API_TIMEOUT_SECONDS,
+        },
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
         'chat_attachment_max_bytes': CHAT_ATTACHMENT_MAX_BYTES,
