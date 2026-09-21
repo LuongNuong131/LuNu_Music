@@ -185,6 +185,7 @@ Because Vite injects `VITE_*` values at build time, redeploy Vercel after changi
 | `CORS_ORIGINS` | Comma-separated Vercel and local frontend origins. |
 | `YOUTUBE_API_KEY` | Recommended server-side key for stable YouTube search. |
 | `YOUTUBE_API_TIMEOUT_SECONDS` | Optional YouTube Data API timeout; defaults to `20`. |
+| `LUNU_AUDIO_UPLOAD_MAX_BYTES` | Optional direct audio upload limit; defaults to 200 MiB. |
 | `YOUTUBE_COOKIES_PATH` | Optional path to a YouTube-only Netscape cookie Secret File. |
 | `YOUTUBE_COOKIES_B64` | Optional alternative cookie input; avoid when Secret File is available. |
 | `LUNU_SONG_START_SEQUENCE` | Optional song sequence start; default is `199`. |
@@ -194,6 +195,8 @@ Because Vite injects `VITE_*` values at build time, redeploy Vercel after changi
 A healthy backend can be checked at `https://lunu-music.onrender.com/api/health`. The current pipeline marker should include `video_pipeline: preflight-450mb-chunked` after the latest deployment.
 
 **Where to put the YouTube key:** in Render, open the backend Web Service → **Environment** → **Add Environment Variable**, set the key name to `YOUTUBE_API_KEY`, paste the value, save, and redeploy. Do not put it in Vercel, `VITE_*`, Vue source code, or Git. After redeploy, `/api/health` should report `youtube_data_api.configured: true` and `youtube_data_api.search_source: youtube-data-api-first`. The key improves official YouTube search only; it does not authenticate yt-dlp media downloads.
+
+When Render receives YouTube `429`/`403` responses, the downloader now stops immediately instead of retrying every player client. In **Admin → Kho nhạc**, use **Upload audio trực tiếp** to upload an audio file that you are authorized to store; the backend normalizes it with FFmpeg and sends it to Cloudinary without depending on YouTube.
 
 ## Supabase migrations
 

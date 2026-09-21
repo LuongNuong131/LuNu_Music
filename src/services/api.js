@@ -84,6 +84,16 @@ export const addSong = async (songData) => {
   }
 };
 
+export const uploadSongFile = (file, metadata) => {
+  const form = new FormData();
+  form.append('file', file);
+  form.append('title', metadata.title || '');
+  form.append('artist', metadata.artist || '');
+  form.append('cover', metadata.cover || '');
+  form.append('lyrics', metadata.lyrics || '');
+  return request('/songs/upload', { method: 'POST', body: form });
+};
+
 export const getImportJob = (jobId) => request(`/songs/import-jobs/${encodeURIComponent(jobId)}`);
 
 export const getCinemaVideos = () => request('/cinema/videos');

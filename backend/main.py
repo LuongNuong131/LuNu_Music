@@ -60,6 +60,7 @@ CLOUDINARY_SAFE_VIDEO_BYTES = 92 * 1024 * 1024
 VIDEO_TRANSCODE_TIMEOUT_SECONDS = int(os.getenv('LUNU_VIDEO_TRANSCODE_TIMEOUT_SECONDS', '900'))
 RENDER_MAX_DOWNLOAD_BYTES = int(os.getenv('LUNU_RENDER_MAX_DOWNLOAD_BYTES', str(450 * 1024 * 1024)))
 CHAT_ATTACHMENT_MAX_BYTES = int(os.getenv('LUNU_CHAT_ATTACHMENT_MAX_BYTES', str(25 * 1024 * 1024)))
+MAX_AUDIO_UPLOAD_BYTES = int(os.getenv('LUNU_AUDIO_UPLOAD_MAX_BYTES', str(200 * 1024 * 1024)))
 YOUTUBE_CLIENTS = tuple(dict.fromkeys(
     item.strip() for item in os.getenv('YOUTUBE_PLAYER_CLIENTS', 'web_embedded,mweb,web,tv').split(',') if item.strip()
 )) or ('web_embedded', 'mweb', 'web', 'tv')
@@ -1219,6 +1220,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
     video_selector = 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'
     profiles = [(client, audio_selector if mode == 'song' else video_selector) for client in YOUTUBE_CLIENTS]
     errors = []
+    blocked_by_youtube = False
     for profile_index, (client, selector) in enumerate(profiles):
         if profile_index:
             time.sleep(min(6, 1.5 * (2 ** (profile_index - 1))))
@@ -1274,19 +1276,24 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
             raise
         except Exception as error:
             error_text = str(error)
+            lower_error = error_text.lower()
             if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
                 errors.append(f'{client}: Render không có route mạng tới stream YouTube (Errno 101); đã thử lại với IPv4/backoff')
-            elif 'Sign in to confirm' in error_text or 'not a bot' in error_text or 'challenge' in error_text.lower():
+            elif any(token in lower_error for token in ('http error 429', 'too many requests', 'http error 403', 'forbidden', 'sign in to confirm', 'not a bot', 'challenge', 'failed to extract any player response')):
+                blocked_by_youtube = True
                 if youtube_cookie_status()['configured']:
-                    errors.append(f'{client}: YouTube challenge; cookie đã được cấu hình nhưng có thể hết hạn hoặc không cùng phiên đăng nhập')
+                    errors.append(f'{client}: YouTube đang giới hạn/challenge IP hoặc session (429/403); cookie có thể không cùng phiên')
                 else:
-                    errors.append(f'{client}: YouTube challenge; Render chưa có YOUTUBE_COOKIES_B64 hoặc YOUTUBE_COOKIES_PATH')
+                    errors.append(f'{client}: YouTube đang giới hạn/challenge IP (429/403); Render chưa có cookie')
             else:
                 errors.append(f'{client}: {error}')
             for item in available_media_files(temp_dir, video_id):
                 item.unlink(missing_ok=True)
-    cookie_hint = 'Đã có cookie nhưng cookie có thể hết hạn/không đúng phiên.' if youtube_cookie_status()['configured'] else 'Render chưa được cấp Netscape cookie qua YOUTUBE_COOKIES_B64 hoặc YOUTUBE_COOKIES_PATH.'
-    raise RuntimeError('Không tải được media từ YouTube sau nhiều profile: ' + ' | '.join(errors[-4:]) + f'. {cookie_hint} Kiểm tra /api/health rồi export cookie YouTube mới nếu IP Render bị challenge.')
+            if blocked_by_youtube:
+                break
+    if blocked_by_youtube:
+        raise RuntimeError('YOUTUBE_RATE_LIMITED: YouTube trả HTTP 429/403 hoặc challenge từ IP Render. Đã dừng retry để tránh làm nặng rate-limit. Hãy chờ, dùng worker/máy khác hoặc upload file audio trực tiếp.')
+    raise RuntimeError('Không tải được media từ YouTube: ' + ' | '.join(errors[-4:]))
 
 
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
@@ -1349,6 +1356,49 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
             update_proposal(client, proposal_id, {'status': 'failed', 'job_id': job_id, 'rejection_reason': str(error)[:1000]})
             notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất nhạc chưa thể xử lý', f'Bài “{request_data.get("title", "")}" chưa được thêm: {error}', 'proposal-failed')
         print(f'❌ Lỗi xử lý audio {video_id}: {error}')
+    finally:
+        if file_path and file_path.exists():
+            file_path.unlink(missing_ok=True)
+        shutil.rmtree(temp_dir, ignore_errors=True)
+
+
+def process_uploaded_song(job_id: str, source_path: Path, request_data: dict) -> None:
+    temp_dir = source_path.parent
+    normalized_path = temp_dir / 'uploaded-normalized.mp3'
+    file_path: Optional[Path] = None
+    client: Optional[Client] = None
+    set_import_job(job_id, status='processing', message='Đang kiểm tra và chuẩn hóa file audio...')
+    try:
+        client = require_supabase()
+        if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
+            raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
+        run_ffmpeg(source_path, normalized_path, 'song')
+        file_path = normalized_path
+        media_key = next_media_key(client, 'songs')
+        file_size_bytes = file_path.stat().st_size
+        set_import_job(job_id, message=f'Đã kiểm tra MP3 ({file_size_bytes} bytes), đang upload Cloudinary với mã {media_key}...')
+        public_id = f'lunu_music/{media_key}'
+        result = upload_cloudinary_media(
+            file_path, public_id, 'video',
+            status_callback=lambda message: set_import_job(job_id, message=f'{message} Mã {media_key}.'),
+            fallback_kind='audio',
+        )
+        secure_url = result.get('secure_url')
+        if not secure_url:
+            raise RuntimeError('Cloudinary không trả về secure_url.')
+        song_data = {
+            'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': request_data['source_id'],
+            'cloudinary_public_id': public_id, 'title': request_data['title'], 'artist': request_data['artist'],
+            'url': secure_url, 'cover': request_data.get('cover') or DEFAULT_COVER,
+            'lyrics': request_data.get('lyrics', ''),
+        }
+        set_import_job(job_id, message='Đã upload Cloudinary, đang ghi metadata vào Supabase...')
+        client.table('songs').insert(song_data).execute()
+        set_import_job(job_id, status='completed', message='Đã upload file audio và thêm vào thư viện.', song=song_data)
+        print(f'✅ Đã upload bài hát {media_key}: {song_data["title"]}')
+    except Exception as error:
+        set_import_job(job_id, status='failed', message=str(error))
+        print(f'❌ Lỗi upload audio {job_id}: {error}')
     finally:
         if file_path and file_path.exists():
             file_path.unlink(missing_ok=True)
@@ -1606,6 +1656,8 @@ async def health() -> dict:
         },
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
+        'audio_upload_max_bytes': MAX_AUDIO_UPLOAD_BYTES,
+        'youtube_download_policy': 'fail-fast-on-429-403; use-audio-upload-fallback',
         'chat_attachment_max_bytes': CHAT_ATTACHMENT_MAX_BYTES,
         'yt_dlp_version': getattr(getattr(yt_dlp, 'version', None), '__version__', None),
         'youtube_clients': list(YOUTUBE_CLIENTS),
@@ -2701,6 +2753,55 @@ async def add_song(request: AddSongRequest, background_tasks: BackgroundTasks, _
     import_jobs[job_id] = {'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận yêu cầu import.'}
     background_tasks.add_task(process_and_upload_song, job_id, request.model_dump())
     return {'success': True, 'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận video. Bắt đầu tải MP3 và upload Cloudinary.'}
+
+
+@app.post('/api/songs/upload', status_code=status.HTTP_202_ACCEPTED)
+async def upload_song_file(
+    background_tasks: BackgroundTasks,
+    file: UploadFile = File(...),
+    title: str = Form(...),
+    artist: str = Form(...),
+    cover: str = Form(default=''),
+    lyrics: str = Form(default=''),
+    _: dict = Depends(require_admin),
+) -> dict:
+    title = title.strip()
+    artist = artist.strip()
+    if not title or not artist:
+        raise HTTPException(status_code=422, detail='Tên bài hát và nghệ sĩ không được để trống.')
+    allowed_extensions = {'.mp3', '.m4a', '.wav', '.flac', '.ogg', '.opus', '.aac', '.webm'}
+    suffix = Path(file.filename or '').suffix.lower()
+    if suffix not in allowed_extensions:
+        raise HTTPException(status_code=415, detail='Chỉ nhận file audio: MP3, M4A, WAV, FLAC, OGG, OPUS, AAC hoặc WEBM.')
+    temp_dir = Path(tempfile.mkdtemp(prefix='lunu-upload-'))
+    source_path = temp_dir / f'original{suffix}'
+    size = 0
+    try:
+        with source_path.open('wb') as output:
+            while chunk := await file.read(1024 * 1024):
+                size += len(chunk)
+                if size > MAX_AUDIO_UPLOAD_BYTES:
+                    raise HTTPException(status_code=413, detail=f'File audio quá lớn. Giới hạn là {MAX_AUDIO_UPLOAD_BYTES // (1024 * 1024)} MiB.')
+                output.write(chunk)
+    except HTTPException:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise
+    except Exception as error:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=400, detail=f'Không thể đọc file audio: {error}') from error
+    finally:
+        await file.close()
+    if size == 0:
+        shutil.rmtree(temp_dir, ignore_errors=True)
+        raise HTTPException(status_code=422, detail='File audio rỗng.')
+    job_id = str(uuid.uuid4())
+    source_id = f'upload-{job_id}'
+    import_jobs[job_id] = {'job_id': job_id, 'kind': 'audio-upload', 'status': 'queued', 'message': 'Đã nhận file audio, đang xử lý.'}
+    background_tasks.add_task(process_uploaded_song, job_id, source_path, {
+        'source_id': source_id, 'title': title, 'artist': artist,
+        'cover': cover.strip(), 'lyrics': lyrics.strip(),
+    })
+    return {'success': True, 'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận file audio. Đang chuẩn hóa và upload Cloudinary.'}
 
 
 @app.get('/api/songs/import-jobs/{job_id}')

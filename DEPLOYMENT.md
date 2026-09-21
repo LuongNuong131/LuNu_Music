@@ -18,6 +18,7 @@ Các biến bắt buộc:
 | `SUPABASE_KEY` | Server-side key tương ứng với policy/schema hiện tại |
 | `YOUTUBE_API_KEY` | **Khuyến nghị** — YouTube Data API v3 key để tìm kiếm ổn định, không phụ thuộc kết quả yt-dlp/YouTube theo IP Render |
 | `YOUTUBE_API_TIMEOUT_SECONDS` | Tùy chọn — timeout gọi YouTube Data API, mặc định `20` giây |
+| `LUNU_AUDIO_UPLOAD_MAX_BYTES` | Tùy chọn — giới hạn file audio upload trực tiếp, mặc định `209715200` (200 MiB) |
 | `YOUTUBE_COOKIES_B64` | Tùy chọn — cookies.txt Netscape được mã hóa base64 cho video bị YouTube yêu cầu xác minh |
 | `LUNU_SONG_START_SEQUENCE` | Mặc định `199`, thứ tự đầu tiên sau 188 bài legacy |
 | `CLOUDINARY_CLOUD_NAME` | Cloud name |
@@ -65,7 +66,7 @@ Sidebar có tab **LuNu Cinema** cho tài khoản admin. Tại đây admin tìm v
 
 ## Lưu ý import YouTube
 
-Endpoint import trả về trạng thái `queued`; Render xử lý tải yt-dlp, chuyển đổi FFmpeg, upload Cloudinary và insert Supabase ở background task. Dockerfile đã cài FFmpeg và Node.js; requirements đã thêm `yt-dlp-ejs` để xử lý YouTube challenge. Downloader không khóa cứng một format, thử các profile audio/video và báo rõ nếu video chỉ có hình ảnh hoặc bị YouTube chặn. Đây là mô hình đơn giản phù hợp thư viện cá nhân nhỏ. Nếu cần import nhiều bài hoặc retry bền vững sau restart, nên chuyển pipeline sang job queue/dịch vụ worker riêng thay vì phụ thuộc process web.
+Endpoint import trả về trạng thái `queued`; Render xử lý tải yt-dlp, chuyển đổi FFmpeg, upload Cloudinary và insert Supabase ở background task. Khi YouTube trả 429/403/challenge, downloader hiện **dừng ngay**, không tiếp tục thử nhiều client để tránh làm nặng rate-limit. Admin có thể dùng form **Upload audio trực tiếp** trong Quản trị → Kho nhạc; file được chuẩn hóa bằng FFmpeg rồi upload Cloudinary, không phụ thuộc YouTube. Dockerfile đã cài FFmpeg và Node.js; requirements đã thêm `yt-dlp-ejs` để xử lý challenge. Nếu cần tự động tải YouTube ổn định, chuyển yt-dlp sang worker riêng có IP/môi trường phù hợp thay vì chạy trong Render web process.
 
 ## Migration bắt buộc trước khi dùng tính năng mới
 
