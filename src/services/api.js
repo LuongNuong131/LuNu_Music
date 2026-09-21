@@ -64,14 +64,15 @@ export const getSongs = async () => {
 };
 
 export const searchYoutube = async (query) => {
-  try { return await request(`/songs/search_youtube?query=${encodeURIComponent(query)}`); }
-  catch (error) { console.error('Lỗi tìm kiếm YouTube:', error); return { success: false, message: error.message }; }
+  try { return await request(`/songs/search?query=${encodeURIComponent(query)}`); }
+  catch (error) { console.error('Lỗi tìm kiếm nguồn audio:', error); return { success: false, message: error.message }; }
 };
 
 export const addSong = async (songData) => {
   try {
-    const payload = typeof songData === 'string' ? { video_id: songData, title: '', artist: '' } : {
-      video_id: songData.videoId || songData.video_id,
+    const payload = typeof songData === 'string' ? { source_id: songData, provider: 'youtube', title: '', artist: '' } : {
+      source_id: songData.sourceId || songData.source_id || songData.videoId || songData.video_id,
+      provider: songData.provider || 'jamendo',
       title: songData.title,
       artist: songData.artist,
       cover: songData.cover || '/images/ChoCiu.jpg',

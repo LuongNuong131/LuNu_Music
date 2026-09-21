@@ -18,6 +18,9 @@ Các biến bắt buộc:
 | `SUPABASE_KEY` | Server-side key tương ứng với policy/schema hiện tại |
 | `YOUTUBE_API_KEY` | **Khuyến nghị** — YouTube Data API v3 key để tìm kiếm ổn định, không phụ thuộc kết quả yt-dlp/YouTube theo IP Render |
 | `YOUTUBE_API_TIMEOUT_SECONDS` | Tùy chọn — timeout gọi YouTube Data API, mặc định `20` giây |
+| `JAMENDO_CLIENT_ID` | Khuyến nghị — application ID từ Jamendo Developer Portal để bật catalog và direct download track được phép |
+| `LUNU_DIRECT_SOURCE_TIMEOUT_SECONDS` | Tùy chọn — timeout mỗi provider direct audio, mặc định `20` giây |
+| `LUNU_ALLOW_UNLICENSED_ARCHIVE` | Mặc định `false`; chỉ đặt `true` khi đã tự kiểm duyệt quyền sử dụng từng item Internet Archive |
 | `LUNU_AUDIO_UPLOAD_MAX_BYTES` | Tùy chọn — giới hạn file audio upload trực tiếp, mặc định `209715200` (200 MiB) |
 | `YOUTUBE_COOKIES_B64` | Tùy chọn — cookies.txt Netscape được mã hóa base64 cho video bị YouTube yêu cầu xác minh |
 | `LUNU_SONG_START_SEQUENCE` | Mặc định `199`, thứ tự đầu tiên sau 188 bài legacy |
@@ -55,6 +58,12 @@ Bảng `songs` hiện được backend sử dụng với các cột `id`, `title
 Bảng `cinema_videos` được tạo bởi cùng migration. Video mới có mã dạng `VD0125082026`, tăng dần theo số thứ tự trong kho Cinema. Để bật hai chế độ lưu, chạy thêm `supabase/cinema_retention.sql` một lần; migration này thêm `retention_mode` (`permanent` hoặc `temporary`) và `expires_at`. Bảng `users` tối thiểu cần `id`, `username`, `role`; bản nâng cấp ưu tiên cột `password_hash`. Backend vẫn đọc cột `password` cũ để cho phép đăng nhập lần đầu và tự nâng cấp sang PBKDF2 hash, sau đó nên xóa dữ liệu plaintext sau khi xác nhận migration thành công.
 
 Nếu database đã bật RLS, cần tạo policy server-side phù hợp với cách backend kết nối. Không dùng service key trong bundle frontend.
+
+## Tìm kiếm và tải audio ổn định
+
+Khu vực import bài hát hiện dùng endpoint `/api/songs/search`, ưu tiên Jamendo và Internet Archive. Chỉ kết quả có quyền download rõ ràng mới được hiển thị; backend tải file trực tiếp bằng HTTPS, giới hạn kích thước, chuẩn hóa bằng FFmpeg, upload Cloudinary và lưu vào Supabase. YouTube không còn là nguồn tải MP3 mặc định vì IP Render thường bị 429/403. Để bật Jamendo, tạo app ở [Jamendo Developer Portal](https://devportal.jamendo.com/) rồi đặt `JAMENDO_CLIENT_ID` trên Render. Internet Archive chỉ được nhận khi metadata có Creative Commons/public-domain rights, trừ khi bạn chủ động bật `LUNU_ALLOW_UNLICENSED_ARCHIVE` sau khi kiểm duyệt.
+
+Endpoint `/api/songs/search_youtube` vẫn được giữ riêng cho các luồng Cinema/metadata cũ; endpoint đó không cam kết tải audio.
 
 ## Tìm kiếm YouTube ổn định
 

@@ -66,6 +66,9 @@ YOUTUBE_CLIENTS = tuple(dict.fromkeys(
 )) or ('web_embedded', 'mweb', 'web', 'tv')
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '').strip()
 YOUTUBE_API_TIMEOUT_SECONDS = int(os.getenv('YOUTUBE_API_TIMEOUT_SECONDS', '20'))
+JAMENDO_CLIENT_ID = os.getenv('JAMENDO_CLIENT_ID', '').strip()
+DIRECT_SOURCE_TIMEOUT_SECONDS = int(os.getenv('LUNU_DIRECT_SOURCE_TIMEOUT_SECONDS', '20'))
+ALLOW_UNLICENSED_ARCHIVE = os.getenv('LUNU_ALLOW_UNLICENSED_ARCHIVE', 'false').strip().lower() == 'true'
 CHAT_ATTACHMENT_MAX_FILENAME = 160
 CHAT_IMAGE_MIMES = {'image/jpeg', 'image/png', 'image/webp', 'image/gif'}
 CHAT_FILE_MIMES = {'application/pdf', 'text/plain', 'text/csv', 'application/json', 'application/zip', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'}
@@ -150,11 +153,17 @@ class MediaTooLargeError(RuntimeError):
 
 
 class AddSongRequest(BaseModel):
-    video_id: str = Field(min_length=6, max_length=32, pattern=r'^[A-Za-z0-9_-]+$')
+    source_id: str = Field(min_length=2, max_length=240)
     title: str = Field(min_length=1, max_length=240)
     artist: str = Field(min_length=1, max_length=160)
+    provider: Literal['jamendo', 'internet_archive', 'youtube'] = 'jamendo'
     cover: str = Field(default='', max_length=500)
     lyrics: str = Field(default='', max_length=100000)
+
+    @property
+    def video_id(self) -> str:
+        """Backward-compatible alias for old YouTube callers."""
+        return self.source_id
 
     @field_validator('title', 'artist', 'cover', 'lyrics')
     @classmethod
@@ -1061,6 +1070,161 @@ def is_missing_chat_attachment_column_error(error: Exception) -> bool:
     return 'attachment_url' in detail or 'attachment_public_id' in detail or 'attachment_resource_type' in detail
 
 
+def _json_get(url: str, *, timeout: int = DIRECT_SOURCE_TIMEOUT_SECONDS) -> dict:
+    request = urllib.request.Request(url, headers={'User-Agent': 'LuNu-Music/2.1 (+direct-audio-provider)'})
+    with urllib.request.urlopen(request, timeout=timeout) as response:
+        payload = json.loads(response.read().decode('utf-8'))
+    if not isinstance(payload, dict):
+        raise RuntimeError('Nguồn audio trả về dữ liệu không hợp lệ.')
+    return payload
+
+
+def _provider_result(provider: str, source_id: str, title: str, artist: str, cover: str = '', **extra: object) -> dict:
+    return {
+        'id': f'{provider}:{source_id}', 'source_id': source_id, 'provider': provider,
+        'title': (title or 'Untitled').strip(), 'artist': (artist or 'Unknown artist').strip(),
+        'uploader': (artist or provider).strip(), 'cover': cover or DEFAULT_COVER,
+        'download_allowed': True, **extra,
+    }
+
+
+def search_jamendo_direct(query: str) -> list[dict]:
+    if not JAMENDO_CLIENT_ID:
+        return []
+    params = urllib.parse.urlencode({
+        'client_id': JAMENDO_CLIENT_ID, 'format': 'json', 'limit': 10,
+        'search': query, 'audioformat': 'mp32', 'include': 'musicinfo',
+    })
+    data = _json_get(f'https://api.jamendo.com/v3.0/tracks/?{params}')
+    results = []
+    for track in data.get('results') or []:
+        if not isinstance(track, dict) or not track.get('id'):
+            continue
+        allowed = track.get('audiodownload_allowed') is True or str(track.get('audiodownload_allowed')).lower() == 'true'
+        if not allowed or not track.get('audiodownload'):
+            continue
+        results.append(_provider_result(
+            'jamendo', str(track['id']), str(track.get('name') or ''),
+            str(track.get('artist_name') or ''), str(track.get('image') or ''),
+            download_url=track.get('audiodownload'), source_url=track.get('shareurl') or track.get('url'),
+            license=track.get('license_ccurl') or '', requires_attribution=True,
+        ))
+    return results
+
+
+def _archive_has_download_rights(item: dict) -> bool:
+    if ALLOW_UNLICENSED_ARCHIVE:
+        return True
+    text = ' '.join(str(item.get(key) or '') for key in ('licenseurl', 'rights', 'description')).lower()
+    return any(token in text for token in ('creativecommons.org', 'creative commons', 'public domain', 'cc0'))
+
+
+def _archive_audio_file(identifier: str) -> tuple[dict, str]:
+    metadata = _json_get(f'https://archive.org/metadata/{urllib.parse.quote(identifier, safe="")}')
+    if not _archive_has_download_rights(metadata.get('metadata') or {}):
+        raise PermissionError('Internet Archive item không có license download rõ ràng.')
+    candidates = []
+    for item in metadata.get('files') or []:
+        if not isinstance(item, dict) or not item.get('name') or item.get('private') == 'true':
+            continue
+        name = str(item['name'])
+        suffix = Path(name).suffix.lower()
+        if suffix not in {'.mp3', '.ogg', '.oga', '.flac', '.wav', '.m4a', '.opus', '.aac'}:
+            continue
+        size = int(item.get('size') or 0)
+        if size and size > MAX_AUDIO_UPLOAD_BYTES:
+            continue
+        candidates.append((item, suffix))
+    if not candidates:
+        raise FileNotFoundError('Internet Archive item không có file audio phù hợp hoặc file quá lớn.')
+    candidates.sort(key=lambda pair: (pair[0].get('format') != 'VBR MP3', pair[0].get('format') != 'MP3', pair[0].get('size') or 0))
+    item, _ = candidates[0]
+    url = f'https://archive.org/download/{urllib.parse.quote(identifier, safe="")}/{urllib.parse.quote(str(item["name"]))}'
+    return metadata, url
+
+
+def search_internet_archive_direct(query: str) -> list[dict]:
+    params = urllib.parse.urlencode({
+        'q': f'({query}) AND mediatype:audio', 'fl[]': ['identifier', 'title', 'creator', 'licenseurl', 'rights'],
+        'rows': 12, 'page': 1, 'output': 'json', 'sort[]': 'downloads desc',
+    }, doseq=True)
+    data = _json_get(f'https://archive.org/advancedsearch.php?{params}')
+    results = []
+    for doc in ((data.get('response') or {}).get('docs') or []):
+        if not isinstance(doc, dict) or not doc.get('identifier') or not _archive_has_download_rights(doc):
+            continue
+        try:
+            metadata, download_url = _archive_audio_file(str(doc['identifier']))
+        except (Exception, PermissionError):
+            continue
+        meta = metadata.get('metadata') or {}
+        results.append(_provider_result(
+            'internet_archive', str(doc['identifier']), str(meta.get('title') or doc.get('title') or ''),
+            str(meta.get('creator') or doc.get('creator') or ''), '', download_url=download_url,
+            source_url=f'https://archive.org/details/{urllib.parse.quote(str(doc["identifier"]))}',
+            license=meta.get('licenseurl') or doc.get('licenseurl') or meta.get('rights') or '',
+            requires_attribution='creativecommons.org' in str(meta.get('licenseurl') or doc.get('licenseurl') or '').lower(),
+        ))
+    return results
+
+
+def search_direct_audio_sources(query: str) -> tuple[list[dict], list[str]]:
+    results: list[dict] = []
+    errors: list[str] = []
+    for name, searcher in (('jamendo', search_jamendo_direct), ('internet_archive', search_internet_archive_direct)):
+        try:
+            results.extend(searcher(query))
+        except Exception as error:
+            errors.append(f'{name}: {error}')
+    return results, errors
+
+
+def _safe_provider_url(url: str) -> str:
+    parsed = urllib.parse.urlparse(url)
+    if parsed.scheme != 'https' or parsed.hostname not in {'api.jamendo.com', 'archive.org', 'ia801500.us.archive.org', 'ia800000.us.archive.org'} and not (parsed.hostname or '').endswith('.archive.org'):
+        raise ValueError('URL audio provider không được phép.')
+    return url
+
+
+def download_direct_audio(provider: str, source_id: str, temp_dir: str) -> tuple[Path, dict]:
+    if provider == 'jamendo':
+        # source_id is a track ID for import; always resolve the exact ID instead of
+        # searching the ID as free text and risking a different result.
+        if not JAMENDO_CLIENT_ID:
+            raise RuntimeError('Thiếu JAMENDO_CLIENT_ID trên backend.')
+        params = urllib.parse.urlencode({'client_id': JAMENDO_CLIENT_ID, 'format': 'json', 'id': source_id, 'audioformat': 'mp32'})
+        data = _json_get(f'https://api.jamendo.com/v3.0/tracks/?{params}')
+        track = (data.get('results') or [None])[0]
+        allowed = track and (track.get('audiodownload_allowed') is True or str(track.get('audiodownload_allowed')).lower() in {'true', '1'})
+        if not track or not track.get('audiodownload') or not allowed:
+            raise PermissionError('Jamendo không cho phép download track này hoặc thiếu JAMENDO_CLIENT_ID.')
+        info = _provider_result('jamendo', source_id, track.get('name', ''), track.get('artist_name', ''), track.get('image', ''), download_url=track['audiodownload'], source_url=track.get('shareurl') or track.get('url'), license=track.get('license_ccurl') or '', requires_attribution=True)
+        url = info['download_url']
+    elif provider == 'internet_archive':
+        metadata, url = _archive_audio_file(source_id)
+        meta = metadata.get('metadata') or {}
+        info = _provider_result('internet_archive', source_id, meta.get('title', ''), meta.get('creator', ''), '', download_url=url, source_url=f'https://archive.org/details/{urllib.parse.quote(source_id)}', license=meta.get('licenseurl') or meta.get('rights') or '', requires_attribution='creativecommons.org' in str(meta.get('licenseurl') or '').lower())
+    else:
+        raise ValueError('YouTube không còn là nguồn download trực tiếp mặc định. Hãy chọn provider có quyền download.')
+    output = Path(temp_dir) / f'{provider}-{hashlib.sha256(source_id.encode()).hexdigest()[:16]}.audio'
+    request = urllib.request.Request(_safe_provider_url(str(url)), headers={'User-Agent': 'LuNu-Music/2.1 (+direct-audio-provider)'})
+    total = 0
+    with urllib.request.urlopen(request, timeout=DIRECT_SOURCE_TIMEOUT_SECONDS) as response, output.open('wb') as handle:
+        while True:
+            chunk = response.read(1024 * 1024)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > MAX_AUDIO_UPLOAD_BYTES:
+                output.unlink(missing_ok=True)
+                raise MediaTooLargeError(f'Audio provider vượt giới hạn {MAX_AUDIO_UPLOAD_BYTES} bytes.')
+            handle.write(chunk)
+    if total < 1024:
+        output.unlink(missing_ok=True)
+        raise RuntimeError('Provider trả về file audio rỗng hoặc không hợp lệ.')
+    return output, info
+
+
 def available_media_files(temp_dir: str, video_id: str) -> list[Path]:
     image_extensions = {'.jpg', '.jpeg', '.png', '.webp', '.gif', '.vtt', '.part', '.ytdl'}
     return [item for item in Path(temp_dir).glob(f'{video_id}*') if item.is_file() and item.suffix.lower() not in image_extensions]
@@ -1297,18 +1461,28 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
 
 
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
-    video_id = request_data['video_id']
+    provider = request_data.get('provider') or 'youtube'
+    source_id = request_data.get('source_id') or request_data.get('video_id')
+    if not source_id:
+        raise RuntimeError('Thiếu source_id cho bài hát.')
+    canonical_source_id = source_id if provider == 'youtube' else f'{provider}:{source_id}'
     proposal_id = request_data.get('proposal_id')
     temp_dir = tempfile.mkdtemp(prefix='lunu-song-')
     file_path: Optional[Path] = None
     client: Optional[Client] = None
-    set_import_job(job_id, status='processing', message='Đang tải audio từ YouTube...')
+    set_import_job(job_id, status='processing', message=f'Đang tải audio từ {provider}...')
     try:
         client = require_supabase()
         if not all(os.getenv(key, '').strip() for key in ('CLOUDINARY_CLOUD_NAME', 'CLOUDINARY_API_KEY', 'CLOUDINARY_API_SECRET')):
             raise RuntimeError('Cloudinary chưa được cấu hình trên Render.')
         media_key = next_media_key(client, 'songs')
-        file_path = download_media(video_id, temp_dir, 'song')
+        if provider in {'jamendo', 'internet_archive'}:
+            file_path, provider_info = download_direct_audio(provider, source_id, temp_dir)
+        elif provider == 'youtube':
+            file_path = download_media(source_id, temp_dir, 'song')
+            provider_info = {}
+        else:
+            raise ValueError(f'Provider không được hỗ trợ: {provider}')
         file_size_bytes = file_path.stat().st_size if file_path.exists() else None
         if proposal_id:
             update_proposal(client, proposal_id, {'file_size_bytes': file_size_bytes})
@@ -1325,13 +1499,13 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
         if not secure_url:
             raise RuntimeError('Cloudinary không trả về secure_url.')
         song_data = {
-            'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': video_id,
+            'id': str(uuid.uuid4()), 'media_key': media_key, 'source_id': canonical_source_id,
             'cloudinary_public_id': public_id, 'title': request_data['title'], 'artist': request_data['artist'],
-            'url': secure_url, 'cover': DEFAULT_COVER,
+            'url': secure_url, 'cover': request_data.get('cover') or provider_info.get('cover') or DEFAULT_COVER,
             'lyrics': request_data.get('lyrics', ''),
         }
         set_import_job(job_id, message='Đã upload Cloudinary, đang ghi metadata vào Supabase...')
-        existing = client.table('songs').select('id,url,cloudinary_public_id').eq('source_id', video_id).limit(1).execute()
+        existing = client.table('songs').select('id,url,cloudinary_public_id').eq('source_id', canonical_source_id).limit(1).execute()
         if existing.data:
             old = existing.data[0]
             client.table('songs').update({key: value for key, value in song_data.items() if key != 'id'}).eq('id', old['id']).execute()
@@ -1355,7 +1529,7 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
         if proposal_id and client:
             update_proposal(client, proposal_id, {'status': 'failed', 'job_id': job_id, 'rejection_reason': str(error)[:1000]})
             notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất nhạc chưa thể xử lý', f'Bài “{request_data.get("title", "")}" chưa được thêm: {error}', 'proposal-failed')
-        print(f'❌ Lỗi xử lý audio {video_id}: {error}')
+        print(f'❌ Lỗi xử lý audio {provider}:{source_id}: {error}')
     finally:
         if file_path and file_path.exists():
             file_path.unlink(missing_ok=True)
@@ -1658,6 +1832,12 @@ async def health() -> dict:
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
         'audio_upload_max_bytes': MAX_AUDIO_UPLOAD_BYTES,
         'youtube_download_policy': 'fail-fast-on-429-403; use-audio-upload-fallback',
+        'direct_audio_providers': {
+            'jamendo': {'configured': bool(JAMENDO_CLIENT_ID), 'download_policy': 'license-and-download-allowed-only'},
+            'internet_archive': {'configured': True, 'download_policy': 'creative-commons-or-public-domain-only'},
+        },
+        'direct_audio_timeout_seconds': DIRECT_SOURCE_TIMEOUT_SECONDS,
+        'allow_unlicensed_archive': ALLOW_UNLICENSED_ARCHIVE,
         'chat_attachment_max_bytes': CHAT_ATTACHMENT_MAX_BYTES,
         'yt_dlp_version': getattr(getattr(yt_dlp, 'version', None), '__version__', None),
         'youtube_clients': list(YOUTUBE_CLIENTS),
@@ -2510,7 +2690,8 @@ async def approve_media_proposal(proposal_id: str, background_tasks: BackgroundT
         job_id = str(uuid.uuid4())
         client.table('media_proposals').update({'status': 'processing', 'job_id': job_id, 'reviewed_by': reviewer['id'], 'reviewed_at': datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()}).eq('id', proposal_id).execute()
         request_data = {
-            'video_id': proposal['source_id'], 'title': proposal['title'], 'artist': proposal.get('artist', ''),
+            'video_id': proposal['source_id'], 'source_id': proposal['source_id'], 'provider': 'youtube',
+            'title': proposal['title'], 'artist': proposal.get('artist', ''),
             'uploader': proposal.get('uploader') or 'YouTube', 'cover': proposal.get('cover', ''),
             'description': proposal.get('description', ''), 'proposal_id': proposal_id,
             'requested_by': proposal.get('requested_by'), 'proposal': proposal,
@@ -2673,6 +2854,29 @@ async def import_legacy_songs(client: Client = Depends(require_supabase), _: dic
         return {'success': True, 'imported': len(pending), 'skipped': len(catalog) - len(pending), 'total': len(catalog), 'message': f'Đã khôi phục {len(pending)} bài, bỏ qua {len(catalog) - len(pending)} bài đã có.'}
     except Exception as error:
         raise HTTPException(status_code=502, detail=f'Không thể import catalog vào Supabase: {error}')
+
+
+@app.get('/api/songs/search')
+async def search_direct_songs(query: str = Query(min_length=2, max_length=120)) -> dict:
+    normalized_query = query.strip()
+    results, errors = await asyncio.to_thread(search_direct_audio_sources, normalized_query)
+    # Keep the response deterministic and avoid showing duplicate provider records.
+    unique = {}
+    for item in results:
+        key = f'{item.get("provider")}:{item.get("source_id")}'
+        unique[key] = item
+    if unique:
+        return {
+            'success': True, 'results': list(unique.values())[:20],
+            'source': 'direct-audio-providers',
+            'providers': {'jamendo': bool(JAMENDO_CLIENT_ID), 'internet_archive': True},
+        }
+    detail = 'Không tìm thấy audio có quyền tải trực tiếp.'
+    if not JAMENDO_CLIENT_ID:
+        detail += ' Để có catalog Jamendo, hãy cấu hình JAMENDO_CLIENT_ID trên Render.'
+    if errors:
+        print(f'⚠️ Direct audio search failed for {normalized_query!r}: {" | ".join(errors[-3:])}')
+    return {'success': False, 'results': [], 'source': 'direct-audio-providers', 'message': detail}
 
 
 @app.get('/api/songs/search_youtube')

@@ -2,16 +2,16 @@
 
 ## User-requested flow
 
-The intended flow is: search YouTube by title, show similar videos, select one, enter the final song title and artist in the web UI, send that metadata with the selected video ID, download the selected video as MP3 with yt-dlp/FFmpeg, upload the MP3 to Cloudinary, save the returned Cloudinary URL plus the user-entered metadata in Supabase, and refresh the library after the background job actually completes.
+The stable song-import flow is: search direct-download providers by title, show licensed results, select one, enter the final song title and artist in the web UI, send that metadata with the provider/source ID, download the audio over HTTPS, normalize it with FFmpeg, upload it to Cloudinary, save the returned URL plus metadata in Supabase, and refresh the library after the background job completes. YouTube remains isolated to the legacy/Cinema metadata path and is not the default MP3 source.
 
 ## Current blockers
 
 | Layer | Current behavior | Impact | Fix |
 |---|---|---|---|
-| Admin UI | `DiscordBotSearch.vue` sends only `video.id` when clicking “Tải bài này” | There is no title/artist editing step; backend must guess metadata from YouTube | Add selected-video form with editable title and artist |
-| Frontend API | `addSong(videoId)` serializes only `{ video_id }` | User-entered metadata cannot reach Render | Send `{ video_id, title, artist, cover, lyrics }` |
-| Backend contract | `AddSongRequest` accepts only `video_id` | Request schema rejects/ignores custom metadata | Extend Pydantic model and validate fields |
-| Download worker | `process_and_upload_song(video_id)` always uses `info.title` and `info.uploader` | Saved metadata is not the metadata chosen by the user | Pass validated metadata into worker and use it as source of truth |
+| Admin UI | Search results were YouTube-only | Render/office networks can block YouTube playback/download | Search Jamendo and Internet Archive direct-download results |
+| Frontend API | Import payload used a YouTube-only `video_id` contract | Non-YouTube sources could not be imported | Send `{ source_id, provider, title, artist, cover, lyrics }` |
+| Backend contract | `AddSongRequest` accepted only `video_id` | Provider/source could not be validated | Validate provider and source ID with Pydantic |
+| Download worker | `process_and_upload_song` always called yt-dlp | Every song import inherited YouTube 429/403 failures | Resolve exact provider ID and download only when provider permits it |
 | Job lifecycle | Background task returns only a generic queued message; frontend refreshes immediately | Library refresh happens before upload/insert finishes and gives no completion status | Add in-memory job registry, `job_id`, status endpoint and frontend polling |
 | Cloudinary | Upload uses a filename-derived public ID with overwrite behavior | Duplicate titles can overwrite or produce hard-to-debug collisions | Use deterministic video ID public ID and return secure URL |
 | Supabase | Insert happens only inside a background task with no job result exposed | UI cannot distinguish completed upload from failed upload | Persist status in job registry and return structured error |
@@ -19,7 +19,7 @@ The intended flow is: search YouTube by title, show similar videos, select one, 
 
 ## Evidence from Render logs
 
-The attached logs show YouTube search succeeds with HTTP 200, while previous CORS problems have already been fixed. The current code path after the search still calls the old add endpoint with only a video ID; no successful `/api/songs/add` completion is present in the supplied logs. This is consistent with the missing metadata form and missing completion/status flow rather than a search failure.
+The supplied logs show YouTube search succeeds with HTTP 200, but every media extraction attempt from Render receives HTTP 429/403. This is a provider/IP limitation, not a missing retry profile. The new song path no longer depends on that extractor; `/api/songs/search_youtube` is retained for legacy/Cinema use, while `/api/songs/search` returns only direct-download provider results.
 
 ## Implementation target
 
