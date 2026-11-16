@@ -1,30 +1,475 @@
 <template>
   <div class="import-console">
-    <div class="search-wrapper"><label class="search-field"><span>⌕</span><input v-model.trim="searchQuery" @keyup.enter="handleSearch" type="search" placeholder="Tìm bài từ nguồn có thể tải trực tiếp..." :disabled="isSearching || isImporting" /></label><button @click="handleSearch" :disabled="isSearching || isImporting || !searchQuery" class="action-btn">{{ isSearching ? 'Đang tìm...' : 'Tìm kiếm' }} <span>→</span></button></div>
+    <div class="source-choices" role="group" aria-label="Chọn nguồn nhạc">
+      <button
+        :class="{ active: source === 'direct' }"
+        :aria-pressed="source === 'direct'"
+        :disabled="isImporting"
+        @click="changeSource('direct')"
+      >
+        <Music2 :size="17" /> Nguồn audio trực tiếp</button
+      ><button
+        :class="{ active: source === 'youtube' }"
+        :aria-pressed="source === 'youtube'"
+        :disabled="isImporting"
+        @click="changeSource('youtube')"
+      >
+        <SquarePlay :size="18" /> YouTube
+      </button>
+    </div>
+    <p class="source-hint">
+      {{
+        source === 'youtube'
+          ? 'Tìm bằng tên bài hát và nghệ sĩ. Chỉ thêm nội dung bạn có quyền sử dụng.'
+          : 'Tìm nhạc cho phép tải từ Internet Archive và Jamendo.'
+      }}
+    </p>
+    <form class="search-wrapper" @submit.prevent="handleSearch">
+      <label class="search-field"
+        ><Search :size="18" /><input
+          v-model.trim="searchQuery"
+          type="search"
+          :placeholder="
+            source === 'youtube' ? 'Tìm tên bài hát trên YouTube...' : 'Tìm bài hát hoặc nghệ sĩ...'
+          "
+          aria-label="Tìm nguồn nhạc"
+          :disabled="isSearching || isImporting"
+          minlength="2"
+          required /></label
+      ><button :disabled="isSearching || isImporting || searchQuery.length < 2" class="action-btn">
+        <LoaderCircle v-if="isSearching" :size="16" />{{ isSearching ? 'Đang tìm...' : 'Tìm kiếm' }}
+      </button>
+    </form>
     <p v-if="message" class="status-message" :class="messageType" role="status">{{ message }}</p>
-
-    <div v-if="selectedVideo" class="selected-panel"><div class="selected-heading"><div><span class="panel-kicker">SELECTED SOURCE</span><h3>Chỉnh sửa thông tin trước khi lưu</h3></div><button class="close-btn" @click="clearSelection" aria-label="Bỏ chọn nguồn">×</button></div><div class="selected-video"><img :src="thumbnail(selectedVideo)" :alt="selectedVideo.title" class="selected-thumb" /><div><strong>{{ selectedVideo.title }}</strong><span>{{ selectedVideo.uploader || selectedVideo.provider }}</span><small>{{ selectedVideo.provider }} · {{ selectedVideo.source_id }}</small></div></div><form class="metadata-form" @submit.prevent="handleImport"><label><span>TÊN BÀI HÁT</span><input v-model.trim="metadata.title" required maxlength="240" /></label><label><span>CA SĨ / NGHỆ SĨ</span><input v-model.trim="metadata.artist" required maxlength="160" /></label><div class="form-actions"><button type="button" class="cancel-btn" @click="clearSelection">Chọn nguồn khác</button><button type="submit" class="action-btn" :disabled="isImporting || !metadata.title || !metadata.artist">{{ isImporting ? importLabel : 'Tải MP3 & thêm vào thư viện' }} <span>↗</span></button></div></form></div>
-
-    <div v-if="!selectedVideo && searchResults.length" class="results-heading"><span>{{ searchResults.length }} kết quả</span><small>Chọn nguồn có quyền tải audio</small></div><div v-if="!selectedVideo && searchResults.length" class="results-list"><article v-for="video in searchResults" :key="video.id" class="result-item"><img :src="thumbnail(video)" :alt="video.title" class="video-thumb" loading="lazy" /><div class="video-info"><h4 :title="video.title">{{ video.title }}</h4><p>{{ video.artist || video.uploader || 'Không rõ nghệ sĩ' }} · {{ video.provider }}</p></div><button @click="selectVideo(video)" class="select-btn">Chọn <span>→</span></button></article></div>
+    <div v-if="selectedVideo" class="selected-panel">
+      <header>
+        <h3>Thông tin bài hát</h3>
+        <button
+          class="close-btn"
+          :disabled="isImporting"
+          @click="clearSelection"
+          aria-label="Bỏ chọn nguồn"
+        >
+          <X :size="18" />
+        </button>
+      </header>
+      <div class="selected-video">
+        <img :src="thumbnail(selectedVideo)" :alt="selectedVideo.title" />
+        <div>
+          <strong>{{ selectedVideo.title }}</strong><span>{{
+            selectedVideo.artist || selectedVideo.uploader
+          }}</span
+          ><small>{{
+            selectedVideo.provider === 'youtube'
+              ? 'YouTube'
+              : selectedVideo.provider === 'jamendo'
+                ? 'Jamendo'
+                : 'Internet Archive'
+          }}</small>
+        </div>
+      </div>
+      <form class="metadata-form" @submit.prevent="handleImport">
+        <label
+          ><span>Tên bài hát</span
+          ><input
+            v-model.trim="metadata.title"
+            required
+            maxlength="240"
+            :disabled="isImporting" /></label
+        ><label
+          ><span>Nghệ sĩ</span
+          ><input v-model.trim="metadata.artist" required maxlength="160" :disabled="isImporting"
+        /></label>
+        <div class="form-actions">
+          <button type="button" class="cancel-btn" :disabled="isImporting" @click="clearSelection">
+            Chọn bài khác</button
+          ><button
+            class="action-btn"
+            :disabled="isImporting || !metadata.title || !metadata.artist"
+          >
+            <Download :size="16" />{{ isImporting ? importLabel : 'Thêm vào thư viện' }}
+          </button>
+        </div>
+      </form>
+    </div>
+    <div v-else-if="searchResults.length" class="results-list">
+      <article
+        v-for="video in searchResults"
+        :key="`${video.provider}:${video.source_id}`"
+        class="result-item"
+      >
+        <img :src="thumbnail(video)" :alt="video.title" loading="lazy" />
+        <div>
+          <h4>{{ video.title }}</h4>
+          <p>{{ video.artist || video.uploader || 'Chưa rõ nghệ sĩ' }}</p>
+          <small>{{ video.provider }}</small>
+        </div>
+        <button class="select-btn" @click="selectVideo(video)">Chọn <Plus :size="15" /></button>
+      </article>
+    </div>
   </div>
 </template>
-
 <script setup>
 import { onBeforeUnmount, reactive, ref } from 'vue';
-import { addSong, getImportJob, searchYoutube } from '../services/api';
-
+import { Download, LoaderCircle, Music2, Plus, Search, X, SquarePlay } from '@lucide/vue';
+import { addSong, searchAudioSources } from '../services/api';
+import { waitForImport } from '../utils/importJob';
+import { songArtwork } from '../utils/artwork';
 const emit = defineEmits(['song-added']);
-const searchQuery = ref(''); const searchResults = ref([]); const selectedVideo = ref(null); const isSearching = ref(false); const isImporting = ref(false); const message = ref(''); const messageType = ref(''); const importLabel = ref('Đang xử lý...'); let pollTimer = null;
+const source = ref('direct'),
+  searchQuery = ref(''),
+  searchResults = ref([]),
+  selectedVideo = ref(null),
+  isSearching = ref(false),
+  isImporting = ref(false),
+  message = ref(''),
+  messageType = ref(''),
+  importLabel = ref('Đang xử lý...');
 const metadata = reactive({ title: '', artist: '', cover: '', lyrics: '' });
-const thumbnail = (video) => video?.cover || video?.thumbnail || '/images/ChoCiu.jpg';
-const selectVideo = (video) => { selectedVideo.value = video; metadata.title = video.title || ''; metadata.artist = video.uploader || ''; metadata.cover = '/images/ChoCiu.jpg'; metadata.lyrics = ''; message.value = 'Bạn có thể chỉnh lại tên bài và ca sĩ trước khi tải.'; messageType.value = ''; };
-const clearSelection = () => { selectedVideo.value = null; metadata.title = ''; metadata.artist = ''; metadata.cover = ''; metadata.lyrics = ''; };
-const handleSearch = async () => { if (!searchQuery.value) return; isSearching.value = true; message.value = 'Đang tìm audio từ các nguồn cho phép tải...'; messageType.value = ''; searchResults.value = []; clearSelection(); try { const response = await searchYoutube(searchQuery.value); if (!response?.success) throw new Error(response?.message || 'Không tìm thấy audio có thể tải.'); searchResults.value = response.results || []; message.value = searchResults.value.length ? `Tìm thấy ${searchResults.value.length} nguồn audio có thể tải.` : 'Không có kết quả phù hợp.'; } catch (error) { message.value = error.message || 'Không thể tìm kiếm nguồn audio.'; messageType.value = 'error'; } finally { isSearching.value = false; } };
-const pollImport = async (jobId) => { try { const response = await getImportJob(jobId); importLabel.value = response.message || 'Đang xử lý...'; if (response.status === 'completed') { message.value = `Đã thêm “${response.song?.title || metadata.title}” vào thư viện.`; messageType.value = 'success'; isImporting.value = false; emit('song-added', response.song); clearSelection(); searchResults.value = []; searchQuery.value = ''; return; } if (response.status === 'failed') throw new Error(response.message || 'Import thất bại.'); pollTimer = window.setTimeout(() => pollImport(jobId), 2200); } catch (error) { isImporting.value = false; message.value = error.message || 'Không thể kiểm tra trạng thái import.'; messageType.value = 'error'; } };
-const handleImport = async () => { if (!selectedVideo.value || !metadata.title || !metadata.artist) return; isImporting.value = true; messageType.value = ''; importLabel.value = 'Đang xếp hàng...'; message.value = 'Đang gửi nguồn audio và metadata lên Render...'; try { const response = await addSong({ sourceId: selectedVideo.value.source_id, provider: selectedVideo.value.provider, title: metadata.title, artist: metadata.artist, cover: metadata.cover, lyrics: metadata.lyrics }); if (!response?.success || !response.job_id) throw new Error(response?.message || 'Backend không nhận được yêu cầu.'); message.value = 'Đã nhận. Đang tải audio trực tiếp, upload Cloudinary và ghi Supabase...'; importLabel.value = 'Đang tải audio...'; await pollImport(response.job_id); } catch (error) { isImporting.value = false; message.value = error.message || 'Không thể bắt đầu import.'; messageType.value = 'error'; } };
-onBeforeUnmount(() => { if (pollTimer) window.clearTimeout(pollTimer); });
+let controller = null;
+const thumbnail = (video) => songArtwork({ ...video, cover: video.cover || video.thumbnail });
+const clearSelection = () => {
+  selectedVideo.value = null;
+  Object.assign(metadata, { title: '', artist: '', cover: '', lyrics: '' });
+};
+const changeSource = (value) => {
+  source.value = value;
+  searchResults.value = [];
+  clearSelection();
+  message.value = '';
+};
+const selectVideo = (video) => {
+  selectedVideo.value = video;
+  Object.assign(metadata, {
+    title: video.title || '',
+    artist: video.artist || video.uploader || '',
+    cover: video.cover || video.thumbnail || '',
+    lyrics: '',
+  });
+  message.value = '';
+};
+const handleSearch = async () => {
+  if (searchQuery.value.length < 2 || isSearching.value) return;
+  isSearching.value = true;
+  message.value = '';
+  searchResults.value = [];
+  clearSelection();
+  try {
+    const response = await searchAudioSources(searchQuery.value, source.value);
+    if (!response.success)
+      throw new Error(
+        response.message || 'Chưa có kết quả. Thử tên bài hát và nghệ sĩ cụ thể hơn.',
+      );
+    searchResults.value = response.results;
+    message.value = `${searchResults.value.length} kết quả. Chọn bài để kiểm tra thông tin.`;
+    messageType.value = '';
+  } catch (error) {
+    message.value = error.message;
+    messageType.value = 'error';
+  } finally {
+    isSearching.value = false;
+  }
+};
+const handleImport = async () => {
+  if (!selectedVideo.value || isImporting.value) return;
+  isImporting.value = true;
+  messageType.value = '';
+  importLabel.value = 'Đang xếp hàng...';
+  controller = new AbortController();
+  try {
+    const response = await addSong({
+      sourceId: selectedVideo.value.source_id,
+      provider: selectedVideo.value.provider,
+      ...metadata,
+    });
+    if (!response.success || !response.job_id)
+      throw new Error(response.message || 'Chưa thể bắt đầu thêm nhạc.');
+    const job = await waitForImport(response.job_id, {
+      signal: controller.signal,
+      onProgress: (job) => {
+        message.value = job.message || 'Đang xử lý bài hát...';
+        importLabel.value = 'Đang thêm nhạc...';
+      },
+    });
+    message.value = `Đã thêm “${job.song?.title || metadata.title}” vào thư viện.`;
+    messageType.value = 'success';
+    emit('song-added', job.song);
+    clearSelection();
+    searchResults.value = [];
+  } catch (error) {
+    if (error.name !== 'AbortError') {
+      message.value = error.message;
+      messageType.value = 'error';
+    }
+  } finally {
+    isImporting.value = false;
+  }
+};
+onBeforeUnmount(() => controller?.abort());
 </script>
-
 <style scoped>
-.import-console { display: flex; flex-direction: column; gap: 15px; padding: 18px; border: 1px solid var(--hairline-soft); border-radius: 15px; background: rgba(255,255,255,.025); }.search-wrapper { display: flex; gap: 9px; }.search-field { display: flex; align-items: center; flex: 1; gap: 10px; padding: 12px 13px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(3,5,9,.34); }.search-field:focus-within { border-color: rgba(245,185,122,.6); box-shadow: 0 0 0 3px rgba(245,185,122,.07); }.search-field span { color: var(--gold); font-size: 18px; }.search-field input { width: 100%; border: 0; outline: 0; background: transparent; color: var(--text-main); font-size: 11px; }.action-btn, .select-btn, .cancel-btn { border-radius: 9px; padding: 11px 13px; cursor: pointer; font-size: 10px; font-weight: 800; white-space: nowrap; }.action-btn { border: 0; background: linear-gradient(135deg,var(--gold-bright),var(--gold)); color: #171218; }.action-btn:hover:not(:disabled) { box-shadow: 0 8px 25px rgba(245,185,122,.2); transform: translateY(-1px); }.action-btn:disabled { cursor: progress; opacity: .55; }.action-btn span, .select-btn span { margin-left: 8px; font-size: 14px; }.status-message { margin: 0; color: var(--text-sub); font-size: 10px; line-height: 1.5; }.status-message.success { color: var(--mint); }.status-message.error { color: var(--crimson); }.selected-panel { padding: 18px; border: 1px solid rgba(245,185,122,.28); border-radius: 13px; background: linear-gradient(110deg,rgba(245,185,122,.08),rgba(155,140,255,.05)); }.selected-heading, .results-heading { display: flex; align-items: center; justify-content: space-between; }.panel-kicker { color: var(--gold); font: 8px var(--font-mono); letter-spacing: 1.5px; }.selected-heading h3 { margin-top: 6px; font: 500 18px var(--font-display); }.close-btn { width: 29px; height: 29px; border: 1px solid var(--hairline); border-radius: 8px; background: transparent; color: var(--text-sub); cursor: pointer; font-size: 18px; }.selected-video { display: flex; align-items: center; gap: 12px; margin: 18px 0; }.selected-thumb { width: 110px; height: 62px; border-radius: 9px; object-fit: cover; }.selected-video div { display: flex; flex-direction: column; min-width: 0; }.selected-video strong { overflow: hidden; color: var(--text-main); text-overflow: ellipsis; white-space: nowrap; font-size: 11px; }.selected-video span, .selected-video small { margin-top: 5px; color: var(--text-sub); font-size: 9px; }.selected-video small { color: var(--text-faint); font-family: var(--font-mono); }.metadata-form { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }.metadata-form label { display: grid; gap: 6px; }.metadata-form label span { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1px; }.metadata-form input { padding: 11px 12px; border: 1px solid var(--hairline); border-radius: 9px; outline: 0; background: rgba(3,5,9,.3); color: var(--text-main); font-size: 11px; }.metadata-form input:focus { border-color: var(--gold); }.form-actions { grid-column: 1 / -1; display: flex; justify-content: flex-end; gap: 8px; margin-top: 7px; }.cancel-btn { border: 1px solid var(--hairline); background: transparent; color: var(--text-sub); }.cancel-btn:hover { color: var(--gold); }.results-heading { padding: 2px 2px 0; color: var(--text-main); font-size: 11px; }.results-heading small { color: var(--text-faint); font-size: 9px; }.results-list { display: flex; flex-direction: column; gap: 6px; max-height: 420px; overflow: auto; }.result-item { display: flex; align-items: center; gap: 12px; padding: 9px; border: 1px solid transparent; border-radius: 10px; background: rgba(3,5,9,.23); }.result-item:hover { border-color: var(--hairline); background: rgba(255,255,255,.045); }.video-thumb { width: 100px; height: 56px; border-radius: 7px; object-fit: cover; }.video-info { flex: 1; min-width: 0; }.video-info h4, .video-info p { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.video-info h4 { color: var(--text-main); font-size: 11px; font-weight: 700; }.video-info p { margin-top: 5px; color: var(--text-sub); font-size: 9px; }.select-btn { border: 1px solid rgba(245,185,122,.32); background: rgba(245,185,122,.08); color: var(--gold); }.select-btn:hover { background: rgba(245,185,122,.15); }@media (max-width: 600px) { .search-wrapper, .metadata-form { grid-template-columns: 1fr; display: grid; }.metadata-form .form-actions { grid-column: 1; flex-wrap: wrap; }.form-actions > * { flex: 1; }.selected-thumb { width: 86px; height: 50px; }.result-item { align-items: flex-start; flex-wrap: wrap; }.video-info { width: calc(100% - 115px); }.select-btn { width: 100%; } }
+.import-console {
+  display: grid;
+  gap: 15px;
+  padding: 20px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface-2);
+}
+.source-choices {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.source-choices button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: none;
+  color: var(--text-sub);
+  font-size: 11px;
+}
+.source-choices button.active {
+  background: var(--accent-soft);
+  color: var(--gold);
+  border-color: var(--gold);
+}
+.source-hint {
+  font-size: 11px;
+  color: var(--text-sub);
+  line-height: 1.8;
+}
+.search-wrapper {
+  display: flex;
+  gap: 10px;
+}
+.search-field {
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 0;
+  gap: 9px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  padding: 11px 13px;
+  color: var(--text-faint);
+}
+.search-field:focus-within {
+  border-color: var(--gold);
+}
+.search-field input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: none;
+  color: var(--text-main);
+  font-size: 12px;
+}
+.action-btn,
+.select-btn,
+.cancel-btn {
+  display: inline-flex;
+  justify-content: center;
+  align-items: center;
+  gap: 8px;
+  min-height: 41px;
+  padding: 10px 14px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  font-size: 11px;
+  background: var(--accent-soft);
+  color: var(--gold);
+}
+.action-btn {
+  background: var(--gold);
+  color: var(--brand-ink);
+  border: 0;
+  font-weight: 600;
+}
+.status-message {
+  font-size: 11px;
+  line-height: 1.8;
+  color: var(--text-sub);
+  overflow-wrap: anywhere;
+}
+.status-message.error {
+  color: var(--crimson);
+}
+.status-message.success {
+  color: var(--mint);
+}
+.selected-panel {
+  padding: 17px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+}
+.selected-panel header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.selected-panel h3 {
+  font-size: 14px;
+  font-weight: 500;
+}
+.close-btn {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  border: 0;
+  background: none;
+  color: var(--text-sub);
+}
+.selected-video {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 14px 0 22px;
+  min-width: 0;
+}
+.selected-video img {
+  width: 75px;
+  height: 75px;
+  object-fit: cover;
+  border-radius: 9px;
+}
+.selected-video > div {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
+.selected-video strong {
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.selected-video span,
+.selected-video small {
+  color: var(--text-sub);
+  font-size: 10px;
+}
+.metadata-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+.metadata-form label {
+  display: grid;
+  gap: 9px;
+  font-size: 11px;
+  color: var(--text-sub);
+}
+.metadata-form input {
+  width: 100%;
+  min-width: 0;
+  padding: 12px;
+  border: 1px solid var(--hairline);
+  border-radius: 9px;
+  background: var(--glass);
+  color: var(--text-main);
+}
+.form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 9px;
+  grid-column: 1/-1;
+  flex-wrap: wrap;
+}
+.results-list {
+  display: grid;
+  gap: 9px;
+  max-height: 440px;
+  overflow: auto;
+}
+.result-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px;
+  border: 1px solid var(--hairline-soft);
+  border-radius: 9px;
+}
+.result-item img {
+  width: 58px;
+  height: 58px;
+  object-fit: cover;
+  border-radius: 7px;
+}
+.result-item > div {
+  flex: 1;
+  min-width: 0;
+}
+.result-item h4 {
+  font-size: 12px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.result-item p,
+.result-item small {
+  margin-top: 5px;
+  color: var(--text-sub);
+  font-size: 10px;
+}
+.result-item small {
+  font-size: 9px;
+}
+@media (max-width: 600px) {
+  .import-console {
+    padding: 13px;
+  }
+  .search-wrapper {
+    flex-direction: column;
+  }
+  .search-field input,
+  .metadata-form input {
+    font-size: 16px;
+  }
+  .metadata-form {
+    grid-template-columns: 1fr;
+  }
+  .form-actions > * {
+    flex: 1;
+  }
+  .source-choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px;
+  }
+  .source-choices button {
+    font-size: 10px;
+    justify-content: center;
+    padding: 10px 7px;
+  }
+  .source-choices svg {
+    flex: none;
+  }
+  .result-item {
+    gap: 8px;
+  }
+  .result-item img {
+    width: 45px;
+    height: 45px;
+  }
+  .result-item h4 {
+    font-size: 10px;
+  }
+  .select-btn {
+    font-size: 10px;
+    padding: 8px;
+  }
+  .selected-panel {
+    padding: 12px;
+  }
+  .metadata-form .form-actions {
+    grid-column: 1;
+  }
+}
 </style>

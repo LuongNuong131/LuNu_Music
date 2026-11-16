@@ -1,33 +1,325 @@
-<!-- src/components/QueuePanel.vue -->
 <template>
-  <Teleport to="body">
-    <Transition name="slide">
-      <div v-if="visible" class="queue-overlay" @click.self="emit('close')">
-        <aside class="queue-panel" role="dialog" aria-modal="true" aria-labelledby="queue-title">
-          <div class="queue-header"><div><p class="queue-kicker">PLAYBACK</p><h3 id="queue-title">Hàng đợi</h3></div><button type="button" class="close-btn" @click="emit('close')" aria-label="Đóng hàng đợi">×</button></div>
-          <div class="queue-summary"><span><strong>{{ queue.length + (currentSong ? 1 : 0) }}</strong> bài trong phiên</span><span class="queue-live"><i></i> LIVE</span></div>
-          <div class="queue-section" v-if="currentSong"><p class="section-label">ĐANG PHÁT</p><div class="queue-item now-playing"><div class="q-art active-art"><img :src="currentSong.cover || fallbackCover" :alt="`Bìa ${currentSong.title}`" @error="handleImageError" /><span aria-hidden="true">▶</span></div><div class="q-info"><div class="q-title">{{ currentSong.title }}</div><div class="q-artist">{{ currentSong.artist }}</div></div><div class="playing-bars"><i></i><i></i><i></i></div></div></div>
-          <div class="queue-section next-section"><div class="section-head"><p class="section-label">TIẾP THEO <span>· {{ queue.length }}</span></p><button v-if="queue.length" type="button" class="clear-btn" @click="emit('clear')">Xoá hết</button></div><TransitionGroup name="list" tag="div" class="queue-list" v-if="queue.length"><div class="queue-item" v-for="(song, index) in queue" :key="song.id + '-' + index" role="button" tabindex="0" @click="emit('play', song)" @keydown.enter="emit('play', song)" @keydown.space.prevent="emit('play', song)"><span class="q-index">{{ String(index + 1).padStart(2, '0') }}</span><div class="q-art"><img :src="song.cover || fallbackCover" :alt="`Bìa ${song.title}`" @error="handleImageError" /></div><div class="q-info"><div class="q-title">{{ song.title }}</div><div class="q-artist">{{ song.artist }}</div></div><button type="button" class="q-remove" @click.stop="emit('remove', index)" aria-label="Xóa khỏi hàng đợi">×</button></div></TransitionGroup><div v-else class="empty-queue"><div>⌁</div><p>Hàng đợi đang trống</p><span>Thêm bài hát từ menu tuỳ chọn.</span></div></div>
-          <div class="queue-footer">Mọi thay đổi chỉ lưu trên thiết bị này.</div>
+  <Teleport to="body"
+    ><Transition name="queue-reveal"
+      ><div v-if="visible" class="queue-overlay" @click.self="emit('close')">
+        <aside
+          ref="panelRef"
+          class="queue-panel"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="queue-title"
+          tabindex="-1"
+        >
+          <header class="queue-header">
+            <div>
+              <h2 id="queue-title">Hàng đợi</h2>
+              <p>{{ queue.length }} bài hát tiếp theo</p>
+            </div>
+            <button class="queue-icon" aria-label="Đóng hàng đợi" @click="emit('close')">
+              <X :size="22" />
+            </button>
+          </header>
+          <section v-if="currentSong" class="queue-current">
+            <h3>Đang phát</h3>
+            <div class="queue-current-song">
+              <img :src="songArtwork(currentSong)" :alt="`Bìa ${currentSong.title}`" />
+              <div>
+                <strong>{{ currentSong.title }}</strong><small>{{ currentSong.artist }}</small>
+              </div>
+              <AudioLines :size="21" />
+            </div>
+          </section>
+          <div class="queue-section-heading">
+            <h3>Tiếp theo</h3>
+            <button v-if="queue.length" @click="emit('clear')">
+              <Trash2 :size="14" /> Xóa hàng đợi
+            </button>
+          </div>
+          <div v-if="queue.length" class="queue-list">
+            <article v-for="(song, index) in queue" :key="`${song.id}-${index}`" class="queue-item">
+              <span>{{ String(index + 1).padStart(2, '0') }}</span><button
+                class="queued-song"
+                @click="emit('play', song)"
+                :aria-label="`Phát ${song.title} từ hàng đợi`"
+              >
+                <img :src="songArtwork(song)" :alt="`Bìa ${song.title}`" loading="lazy" /><span
+                  ><strong>{{ song.title }}</strong
+                  ><small>{{ song.artist }}</small></span
+                ></button
+              ><button
+                class="queue-icon remove-button"
+                :aria-label="`Xóa ${song.title} khỏi hàng đợi`"
+                @click="emit('remove', index)"
+              >
+                <X :size="17" />
+              </button>
+            </article>
+          </div>
+          <div v-else class="queue-empty">
+            <ListMusic :size="35" />
+            <h3>Để âm nhạc tiếp nối.</h3>
+            <p>Thêm bài hát từ thư viện để tạo một phiên nghe theo cách của bạn.</p>
+          </div>
+          <p class="queue-footer">Hàng đợi được lưu trên thiết bị này.</p>
         </aside>
-      </div>
-    </Transition>
-  </Teleport>
+      </div></Transition
+    ></Teleport
+  >
 </template>
-
 <script setup>
-defineProps({ visible: Boolean, currentSong: Object, queue: Array });
+import { ref, toRef } from 'vue';
+import { AudioLines, ListMusic, Trash2, X } from '@lucide/vue';
+import { songArtwork } from '../utils/artwork';
+import { useDialogFocus } from '../composables/useDialogFocus';
+const props = defineProps({
+  visible: Boolean,
+  currentSong: Object,
+  queue: { type: Array, default: () => [] },
+});
 const emit = defineEmits(['close', 'remove', 'clear', 'play']);
-const fallbackCover = '/images/ChoCiu.jpg';
-const handleImageError = (event) => {
-  const image = event.currentTarget;
-  if (!image || image.dataset.fallbackApplied === 'true') return;
-  image.dataset.fallbackApplied = 'true';
-  image.src = fallbackCover;
-};
+const panelRef = ref(null);
+useDialogFocus(toRef(props, 'visible'), panelRef, () => emit('close'));
 </script>
-
 <style scoped>
-.queue-overlay { position: fixed; inset: 0; z-index: 290; display: flex; justify-content: flex-end; background: rgba(3,5,9,.58); backdrop-filter: blur(5px); }.queue-panel { display: flex; flex-direction: column; width: 355px; height: 100%; padding: 27px 20px 17px; border-left: 1px solid rgba(255,255,255,.12); background: linear-gradient(180deg, color-mix(in srgb, var(--glass-bg) 96%, transparent), color-mix(in srgb, var(--bg-deep) 86%, transparent) 85%); box-shadow: -24px 0 80px rgba(0,0,0,.3), -1px 0 0 rgba(255,255,255,.04) inset; backdrop-filter: blur(34px) saturate(1.24); overflow-y: auto; }.queue-header { display: flex; align-items: flex-start; justify-content: space-between; }.queue-kicker { color: var(--gold); font: 9px var(--font-mono); letter-spacing: 1.8px; }.queue-header h3 { margin-top: 6px; color: var(--text-main); font: 600 25px var(--font-display); letter-spacing: -.8px; }.close-btn { display: flex; align-items: center; justify-content: center; width: 32px; height: 32px; border: 1px solid var(--hairline); border-radius: 10px; background: var(--glass); color: var(--text-main); cursor: pointer; font-size: 21px; }.close-btn:hover { color: var(--gold); background: var(--glass-strong); }.queue-summary { display: flex; align-items: center; justify-content: space-between; margin: 21px 0 29px; padding: 11px 12px; border: 1px solid var(--hairline-soft); border-radius: 10px; background: var(--glass); color: var(--text-sub); font-size: 10px; }.queue-summary strong { color: var(--text-main); }.queue-live { display: flex; align-items: center; gap: 6px; color: var(--mint); font: 8px var(--font-mono); letter-spacing: 1px; }.queue-live i { width: 5px; height: 5px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 10px var(--mint); }.section-label { margin-bottom: 11px; color: var(--gold-dim); font: 600 9px var(--font-mono); letter-spacing: 1.5px; }.section-label span { color: var(--text-faint); }.next-section { margin-top: 28px; }.section-head { display: flex; align-items: center; justify-content: space-between; }.clear-btn { border: 0; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 10px; }.clear-btn:hover { color: var(--crimson); }.queue-list { display: flex; flex-direction: column; gap: 4px; }.queue-item { display: flex; align-items: center; gap: 10px; min-height: 58px; padding: 8px; border: 1px solid transparent; border-radius: 12px; }.queue-item:hover { border-color: var(--hairline-soft); background: var(--glass); }.queue-item.now-playing { min-height: 68px; padding: 10px; border-color: rgba(245,185,122,.17); background: linear-gradient(100deg, rgba(245,185,122,.12), rgba(245,185,122,.025)); }.q-index { width: 20px; color: var(--text-faint); text-align: center; font: 9px var(--font-mono); }.q-art { position: relative; width: 39px; height: 39px; flex: 0 0 auto; overflow: hidden; border-radius: 9px; }.q-art img { width: 100%; height: 100%; object-fit: cover; }.active-art { width: 47px; height: 47px; }.active-art::after { content: ''; position: absolute; inset: 0; background: linear-gradient(130deg, rgba(245,185,122,.25), transparent); }.active-art span { position: absolute; right: 4px; bottom: 4px; z-index: 1; display: flex; align-items: center; justify-content: center; width: 17px; height: 17px; border-radius: 50%; background: var(--gold); color: #171019; font-size: 7px; }.q-info { flex: 1; min-width: 0; }.q-title, .q-artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.q-title { color: var(--text-main); font-size: 11px; font-weight: 700; }.q-artist { margin-top: 5px; color: var(--text-sub); font-size: 10px; }.q-remove { border: 0; background: transparent; color: var(--text-faint); cursor: pointer; font-size: 18px; }.q-remove:hover { color: var(--crimson); }.playing-bars { display: flex; align-items: end; gap: 2px; height: 16px; margin-left: 3px; color: var(--gold); }.playing-bars i { width: 3px; height: 7px; border-radius: 3px; background: currentColor; animation: eq .8s ease-in-out infinite; }.playing-bars i:nth-child(2) { height: 14px; animation-delay: -.28s; }.playing-bars i:nth-child(3) { height: 10px; animation-delay: -.54s; }.empty-queue { padding: 35px 10px; border: 1px dashed var(--hairline); border-radius: 14px; text-align: center; }.empty-queue > div { color: var(--gold); font-size: 25px; }.empty-queue p { margin-top: 10px; color: var(--text-main); font: 600 14px var(--font-display); }.empty-queue span { display: block; margin-top: 6px; color: var(--text-faint); font-size: 10px; }.queue-footer { margin-top: auto; padding: 17px 0 0; border-top: 1px solid var(--hairline-soft); color: var(--text-faint); font-size: 9px; }.slide-enter-active, .slide-leave-active { transition: opacity .28s var(--ease-out); }.slide-enter-from, .slide-leave-to { opacity: 0; }.slide-enter-active .queue-panel, .slide-leave-active .queue-panel { transition: transform .44s var(--spring); }.slide-enter-from .queue-panel, .slide-leave-to .queue-panel { transform: translateX(100%); }.list-enter-active, .list-leave-active { transition: opacity .28s var(--spring-soft), transform .34s var(--spring); }.list-enter-from, .list-leave-to { opacity: 0; transform: translateX(10px); }
-@media (max-width: 640px) { .queue-panel { width: min(100%, 400px); } }
+.queue-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 320;
+  display: flex;
+  justify-content: flex-end;
+  background: #080b1880;
+  backdrop-filter: blur(5px);
+}
+.queue-panel {
+  display: flex;
+  flex-direction: column;
+  width: min(440px, 100%);
+  height: 100dvh;
+  padding: 28px 24px 18px;
+  border-left: 1px solid var(--hairline);
+  background: var(--panel-solid);
+  color: var(--text-main);
+  outline: none;
+}
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+}
+.queue-header h2 {
+  font-size: 24px;
+  letter-spacing: -0.6px;
+}
+.queue-header p {
+  font-size: 11px;
+  color: var(--text-sub);
+  margin-top: 9px;
+}
+.queue-icon {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 40px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-sub);
+}
+.queue-icon:hover {
+  background: var(--accent-soft);
+  color: var(--gold);
+}
+.queue-current {
+  margin-top: 30px;
+}
+.queue-current h3,
+.queue-section-heading h3 {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-sub);
+}
+.queue-current-song {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-top: 13px;
+  padding: 13px;
+  border: 1px solid var(--hairline);
+  border-radius: 12px;
+  background: var(--accent-soft);
+}
+.queue-current-song img {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.queue-current-song > div {
+  display: grid;
+  gap: 8px;
+  flex: 1;
+  min-width: 0;
+}
+.queue-current-song strong {
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-weight: 500;
+}
+.queue-current-song small {
+  font-size: 10px;
+  color: var(--text-sub);
+}
+.queue-current-song > svg {
+  color: var(--gold);
+  flex: none;
+}
+.queue-section-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 15px;
+  margin: 29px 0 13px;
+}
+.queue-section-heading button {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 34px;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+  font-size: 10px;
+}
+.queue-section-heading button:hover {
+  color: var(--crimson);
+}
+.queue-list {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+}
+.queue-item > span {
+  font-size: 9px;
+  color: var(--text-faint);
+  width: 19px;
+  flex: none;
+}
+.queued-song {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  background: none;
+  color: var(--text-main);
+  text-align: left;
+}
+.queued-song img {
+  width: 43px;
+  height: 43px;
+  border-radius: 8px;
+  object-fit: cover;
+}
+.queued-song > span {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+  flex: 1;
+}
+.queued-song strong {
+  font-size: 11px;
+  font-weight: 500;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.queued-song small {
+  font-size: 10px;
+  color: var(--text-sub);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.remove-button:hover {
+  color: var(--crimson);
+}
+.queue-empty {
+  display: grid;
+  justify-items: center;
+  align-content: center;
+  gap: 16px;
+  flex: 1;
+  text-align: center;
+  padding: 30px 15px;
+}
+.queue-empty svg {
+  color: var(--gold);
+}
+.queue-empty h3 {
+  font-size: 18px;
+  font-weight: 500;
+}
+.queue-empty p {
+  font-size: 12px;
+  color: var(--text-sub);
+  line-height: 1.8;
+  max-width: 280px;
+}
+.queue-footer {
+  padding-top: 18px;
+  margin-top: 18px;
+  border-top: 1px solid var(--hairline);
+  font-size: 10px;
+  color: var(--text-faint);
+}
+.queue-reveal-enter-active,
+.queue-reveal-leave-active {
+  transition: opacity 0.15s;
+}
+.queue-reveal-enter-active .queue-panel,
+.queue-reveal-leave-active .queue-panel {
+  transition: transform 0.2s ease;
+}
+.queue-reveal-enter-from,
+.queue-reveal-leave-to {
+  opacity: 0;
+}
+.queue-reveal-enter-from .queue-panel,
+.queue-reveal-leave-to .queue-panel {
+  transform: translateX(100%);
+}
+@media (max-width: 760px) {
+  .queue-panel {
+    padding: 23px 19px 20px;
+  }
+  .queue-header h2 {
+    font-size: 23px;
+  }
+  .queue-current-song strong {
+    font-size: 11px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .queue-reveal-enter-active,
+  .queue-reveal-leave-active,
+  .queue-reveal-enter-active .queue-panel,
+  .queue-reveal-leave-active .queue-panel {
+    transition: none;
+  }
+}
 </style>

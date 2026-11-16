@@ -1,3 +1,5 @@
+> **Bản nâng cấp phòng nghe LuNu:** giao diện mới trên desktop/mobile, tìm kiếm tiếng Việt không dấu, thư viện có phân trang, hàng đợi đúng thứ tự và trạng thái thêm nhạc đến khi hoàn tất. Xem [thiết kế](docs/DESIGN.md) và [cách tải nhạc qua máy cá nhân hoặc worker riêng](docs/MEDIA_WORKER.md).
+
 <div align="center">
   <img src="https://capsule-render.vercel.app/api?type=waving&color=0:0f172a,50:7c3aed,100:f5b97a&height=220&section=header&text=LuNu%20Music&fontSize=64&fontColor=ffffff&fontAlignY=38&desc=Listen%20deeply.%20Curate%20your%20own%20room.&descAlignY=60&descSize=17" alt="LuNu Music banner" width="100%" />
 

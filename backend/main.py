@@ -25,6 +25,7 @@ from typing import Literal, Optional
 import cloudinary
 import cloudinary.uploader
 import yt_dlp
+from media_gateway import MediaDownloadError, download_from_worker, validate_media_request, worker_config, worker_status, youtube_circuit
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -62,8 +63,8 @@ RENDER_MAX_DOWNLOAD_BYTES = int(os.getenv('LUNU_RENDER_MAX_DOWNLOAD_BYTES', str(
 CHAT_ATTACHMENT_MAX_BYTES = int(os.getenv('LUNU_CHAT_ATTACHMENT_MAX_BYTES', str(25 * 1024 * 1024)))
 MAX_AUDIO_UPLOAD_BYTES = int(os.getenv('LUNU_AUDIO_UPLOAD_MAX_BYTES', str(200 * 1024 * 1024)))
 YOUTUBE_CLIENTS = tuple(dict.fromkeys(
-    item.strip() for item in os.getenv('YOUTUBE_PLAYER_CLIENTS', 'web_embedded,mweb,web,tv').split(',') if item.strip()
-)) or ('web_embedded', 'mweb', 'web', 'tv')
+    item.strip() for item in os.getenv('YOUTUBE_PLAYER_CLIENTS', 'default').split(',') if item.strip()
+)) or ('default',)
 YOUTUBE_API_KEY = os.getenv('YOUTUBE_API_KEY', '').strip()
 YOUTUBE_API_TIMEOUT_SECONDS = int(os.getenv('YOUTUBE_API_TIMEOUT_SECONDS', '20'))
 JAMENDO_CLIENT_ID = os.getenv('JAMENDO_CLIENT_ID', '').strip()
@@ -482,10 +483,11 @@ def _youtube_cookie_file() -> Optional[Path]:
     cookies_b64 = os.getenv('YOUTUBE_COOKIES_B64', '').strip()
     source: Optional[Path] = Path(configured_path).expanduser() if configured_path else None
     if cookies_b64:
-        source = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-source-{os.getpid()}.txt'
+        source = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-source-{os.getpid()}-{secrets.token_hex(4)}.txt'
         try:
             decoded = base64.b64decode(cookies_b64, validate=True)
             source.write_bytes(decoded)
+            source.chmod(0o600)
         except Exception as error:
             raise RuntimeError(f'YOUTUBE_COOKIES_B64 không hợp lệ: {error}') from error
     if not source or not source.is_file():
@@ -499,6 +501,9 @@ def _youtube_cookie_file() -> Optional[Path]:
     writable = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-{os.getpid()}-{secrets.token_hex(4)}.txt'
     try:
         shutil.copyfile(source, writable)
+        writable.chmod(0o600)
+        if cookies_b64:
+            source.unlink(missing_ok=True)
     except OSError as error:
         raise RuntimeError(f'Không thể chuẩn bị file cookie YouTube: {error}') from error
     return writable
@@ -509,26 +514,29 @@ def youtube_cookie_status() -> dict:
     has_b64 = bool(os.getenv('YOUTUBE_COOKIES_B64', '').strip())
     path_exists = bool(configured_path and Path(configured_path).expanduser().is_file())
     configured = has_b64 or path_exists
-    return {
-        'configured': configured,
-        'source': 'base64' if has_b64 else ('file' if path_exists else None),
-        'valid_format': None,
-    }
+    valid_format = False
+    if configured:
+        try:
+            content = base64.b64decode(os.getenv('YOUTUBE_COOKIES_B64', '').strip(), validate=True).decode('utf-8') if has_b64 else Path(configured_path).expanduser().read_text(encoding='utf-8')
+            valid_format = '# Netscape HTTP Cookie File' in content or '#HttpOnly_' in content
+        except (ValueError, OSError, UnicodeError):
+            valid_format = False
+    return {'configured': configured, 'source': 'base64' if has_b64 else ('file' if path_exists else None), 'valid_format': valid_format}
 
 
-def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'web', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None) -> dict:
+
+def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'default', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None) -> dict:
     opts = {
-        'extractor_args': {'youtube': {'player_client': [client]}},
+        'extractor_args': {'youtube': {'player_client': [client]}} if client != 'default' else {},
         'js_runtimes': {'node': {}},
-        'remote_components': ['ejs:github'],
         'http_headers': {
             'User-Agent': 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36'
         },
         'source_address': '0.0.0.0',
         'socket_timeout': 30,
-        'retries': 3,
-        'extractor_retries': 3,
-        'fragment_retries': 3,
+        'retries': 1,
+        'extractor_retries': 1,
+        'fragment_retries': 1,
         'check_formats': 'selected',
     }
     if is_download:
@@ -1379,8 +1387,20 @@ def run_ffmpeg(input_path: Path, output_path: Path, mode: str) -> None:
 
 
 def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
+    validate_media_request(video_id, mode)
+    worker_url, _ = worker_config()
+    if worker_url:
+        # Do not fall back to Render when the configured worker fails: its egress
+        # may still be blocked, and users should see the actionable worker error.
+        return download_from_worker(video_id, mode, temp_dir, MAX_AUDIO_UPLOAD_BYTES if mode == 'song' else RENDER_MAX_DOWNLOAD_BYTES)
+    return _download_youtube_locally(video_id, temp_dir, mode)
+
+
+def _download_youtube_locally(video_id: str, temp_dir: str, mode: str) -> Path:
+    validate_media_request(video_id, mode)
+    youtube_circuit.check()
     url = f'https://www.youtube.com/watch?v={video_id}'
-    audio_selector = 'best[acodec!=none][ext=m4a]/best[acodec!=none][ext=webm]/best[acodec!=none]/best'
+    audio_selector = 'bestaudio[ext=m4a]/bestaudio/best[acodec!=none]'
     video_selector = 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'
     profiles = [(client, audio_selector if mode == 'song' else video_selector) for client in YOUTUBE_CLIENTS]
     errors = []
@@ -1388,6 +1408,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
     for profile_index, (client, selector) in enumerate(profiles):
         if profile_index:
             time.sleep(min(6, 1.5 * (2 ** (profile_index - 1))))
+        options = {}
         try:
             options = get_ydl_opts(
                 True,
@@ -1395,7 +1416,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
                 client=client,
                 format_selector=selector,
                 postprocessors=[] if mode == 'video' else None,
-                max_filesize=RENDER_MAX_DOWNLOAD_BYTES if mode == 'video' else None,
+                max_filesize=RENDER_MAX_DOWNLOAD_BYTES if mode == 'video' else MAX_AUDIO_UPLOAD_BYTES,
             )
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -1415,7 +1436,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
                     has_audio = any(item.get('acodec') not in (None, 'none') for item in formats)
                     if not has_audio:
                         raise RuntimeError('YouTube chỉ trả thumbnail/hình ảnh cho video này, không có audio stream để tải.')
-                ydl.download([url])
+                ydl.process_ie_result(info, download=True)
             files = available_media_files(temp_dir, video_id)
             if mode == 'song':
                 mp3_files = sorted(Path(temp_dir).glob(f'{video_id}*.mp3'))
@@ -1443,7 +1464,7 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
             lower_error = error_text.lower()
             if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
                 errors.append(f'{client}: Render không có route mạng tới stream YouTube (Errno 101); đã thử lại với IPv4/backoff')
-            elif any(token in lower_error for token in ('http error 429', 'too many requests', 'http error 403', 'forbidden', 'sign in to confirm', 'not a bot', 'challenge', 'failed to extract any player response')):
+            elif any(token in lower_error for token in ('http error 429', 'too many requests', 'http error 403', 'forbidden', 'sign in to confirm', 'not a bot', 'challenge')):
                 blocked_by_youtube = True
                 if youtube_cookie_status()['configured']:
                     errors.append(f'{client}: YouTube đang giới hạn/challenge IP hoặc session (429/403); cookie có thể không cùng phiên')
@@ -1454,9 +1475,14 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
             for item in available_media_files(temp_dir, video_id):
                 item.unlink(missing_ok=True)
             if blocked_by_youtube:
+                youtube_circuit.block(max(30, int(os.getenv('YOUTUBE_COOLDOWN_SECONDS', '900'))))
                 break
+        finally:
+            cookie_path = options.get('cookiefile')
+            if cookie_path:
+                Path(cookie_path).unlink(missing_ok=True)
     if blocked_by_youtube:
-        raise RuntimeError('YOUTUBE_RATE_LIMITED: YouTube trả HTTP 429/403 hoặc challenge từ IP Render. Đã dừng retry để tránh làm nặng rate-limit. Hãy chờ, dùng worker/máy khác hoặc upload file audio trực tiếp.')
+        raise MediaDownloadError('YOUTUBE_RATE_LIMITED', 'YouTube đang từ chối tải từ máy chủ (403/429 hoặc yêu cầu xác minh). Hãy cấu hình máy tải nhạc riêng hoặc thêm file audio từ thiết bị. API key tìm kiếm không khắc phục được lỗi tải này.', youtube_circuit.remaining())
     raise RuntimeError('Không tải được media từ YouTube: ' + ' | '.join(errors[-4:]))
 
 
@@ -1525,7 +1551,7 @@ def process_and_upload_song(job_id: str, request_data: dict) -> None:
             notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất nhạc đã được duyệt', f'Bài “{song_data["title"]}” đã được admin duyệt và thêm vào thư viện LuNu Music.', 'proposal-approved')
         print(f'✅ Đã thêm bài hát {media_key}: {song_data["title"]}')
     except Exception as error:
-        set_import_job(job_id, status='failed', message=str(error))
+        set_import_job(job_id, status='failed', message=str(error), error_code=getattr(error, 'code', 'IMPORT_FAILED'), retry_after=getattr(error, 'retry_after', 0))
         if proposal_id and client:
             update_proposal(client, proposal_id, {'status': 'failed', 'job_id': job_id, 'rejection_reason': str(error)[:1000]})
             notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất nhạc chưa thể xử lý', f'Bài “{request_data.get("title", "")}" chưa được thêm: {error}', 'proposal-failed')
@@ -1571,7 +1597,7 @@ def process_uploaded_song(job_id: str, source_path: Path, request_data: dict) ->
         set_import_job(job_id, status='completed', message='Đã upload file audio và thêm vào thư viện.', song=song_data)
         print(f'✅ Đã upload bài hát {media_key}: {song_data["title"]}')
     except Exception as error:
-        set_import_job(job_id, status='failed', message=str(error))
+        set_import_job(job_id, status='failed', message=str(error), error_code=getattr(error, 'code', 'IMPORT_FAILED'), retry_after=getattr(error, 'retry_after', 0))
         print(f'❌ Lỗi upload audio {job_id}: {error}')
     finally:
         if file_path and file_path.exists():
@@ -1637,7 +1663,7 @@ def process_and_upload_video(job_id: str, request_data: dict) -> None:
             notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất video đã được duyệt', f'Video “{video_data["title"]}” đã được admin duyệt và thêm vào LuNu Tea Room.', 'proposal-approved')
         print(f'✅ Đã thêm video {media_key}: {video_data["title"]}')
     except Exception as error:
-        set_import_job(job_id, status='failed', message=str(error))
+        set_import_job(job_id, status='failed', message=str(error), error_code=getattr(error, 'code', 'IMPORT_FAILED'), retry_after=getattr(error, 'retry_after', 0))
         if proposal_id and client:
             update_proposal(client, proposal_id, {'status': 'failed', 'job_id': job_id, 'rejection_reason': str(error)[:1000]})
             notify_proposal_status(client, request_data.get('proposal', {}), 'Đề xuất video chưa thể xử lý', f'Video “{request_data.get("title", "")}" chưa được thêm: {error}', 'proposal-failed')
@@ -1812,14 +1838,6 @@ async def broadcast_chat_event(conversation_id: str, event: dict) -> None:
 @app.get('/api/health')
 async def health() -> dict:
     cookie_info = youtube_cookie_status()
-    try:
-        cookie_path = _youtube_cookie_file()
-        cookie_info['valid_format'] = bool(cookie_path)
-        if cookie_path:
-            cookie_path.unlink(missing_ok=True)
-    except Exception as error:
-        cookie_info['valid_format'] = False
-        cookie_info['error'] = str(error)
     return {
         'ok': True,
         'supabase_configured': supabase is not None,
@@ -1831,7 +1849,9 @@ async def health() -> dict:
         'video_pipeline': 'preflight-450mb-chunked',
         'video_download_limit_bytes': RENDER_MAX_DOWNLOAD_BYTES,
         'audio_upload_max_bytes': MAX_AUDIO_UPLOAD_BYTES,
-        'youtube_download_policy': 'fail-fast-on-429-403; use-audio-upload-fallback',
+        'youtube_download_policy': 'remote-worker-if-configured; local-cooldown-on-429-403',
+        'media_worker': worker_status(),
+        'youtube_cooldown_seconds': youtube_circuit.remaining(),
         'direct_audio_providers': {
             'jamendo': {'configured': bool(JAMENDO_CLIENT_ID), 'download_policy': 'license-and-download-allowed-only'},
             'internet_archive': {'configured': True, 'download_policy': 'creative-commons-or-public-domain-only'},
@@ -1843,7 +1863,10 @@ async def health() -> dict:
         'youtube_clients': list(YOUTUBE_CLIENTS),
         'youtube_cookie': cookie_info,
         'js_runtime': 'node',
-        'ejs_remote_components': ['ejs:github'],
+        'ejs_remote_components': [],
+        'ejs_source': 'installed-yt-dlp-ejs',
+        'ffmpeg_available': bool(shutil.which('ffmpeg')),
+        'node_available': bool(shutil.which('node')),
     }
 
 
@@ -2886,11 +2909,13 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
     variants = search_query_variants(normalized_query)
     best_results = []
     try:
-        api_results = rank_search_results(search_youtube_data_api(normalized_query), normalized_query)
+        api_results = rank_search_results(await asyncio.to_thread(search_youtube_data_api, normalized_query), normalized_query)
         if api_results:
             return {'success': True, 'results': api_results[:10], 'source': 'youtube-data-api'}
     except Exception as error:
         errors.append(f'youtube-data-api: {error}')
+    if youtube_circuit.remaining():
+        return {'success': False, 'results': [], 'message': 'Tìm kiếm YouTube đang tạm nghỉ. Thử nguồn audio khác hoặc kiểm tra API key tìm kiếm.'}
     for client in (['android', 'web'], ['web'], ['tv']):
         client_results = []
         for variant in variants:
@@ -2953,6 +2978,13 @@ async def search_youtube(query: str = Query(min_length=2, max_length=120)) -> di
 
 @app.post('/api/songs/add', status_code=status.HTTP_202_ACCEPTED)
 async def add_song(request: AddSongRequest, background_tasks: BackgroundTasks, _: dict = Depends(require_admin)) -> dict:
+    if request.provider == 'youtube':
+        try:
+            validate_media_request(request.source_id, 'song')
+            if not worker_config()[0]:
+                youtube_circuit.check()
+        except MediaDownloadError as error:
+            raise HTTPException(status_code=422 if error.code == 'INVALID_VIDEO_ID' else 503, detail={'code': error.code, 'message': str(error), 'retry_after': error.retry_after}) from None
     job_id = str(uuid.uuid4())
     import_jobs[job_id] = {'job_id': job_id, 'status': 'queued', 'message': 'Đã nhận yêu cầu import.'}
     background_tasks.add_task(process_and_upload_song, job_id, request.model_dump())

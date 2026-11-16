@@ -1,69 +1,384 @@
 <template>
-  <aside class="glass-sidebar" :class="{ 'mobile-open': mobileOpen }" aria-label="Điều hướng LuNu Music">
-    <div class="sidebar-topline"><div class="sidebar-brand"><div class="brand-mark">LN</div><div><strong>LuNu</strong><span>Music library</span></div></div><button v-if="mobileOpen" type="button" class="drawer-close" aria-label="Đóng menu" @click="emit('close')">×</button></div>
+  <aside
+    class="glass-sidebar"
+    :class="{ 'mobile-open': mobileOpen }"
+    aria-label="Điều hướng LuNu Music"
+    :inert="isPhone && !mobileOpen"
+  >
+    <div class="sidebar-topline">
+      <button class="sidebar-brand" @click="navigate('home')" aria-label="LuNu Music, trang chủ">
+        <BrandMark /><span
+          ><strong>LuNu<span>music</span></strong
+          ><small>Giai điệu của riêng bạn</small></span
+        ></button
+      ><button v-if="mobileOpen" class="drawer-close" aria-label="Đóng menu" @click="emit('close')">
+        <X :size="21" />
+      </button>
+    </div>
     <nav class="nav-menu" aria-label="Điều hướng chính">
-      <section v-for="group in navGroups" :key="group.label" class="nav-group" :aria-labelledby="`nav-${group.label.toLowerCase()}`">
-        <h2 :id="`nav-${group.label.toLowerCase()}`" class="sidebar-label">{{ group.label }}</h2>
-        <button v-for="item in group.items" :key="item.view" type="button" :class="{ active: currentView === item.view }" :aria-current="currentView === item.view ? 'page' : undefined" @click="navigate(item.view)">
-          <span aria-hidden="true">{{ item.icon }}</span>{{ item.label }}
+      <section v-for="group in navGroups" :key="group.label" class="nav-group">
+        <h2 class="sidebar-label">{{ group.label }}</h2>
+        <button
+          v-for="item in group.items"
+          :key="item.view"
+          :class="{ active: currentView === item.view }"
+          :aria-current="currentView === item.view ? 'page' : undefined"
+          @click="navigate(item.view)"
+        >
+          <component :is="item.icon" :size="19" :stroke-width="1.8" /><span>{{ item.label }}</span
+          ><span v-if="item.view === 'liked' && likedCount" class="nav-count">{{
+            likedCount
+          }}</span>
         </button>
       </section>
     </nav>
-    <button type="button" class="theme-switcher" :aria-label="themeState === 'dark' ? 'Chuyển sang Light mode' : 'Chuyển sang Dark mode'" @click="toggleTheme"><span class="theme-icon">{{ themeState === 'dark' ? '☾' : '☀' }}</span><span><small>ATMOSPHERE</small><strong>{{ themeState === 'dark' ? 'Dark room' : 'Light room' }}</strong></span><b>↗</b></button>
-    <div class="sidebar-note"><span class="note-orb">◖</span><div><small>NOW CURATING</small><p>Những âm thanh<br />đáng nhớ.</p></div></div>
-    <div class="user-info"><img v-if="authState.user?.avatar_url" :src="authState.user.avatar_url" :alt="authState.user.display_name || authState.user.username" class="avatar avatar-image" @error="handleAvatarError" /><div v-else class="avatar">{{ (authState.user?.display_name || authState.user?.username || 'U').slice(0, 1).toUpperCase() }}</div><div v-if="authState.user?.avatar_url" class="avatar avatar-fallback" hidden>{{ (authState.user?.display_name || authState.user?.username || 'U').slice(0, 1).toUpperCase() }}</div><div class="user-copy"><strong>{{ authState.user?.display_name || authState.user?.username || 'Listener' }}</strong><span>@{{ authState.user?.username || 'listener' }} · {{ authState.user?.role === 'admin' ? 'Administrator' : 'Member' }}</span></div><button type="button" @click="logoutUser" class="logout-btn" aria-label="Đăng xuất">↗</button></div>
+    <button class="sidebar-room" @click="navigate('rooms')">
+      <Headphones :size="25" /><strong>Nghe cùng nhau</strong
+      ><span>Mời một người, chung giai điệu.</span><b>Mở phòng nghe <ArrowUpRight :size="16" /></b>
+    </button>
+    <button class="theme-switcher" @click="toggleTheme" :aria-pressed="themeState === 'light'">
+      <component :is="themeState === 'dark' ? Sun : Moon" :size="18" /><span>{{
+        themeState === 'dark' ? 'Giao diện sáng' : 'Giao diện tối'
+      }}</span>
+    </button>
+    <div class="user-info">
+      <button class="profile-button" @click="navigate('account')">
+        <img
+          v-if="avatarUrl"
+          :src="avatarUrl"
+          alt=""
+          class="avatar"
+          @error="avatarFailed = true"
+        /><span v-else class="avatar">{{ name.slice(0, 1).toUpperCase() }}</span
+        ><span class="user-copy"
+          ><strong>{{ name }}</strong
+          ><small>{{
+            authState.user?.role === 'admin' ? 'Quản trị viên' : 'Thành viên LuNu'
+          }}</small></span
+        ></button
+      ><button @click="logoutUser" class="logout-btn" aria-label="Đăng xuất">
+        <LogOut :size="18" />
+      </button>
+    </div>
   </aside>
 </template>
-
 <script setup>
-import { computed } from 'vue';
+import { computed, ref, onMounted, onBeforeUnmount } from 'vue';
+import {
+  Compass,
+  Heart,
+  ListMusic,
+  Mic2,
+  Clapperboard,
+  Radio,
+  Users,
+  MessageCircle,
+  CircleUserRound,
+  Text,
+  Lightbulb,
+  Settings2,
+  Headphones,
+  ArrowUpRight,
+  Sun,
+  Moon,
+  LogOut,
+  X,
+} from '@lucide/vue';
+import BrandMark from './BrandMark.vue';
 import { authState, currentView, logoutUser } from '../store/appState';
 import { themeState, toggleTheme } from '../store/themeState';
-
-defineProps({ mobileOpen: { type: Boolean, default: false } });
+import { useLibrary } from '../composables/useLibrary';
+defineProps({ mobileOpen: Boolean });
 const emit = defineEmits(['close']);
-const navGroups = computed(() => [
-  { label: 'LISTEN', items: [
-    { view: 'home', icon: '⌂', label: 'Tổng quan' },
-    { view: 'liked', icon: '♥', label: 'Yêu thích' },
-    { view: 'playlists', icon: '▤', label: 'Playlist' },
-    { view: 'artists', icon: '♬', label: 'Ca sĩ' },
-  ] },
-  { label: 'WATCH', items: [
-    { view: 'cinema', icon: '▶', label: 'LuNu Tea Room' },
-    { view: 'rooms', icon: '◉', label: 'Phòng nghe' },
-  ] },
-  { label: 'SOCIAL', items: [
-    { view: 'friends', icon: '♧', label: 'Bạn bè' },
-    { view: 'chat', icon: '✉', label: 'Chat' },
-  ] },
-  { label: 'ACCOUNT', items: [
-    { view: 'account', icon: '◎', label: 'Hồ sơ' },
-    { view: 'lyrics', icon: 'Aa', label: 'Lyrics Lab' },
-    { view: 'proposals', icon: '✧', label: 'Đề xuất media' },
-  ] },
-  ...(authState.user?.role === 'admin' ? [{ label: 'ADMIN', items: [{ view: 'admin', icon: '✦', label: 'Quản trị' }] }] : []),
-]);
-const handleAvatarError = (event) => {
-  const image = event.currentTarget;
-  if (!image) return;
-  image.hidden = true;
-  image.nextElementSibling?.removeAttribute('hidden');
+const { likedCount } = useLibrary();
+const name = computed(() => authState.user?.display_name || authState.user?.username || 'Bạn');
+const avatarFailed = ref(false);
+const avatarUrl = computed(() => !avatarFailed.value && authState.user?.avatar_url);
+const isPhone = ref(false);
+const media = window.matchMedia('(max-width: 760px)');
+const syncPhone = () => {
+  isPhone.value = media.matches;
 };
-const navigate = (view) => { currentView.value = view; emit('close'); };
+onMounted(() => {
+  syncPhone();
+  media.addEventListener('change', syncPhone);
+});
+onBeforeUnmount(() => media.removeEventListener('change', syncPhone));
+const navGroups = computed(() => [
+  {
+    label: 'Âm nhạc',
+    items: [
+      { view: 'home', icon: Compass, label: 'Khám phá' },
+      { view: 'liked', icon: Heart, label: 'Yêu thích' },
+      { view: 'playlists', icon: ListMusic, label: 'Playlist của bạn' },
+      { view: 'artists', icon: Mic2, label: 'Nghệ sĩ' },
+    ],
+  },
+  {
+    label: 'Kết nối',
+    items: [
+      { view: 'rooms', icon: Radio, label: 'Phòng nghe' },
+      { view: 'cinema', icon: Clapperboard, label: 'LuNu Tea Room' },
+      { view: 'friends', icon: Users, label: 'Bạn bè' },
+      { view: 'chat', icon: MessageCircle, label: 'Tin nhắn' },
+    ],
+  },
+  {
+    label: 'Không gian riêng',
+    items: [
+      { view: 'lyrics', icon: Text, label: 'Lời bài hát' },
+      { view: 'proposals', icon: Lightbulb, label: 'Đề xuất nhạc' },
+      { view: 'account', icon: CircleUserRound, label: 'Hồ sơ' },
+      ...(authState.user?.role === 'admin'
+        ? [{ view: 'admin', icon: Settings2, label: 'Quản trị' }]
+        : []),
+    ],
+  },
+]);
+const navigate = (view) => {
+  currentView.value = view;
+  emit('close');
+};
 </script>
-
 <style scoped>
-.glass-sidebar { display: flex; flex-direction: column; width: 244px; padding: 27px 18px 17px; border-right: 1px solid var(--hairline); background: linear-gradient(180deg, rgba(17,20,29,.95), rgba(10,12,18,.88)); }.sidebar-topline { display: block; }.sidebar-brand { display: flex; align-items: center; gap: 11px; padding: 0 10px 42px; }.brand-mark { display: grid; place-items: center; width: 35px; height: 35px; border: 1px solid rgba(245,185,122,.45); border-radius: 11px; background: linear-gradient(135deg, var(--gold), var(--coral)); color: #171218; font: 800 10px var(--font-mono); letter-spacing: -1px; box-shadow: 0 8px 25px rgba(245,185,122,.16); }.sidebar-brand strong { display: block; color: var(--text-main); font: 600 18px var(--font-display); letter-spacing: -.5px; }.sidebar-brand span { display: block; margin-top: 2px; color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1.1px; text-transform: uppercase; }.drawer-close { display: none; }.sidebar-label { padding: 0 10px 9px; color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1.8px; }.nav-menu { display: flex; flex: 1; flex-direction: column; gap: 17px; min-height: 0; overflow-y: auto; }.nav-group { display: grid; gap: 4px; }.nav-group .sidebar-label { padding-bottom: 3px; }.nav-menu button { display: flex; align-items: center; gap: 12px; width: 100%; padding: 12px 11px; border: 1px solid transparent; border-radius: 11px; background: transparent; color: var(--text-sub); text-align: left; cursor: pointer; font-size: 11px; transition: .2s ease; }.nav-menu button span { display: grid; place-items: center; width: 20px; color: var(--text-faint); font: 700 12px var(--font-mono); }.nav-menu button:hover, .nav-menu button.active { border-color: var(--hairline-soft); background: linear-gradient(90deg, rgba(245,185,122,.13), rgba(245,185,122,.025)); color: var(--text-main); }.nav-menu button.active span { color: var(--gold); }.theme-switcher { display:flex; align-items:center; gap:10px; width:100%; margin:0 9px 12px; padding:10px; border:1px solid var(--hairline-soft); border-radius:11px; background:rgba(255,255,255,.025); color:var(--text-sub); text-align:left; cursor:pointer; transition:.2s ease; }.theme-switcher:hover, .theme-switcher:focus-visible { border-color:rgba(245,185,122,.35); background:rgba(245,185,122,.08); color:var(--text-main); }.theme-icon { display:grid; place-items:center; width:25px; height:25px; border-radius:8px; background:rgba(245,185,122,.12); color:var(--gold); font-size:16px; }.theme-switcher > span:nth-child(2) { display:flex; flex:1; flex-direction:column; gap:3px; }.theme-switcher small { color:var(--text-faint); font:7px var(--font-mono); letter-spacing:1px; }.theme-switcher strong { color:var(--text-main); font-size:10px; font-weight:600; }.theme-switcher b { color:var(--text-faint); font:11px var(--font-mono); }.sidebar-note { display: flex; align-items: flex-start; gap: 11px; margin: auto 9px 28px; padding: 16px 10px; border: 1px solid rgba(245,185,122,.14); border-radius: 13px; background: radial-gradient(circle at 15% 10%, rgba(245,185,122,.12), transparent 65%), rgba(255,255,255,.025); }.note-orb { color: var(--gold); font-size: 20px; }.sidebar-note small { color: var(--gold-dim); font: 8px var(--font-mono); letter-spacing: 1.2px; }.sidebar-note p { margin-top: 7px; color: var(--text-sub); font: italic 14px/1.3 var(--font-display); }.user-info { display: flex; align-items: center; gap: 9px; padding: 13px 7px 0; border-top: 1px solid var(--hairline-soft); }.avatar { display: grid; place-items: center; width: 30px; height: 30px; border-radius: 50%; background: linear-gradient(135deg, var(--violet), var(--gold)); color: #15111a; font: 800 11px var(--font-mono); }.avatar-image { object-fit: cover; }.user-copy { display: flex; flex: 1; flex-direction: column; min-width: 0; }.user-copy strong, .user-copy span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.user-copy strong { color: var(--text-main); font-size: 10px; }.user-copy span { margin-top: 3px; color: var(--text-faint); font: 8px var(--font-mono); text-transform: uppercase; }.logout-btn { width: 28px; height: 28px; border: 1px solid transparent; border-radius: 8px; background: transparent; color: var(--text-faint); cursor: pointer; }.logout-btn:hover { border-color: rgba(255,109,125,.3); color: var(--crimson); }
-@media (max-width: 760px) { .glass-sidebar { position: fixed; z-index: 120; top: 0; bottom: 0; left: 0; display: flex; width: min(320px, 88vw); height: 100dvh; box-sizing: border-box; padding: max(19px, env(safe-area-inset-top)) 18px max(18px, env(safe-area-inset-bottom)); border-right: 1px solid rgba(245,185,122,.23); border-top: 0; transform: translateX(-105%); transition: transform .25s ease; box-shadow: 24px 0 60px rgba(0,0,0,.45); }.glass-sidebar.mobile-open { transform: translateX(0); }.sidebar-topline { display: flex; align-items: flex-start; justify-content: space-between; }.sidebar-brand { padding: 0 0 35px; }.drawer-close { display: grid; place-items: center; width: 36px; height: 36px; border: 1px solid var(--hairline); border-radius: 10px; background: rgba(255,255,255,.04); color: var(--text-main); cursor: pointer; font-size: 23px; line-height: 1; }.sidebar-label { padding-right: 0; padding-left: 0; }.nav-menu { overflow-y: auto; padding-right: 3px; }.nav-menu button { justify-content: flex-start; min-height: 45px; padding: 11px 12px; }.theme-switcher { margin-right:0; margin-left:0; }.sidebar-note { margin-top: auto; margin-right: 0; margin-left: 0; }.user-info { padding-right: 0; padding-left: 0; }.nav-menu button:not(.active) { opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .glass-sidebar { transition: none; } }
-.glass-sidebar { min-height: 0; overflow: hidden; }
-.nav-menu { flex: 1; min-height: 0; overflow-y: auto; padding: 0 4px 4px 0; scrollbar-width: thin; }
-.nav-menu button { position: relative; }
-.nav-menu button.active::before { content: ''; position: absolute; top: 9px; bottom: 9px; left: -5px; width: 2px; border-radius: 99px; background: var(--gold); box-shadow: 0 0 12px rgba(245,185,122,.8); }
-.nav-menu button:focus-visible { border-color: rgba(245,185,122,.5); box-shadow: 0 0 0 3px rgba(245,185,122,.1); }
-.theme-switcher { flex: none; }
-.sidebar-note { flex: none; }
-.user-info { flex: none; }
-@media (max-height: 720px) and (min-width: 761px) { .sidebar-brand { padding-bottom: 24px; }.sidebar-note { margin-bottom: 14px; padding-top: 11px; padding-bottom: 11px; }.sidebar-note p { font-size: 12px; }.theme-switcher { margin-bottom: 8px; } }
+.glass-sidebar {
+  width: 232px;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 30px 18px 16px;
+  border-right: 1px solid var(--hairline-soft);
+  background: var(--panel-solid);
+}
+.sidebar-topline {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 0 8px 17px;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--gold);
+}
+.sidebar-brand svg {
+  width: 38px;
+  height: 38px;
+}
+.sidebar-brand strong {
+  display: flex;
+  gap: 5px;
+  align-items: baseline;
+  color: var(--text-main);
+  font-size: 23px;
+  letter-spacing: -1px;
+}
+.sidebar-brand strong span {
+  font-size: 14px;
+  font-weight: 400;
+  letter-spacing: -0.4px;
+}
+.sidebar-brand small {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-sub);
+  font-size: 9px;
+}
+.nav-menu {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 23px;
+}
+.nav-group {
+  display: grid;
+  gap: 3px;
+}
+.sidebar-label {
+  padding: 0 12px 8px;
+  font-size: 10px;
+  font-weight: 500;
+  color: var(--text-faint);
+}
+.nav-menu button {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  min-height: 42px;
+  padding: 10px 12px;
+  border: 0;
+  border-radius: 9px;
+  background: none;
+  color: var(--text-sub);
+  text-align: left;
+  font-size: 12px;
+}
+.nav-menu button:hover {
+  background: var(--glass);
+  color: var(--text-main);
+}
+.nav-menu button.active {
+  background: var(--accent-soft);
+  color: var(--gold);
+  font-weight: 600;
+}
+.nav-count {
+  margin-left: auto;
+  font-size: 10px;
+}
+.sidebar-room {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 9px;
+  flex: none;
+  padding: 16px;
+  border: 1px solid var(--hairline);
+  border-radius: 14px;
+  background: var(--surface-2);
+  text-align: left;
+  color: var(--text-main);
+}
+.sidebar-room > svg {
+  color: var(--gold);
+}
+.sidebar-room strong {
+  font-size: 12px;
+}
+.sidebar-room > span {
+  font-size: 9px;
+  color: var(--text-sub);
+}
+.sidebar-room b {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin-top: 5px;
+  font-size: 10px;
+  color: var(--gold);
+}
+.theme-switcher {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 12px;
+  border: 0;
+  background: none;
+  color: var(--text-sub);
+  font-size: 11px;
+}
+.user-info {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding-top: 15px;
+  border-top: 1px solid var(--hairline);
+}
+.profile-button {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  flex: 1;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: none;
+  text-align: left;
+  color: var(--text-main);
+}
+.avatar {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--gold);
+  font-size: 14px;
+  object-fit: cover;
+}
+.user-copy {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+.user-copy strong {
+  font-size: 11px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.user-copy small {
+  font-size: 9px;
+  color: var(--text-faint);
+}
+.logout-btn,
+.drawer-close {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 40px;
+  border: 0;
+  background: none;
+  color: var(--text-sub);
+}
+.drawer-close {
+  display: none;
+}
+@media (max-height: 850px) {
+  .sidebar-room {
+    display: none;
+  }
+  .nav-menu {
+    gap: 15px;
+  }
+  .glass-sidebar {
+    padding-top: 23px;
+    gap: 12px;
+  }
+  .nav-menu button {
+    min-height: 38px;
+  }
+}
+@media (max-width: 760px) {
+  .glass-sidebar {
+    position: fixed;
+    z-index: 170;
+    inset: 0 auto 0 0;
+    width: min(310px, 86vw);
+    height: 100dvh;
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+    padding-top: 24px;
+    box-shadow: none;
+  }
+  .glass-sidebar.mobile-open {
+    transform: translateX(0);
+    box-shadow: 20px 0 60px #0004;
+  }
+  .drawer-close {
+    display: grid;
+  }
+  .nav-menu button {
+    min-height: 44px;
+  }
+  .sidebar-room {
+    display: none;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .glass-sidebar {
+    transition: none;
+  }
+}
 </style>

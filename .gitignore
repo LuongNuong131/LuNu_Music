@@ -27,3 +27,15 @@ backend/.env
 backend/__pycache__/
 backend/*.webm
 backend/*.mp3
+# Test artifacts and local media credentials
+playwright-report/
+test-results/
+__pycache__/
+.pytest_cache/
+*.cookies.txt
+cookies.txt
+
+.env
+.env.*
+!.env.example
+.venv/

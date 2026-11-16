@@ -1,67 +1,505 @@
 <template>
-  <footer class="player-bar aurora-player" :class="{ 'has-error': state.error, 'is-playing': state.isPlaying }">
-    <button v-if="state.currentSong" class="now-track" @click="state.nowPlayingVisible = true" aria-label="Mở trình phát toàn màn hình">
-      <div class="mini-art" :class="{ spinning: state.isPlaying }"><img :src="state.currentSong.cover || fallbackCover" :alt="state.currentSong.title" @error="handleImageError" /><span class="mini-art-ring"></span></div>
-      <div class="track-details"><strong class="track-title">{{ state.currentSong.title }}</strong><span class="track-artist">{{ state.currentSong.artist }}</span></div>
-      <span class="expand-hint">↗</span>
+  <footer
+    class="player-bar"
+    :class="{ 'has-error': state.error, 'is-playing': state.isPlaying }"
+    aria-label="Trình phát nhạc"
+  >
+    <button
+      v-if="state.currentSong"
+      class="now-track"
+      @click="state.nowPlayingVisible = true"
+      aria-label="Mở trình phát toàn màn hình"
+    >
+      <img
+        class="mini-art"
+        :src="songArtwork(state.currentSong)"
+        :alt="state.currentSong.title"
+        @error="handleImageError"
+      /><span class="track-details"
+        ><strong>{{ state.currentSong.title }}</strong
+        ><small>{{ state.currentSong.artist }}</small></span
+      ><Maximize2 class="expand-hint" :size="16" />
     </button>
-    <div v-else class="now-track empty"><div class="mini-art placeholder">♪</div><div class="track-details"><strong class="track-title muted">Chọn một bài để bắt đầu</strong><span class="track-artist">LuNu Music · personal library</span></div></div>
-
+    <div v-else class="now-track empty">
+      <span class="mini-art placeholder"><Headphones :size="25" /></span
+      ><span class="track-details"
+        ><strong>Âm nhạc đang chờ bạn</strong><small>Chọn một bài để bắt đầu</small></span
+      >
+    </div>
+    <button
+      v-if="state.currentSong"
+      class="player-like"
+      :class="{ liked: isLiked(state.currentSong.id) }"
+      :aria-pressed="isLiked(state.currentSong.id)"
+      aria-label="Yêu thích bài đang phát"
+      @click="toggleLike(state.currentSong)"
+    >
+      <Heart :size="18" :fill="isLiked(state.currentSong.id) ? 'currentColor' : 'none'" />
+    </button>
     <div class="player-controls">
       <div class="control-row">
-        <button class="icon-control optional" :class="{ active: state.shuffle }" @click="toggleShuffle" title="Phát ngẫu nhiên" aria-label="Phát ngẫu nhiên">⇄</button>
-        <button class="icon-control" @click="previous" :disabled="!state.currentSong" title="Bài trước" aria-label="Bài trước">|◀</button>
-        <button class="play-btn" @click="togglePlay" :disabled="!state.currentSong" aria-label="Phát hoặc tạm dừng"><span v-if="state.isLoading">…</span><span v-else-if="state.isPlaying">Ⅱ</span><span v-else>▶</span></button>
-        <button class="icon-control" @click="next" :disabled="!state.currentSong" title="Bài tiếp" aria-label="Bài tiếp">▶|</button>
-        <button class="icon-control optional" :class="{ active: state.repeatMode !== 'off' }" @click="toggleRepeat" title="Chế độ lặp" aria-label="Chế độ lặp"><span v-if="state.repeatMode === 'one'">↻¹</span><span v-else>↻</span></button>
+        <button
+          class="icon-control optional"
+          :class="{ active: state.shuffle }"
+          :aria-pressed="state.shuffle"
+          @click="toggleShuffle"
+          aria-label="Phát ngẫu nhiên"
+        >
+          <Shuffle :size="17" /></button
+        ><button
+          class="icon-control previous-control"
+          @click="previous"
+          :disabled="!state.currentSong"
+          aria-label="Bài trước"
+        >
+          <SkipBack :size="19" fill="currentColor" /></button
+        ><button
+          class="play-btn"
+          @click="togglePlay"
+          :disabled="!state.currentSong"
+          :aria-label="state.isPlaying ? 'Tạm dừng' : 'Phát nhạc'"
+        >
+          <LoaderCircle
+            v-if="state.isLoading || state.isBuffering"
+            class="loading-icon"
+            :size="21"
+          /><Pause v-else-if="state.isPlaying" :size="20" fill="currentColor" /><Play
+            v-else
+            :size="20"
+            fill="currentColor"
+          /></button
+        ><button
+          class="icon-control"
+          @click="next"
+          :disabled="!state.currentSong"
+          aria-label="Bài tiếp"
+        >
+          <SkipForward :size="19" fill="currentColor" /></button
+        ><button
+          class="icon-control optional"
+          :class="{ active: state.repeatMode !== 'off' }"
+          :aria-label="`Lặp: ${state.repeatMode === 'one' ? 'một bài' : state.repeatMode === 'all' ? 'tất cả' : 'tắt'}`"
+          @click="toggleRepeat"
+        >
+          <component :is="state.repeatMode === 'one' ? Repeat1 : Repeat2" :size="17" />
+        </button>
       </div>
-      <div class="progress-container"><WaveformSeekBar :peaks="waveformPeaks" :current-time="state.currentTime" :duration="state.duration" @seek="seek" /></div>
-      <p v-if="state.error" class="player-error" role="alert" aria-live="assertive">{{ state.error }}</p>
+      <div class="progress-container">
+        <span>{{ formatTime(state.currentTime) }}</span><input
+          class="progress-bar"
+          type="range"
+          min="0"
+          :max="state.duration || 0"
+          step="0.1"
+          :value="state.currentTime"
+          :disabled="!state.duration"
+          :style="progressStyle"
+          aria-label="Tiến trình bài hát"
+          :aria-valuetext="`${formatTime(state.currentTime)} trên ${formatTime(state.duration)}`"
+          @input="seek(Number($event.target.value))"
+        /><span>{{ formatTime(state.duration) }}</span>
+      </div>
     </div>
-
-    <div class="player-actions"><button class="queue-toggle" :class="{ active: state.queueVisible }" @click="state.queueVisible = true" title="Hàng đợi" aria-label="Mở hàng đợi">☷</button><button class="volume-icon" @click="toggleMute" title="Tắt hoặc bật tiếng" aria-label="Tắt hoặc bật tiếng">{{ state.muted || state.volume === 0 ? '○' : '◖' }}</button><input type="range" class="volume-bar" min="0" max="1" step="0.01" :value="state.muted ? 0 : state.volume" @input="setVolume($event.target.value)" :style="volumeStyle" aria-label="Âm lượng" /><span class="quality-pill">HI-FI</span></div>
-
-    <audio v-if="state.currentSong?.url" ref="audioRef" :src="state.currentSong.url" preload="metadata" @timeupdate="onTimeUpdate" @loadedmetadata="onLoadedMetadata" @waiting="handleAudioWaiting" @canplay="handleAudioCanPlay" @error="handleAudioError" @ended="handleAudioEnded"></audio>
+    <div class="player-actions">
+      <button
+        class="icon-control queue-toggle"
+        :class="{ active: state.queueVisible }"
+        @click="state.queueVisible = !state.queueVisible"
+        aria-label="Mở hàng đợi"
+      >
+        <ListMusic :size="19" /></button
+      ><span class="action-divider"></span
+      ><button
+        class="icon-control volume-icon"
+        @click="toggleMute"
+        :aria-label="state.muted ? 'Bật tiếng' : 'Tắt tiếng'"
+      >
+        <component :is="state.muted || state.volume === 0 ? VolumeX : Volume2" :size="19" /></button
+      ><input
+        type="range"
+        class="volume-bar"
+        min="0"
+        max="1"
+        step="0.01"
+        :value="state.muted ? 0 : state.volume"
+        @input="setVolume(Number($event.target.value))"
+        :style="volumeStyle"
+        aria-label="Âm lượng"
+      /><button
+        class="icon-control full-player"
+        :disabled="!state.currentSong"
+        @click="state.nowPlayingVisible = true"
+        aria-label="Mở lời bài hát"
+      >
+        <Mic2 :size="18" />
+      </button>
+    </div>
+    <p v-if="state.error" class="player-error" role="alert">{{ state.error }}</p>
+    <audio
+      v-if="state.currentSong?.url"
+      ref="audioRef"
+      :src="state.currentSong.url"
+      preload="metadata"
+      @timeupdate="onTimeUpdate"
+      @loadedmetadata="onLoadedMetadata"
+      @waiting="handleAudioWaiting"
+      @canplay="handleAudioCanPlay"
+      @error="handleAudioError"
+      @ended="handleAudioEnded"
+    ></audio>
   </footer>
 </template>
-
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue';
-import { usePlayer, setAudioElement, handleAudioLoaded, handleAudioTimeUpdate, handleAudioWaiting, handleAudioCanPlay, handleAudioError, handleAudioEnded, shouldPlayerAutoplay } from '../store/playerState';
-import WaveformSeekBar from './WaveformSeekBar.vue';
-
-const { state, togglePlay, seek, setVolume, toggleMute, toggleShuffle, toggleRepeat, next, previous } = usePlayer();
+import {
+  Heart,
+  Headphones,
+  ListMusic,
+  LoaderCircle,
+  Maximize2,
+  Mic2,
+  Pause,
+  Play,
+  Repeat1,
+  Repeat2,
+  Shuffle,
+  SkipBack,
+  SkipForward,
+  Volume2,
+  VolumeX,
+} from '@lucide/vue';
+import {
+  usePlayer,
+  setAudioElement,
+  handleAudioLoaded,
+  handleAudioTimeUpdate,
+  handleAudioWaiting,
+  handleAudioCanPlay,
+  handleAudioError,
+  handleAudioEnded,
+} from '../store/playerState';
+import { useLibrary } from '../composables/useLibrary';
+import { songArtwork } from '../utils/artwork';
+const {
+  state,
+  togglePlay,
+  seek,
+  setVolume,
+  toggleMute,
+  toggleShuffle,
+  toggleRepeat,
+  next,
+  previous,
+} = usePlayer();
+const { isLiked, toggleLike } = useLibrary();
 const audioRef = ref(null);
 const fallbackCover = '/images/ChoCiu.jpg';
 const handleImageError = (event) => {
   const image = event.currentTarget;
-  if (!image || image.dataset.fallbackApplied === 'true') return;
+  if (image.dataset.fallbackApplied) return;
   image.dataset.fallbackApplied = 'true';
   image.src = fallbackCover;
 };
-
 onMounted(() => setAudioElement(audioRef.value));
 onBeforeUnmount(() => setAudioElement(null));
-
-watch(() => state.currentSong?.url, async (url) => {
-  await nextTick();
-  setAudioElement(audioRef.value);
-  if (!audioRef.value) return;
-  audioRef.value.load();
-  if (!url) audioRef.value.pause();
-});
-
+watch(
+  () => state.currentSong?.url,
+  async () => {
+    await nextTick();
+    setAudioElement(audioRef.value);
+    audioRef.value?.load();
+  },
+);
 const onTimeUpdate = () => handleAudioTimeUpdate(audioRef.value?.currentTime || 0);
 const onLoadedMetadata = () => handleAudioLoaded(audioRef.value?.duration || 0);
-const progressStyle = computed(() => ({ '--fill': `${state.duration ? (state.currentTime / state.duration) * 100 : 0}%` }));
-const waveformPeaks = computed(() => Array.from({ length: 64 }, (_, index) => { const seed = (state.currentSong?.id || 7) * .17 + index * .73; return .22 + Math.abs(Math.sin(seed) * .42 + Math.cos(seed * .47) * .18); }));
+const progressStyle = computed(() => ({
+  '--fill': `${state.duration ? (state.currentTime / state.duration) * 100 : 0}%`,
+}));
 const volumeStyle = computed(() => ({ '--fill': `${(state.muted ? 0 : state.volume) * 100}%` }));
-const formatTime = (time) => { if (!Number.isFinite(time) || time < 0) return '0:00'; const minutes = Math.floor(time / 60); const seconds = Math.floor(time % 60); return `${minutes}:${String(seconds).padStart(2, '0')}`; };
+const formatTime = (time) => {
+  if (!Number.isFinite(time) || time < 0) return '0:00';
+  return `${Math.floor(time / 60)}:${String(Math.floor(time % 60)).padStart(2, '0')}`;
+};
 </script>
-
 <style scoped>
-.player-bar { position: relative; z-index: 40; display: flex; align-items: center; justify-content: space-between; gap: 24px; min-height: 88px; padding: 13px clamp(16px, 2.7vw, 38px); border: 1px solid rgba(255,255,255,.11); border-radius: 24px 24px 0 0; background: color-mix(in srgb, var(--glass-bg) 92%, transparent); backdrop-filter: blur(30px) saturate(1.3); box-shadow: 0 -18px 55px rgba(0,0,0,.25), 0 -1px 0 rgba(255,255,255,.05) inset; transition: background .42s var(--spring-soft), box-shadow .42s var(--spring-soft); }.now-track { display: flex; align-items: center; min-width: 0; width: 29%; padding: 6px 8px; margin-left: -8px; border: 0; border-radius: 14px; background: transparent; color: inherit; text-align: left; cursor: pointer; }.now-track:hover { background: var(--glass); }.now-track.empty { cursor: default; }.mini-art { position: relative; width: 52px; height: 52px; flex: 0 0 auto; margin-right: 13px; border: 1px solid rgba(245,185,122,.4); border-radius: 14px; overflow: hidden; box-shadow: 0 10px 28px rgba(0,0,0,.28); }.mini-art.spinning { border-radius: 50%; animation: spin 8s linear infinite; }.mini-art img { width: 100%; height: 100%; object-fit: cover; }.mini-art-ring { position: absolute; inset: 6px; border: 1px solid rgba(255,255,255,.26); border-radius: inherit; }.placeholder { display: grid; place-items: center; background: linear-gradient(135deg, rgba(245,185,122,.16), rgba(155,140,255,.16)); color: var(--gold); font-size: 22px; }.track-details { display: flex; flex-direction: column; min-width: 0; }.track-title, .track-artist { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }.track-title { color: var(--text-main); font-size: 12px; font-weight: 700; }.track-title.muted { color: var(--text-sub); }.track-artist { margin-top: 5px; color: var(--text-sub); font-size: 10px; }.expand-hint { margin-left: 12px; color: var(--gold); opacity: 0; }.now-track:hover .expand-hint { opacity: 1; }.player-controls { display: flex; flex: 1; flex-direction: column; align-items: center; min-width: 260px; max-width: 560px; }.control-row { display: flex; align-items: center; gap: clamp(11px, 1.6vw, 23px); margin-bottom: 9px; }.icon-control, .queue-toggle, .volume-icon { display: flex; align-items: center; justify-content: center; width: 30px; height: 30px; padding: 0; border: 0; border-radius: 9px; background: transparent; color: var(--text-sub); cursor: pointer; font: 700 12px var(--font-mono); }.icon-control:hover, .icon-control.active, .queue-toggle:hover, .queue-toggle.active { color: var(--gold); background: rgba(245,185,122,.1); }.play-btn { display: grid; place-items: center; width: 42px; height: 42px; border: 0; border-radius: 50%; background: linear-gradient(135deg, var(--gold-bright), var(--aurora-primary)); color: #161017; box-shadow: 0 8px 24px var(--aurora-mesh-one); cursor: pointer; font-weight: 800; }.play-btn:hover:not(:disabled) { transform: scale(1.07); box-shadow: 0 12px 32px rgba(245,185,122,.35); }.play-btn:disabled, .icon-control:disabled { cursor: not-allowed; opacity: .4; }.progress-container { display: flex; align-items: center; width: 100%; gap: 10px; }.time { width: 34px; color: var(--text-faint); text-align: center; font: 9px var(--font-mono); }.progress-bar, .volume-bar { -webkit-appearance: none; appearance: none; height: 4px; border-radius: 999px; background: linear-gradient(to right, var(--gold) 0%, var(--gold) var(--fill, 0%), rgba(255,255,255,.11) var(--fill, 0%), rgba(255,255,255,.11) 100%); cursor: pointer; }.progress-bar { flex: 1; }.progress-bar::-webkit-slider-thumb, .volume-bar::-webkit-slider-thumb { -webkit-appearance: none; width: 12px; height: 12px; border: 2px solid var(--bg-deep); border-radius: 50%; background: var(--gold-bright); opacity: 0; transition: opacity .15s; }.progress-bar:hover::-webkit-slider-thumb, .volume-bar:hover::-webkit-slider-thumb { opacity: 1; }.player-error { width: 100%; margin: 5px 0 0; color: var(--crimson); text-align: center; font-size: 10px; }.player-actions { display: flex; align-items: center; justify-content: flex-end; gap: 7px; width: 29%; }.volume-icon { font-size: 19px; }.volume-bar { width: 82px; }.quality-pill { border: 1px solid rgba(130,229,195,.2); border-radius: 6px; padding: 4px 6px; color: var(--mint); font: 8px var(--font-mono); letter-spacing: .7px; }audio { display: none; }
-.aurora-player.is-playing { box-shadow: 0 -20px 68px var(--aurora-mesh-one), 0 -1px 0 rgba(255,255,255,.08) inset; }
-@media (min-width: 761px) { .aurora-player { margin: 0 18px 0 18px; border-radius: 24px 24px 0 0; } }
-@media (prefers-reduced-motion: reduce) { .aurora-player, .play-btn { transition: none; } }@media (max-width: 760px) { .optional, .volume-bar, .volume-icon, .quality-pill { display: none; }.player-bar { gap: 12px; min-height: 76px; padding: 10px 13px; }.now-track { width: auto; flex: 1; margin: 0; padding: 0; }.mini-art { width: 43px; height: 43px; margin-right: 9px; border-radius: 11px; }.track-title { font-size: 11px; }.track-artist { font-size: 9px; }.player-controls { min-width: 41px; max-width: none; flex: 0 0 auto; }.control-row { margin: 0; }.control-row .icon-control:not(:nth-child(4)) { display: none; }.control-row .icon-control:nth-child(4) { display: flex; }.play-btn { width: 42px; height: 42px; }.progress-container { display: none; }.player-actions { width: auto; }.expand-hint { display: none; } }@media (max-width: 360px) { .track-artist { display: none; }.mini-art { width: 39px; height: 39px; } }
+.player-bar {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 93px;
+  padding: 13px 27px;
+  border-top: 1px solid var(--hairline);
+  background: var(--panel-solid);
+  z-index: 140;
+}
+.now-track {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  width: 25%;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--text-main);
+  text-align: left;
+}
+.mini-art {
+  display: block;
+  flex: none;
+  width: 53px;
+  height: 53px;
+  border-radius: 9px;
+  object-fit: cover;
+}
+.placeholder {
+  display: grid;
+  place-items: center;
+  background: var(--accent-soft);
+  color: var(--gold);
+}
+.track-details {
+  display: grid;
+  gap: 7px;
+  min-width: 0;
+  flex: 1;
+}
+.track-details strong {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  font-size: 12px;
+  font-weight: 550;
+}
+.track-details small {
+  font-size: 10px;
+  color: var(--text-sub);
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.expand-hint {
+  color: var(--text-faint);
+  flex: none;
+}
+.player-like {
+  display: grid;
+  place-items: center;
+  width: 36px;
+  height: 40px;
+  flex: none;
+  border: 0;
+  background: none;
+  color: var(--text-sub);
+}
+.player-like.liked {
+  color: var(--crimson);
+}
+.player-controls {
+  display: grid;
+  justify-items: center;
+  gap: 7px;
+  flex: 1;
+  min-width: 180px;
+  max-width: 530px;
+  margin: auto;
+}
+.control-row {
+  display: flex;
+  align-items: center;
+  gap: 18px;
+}
+.icon-control {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: none;
+  color: var(--text-sub);
+}
+.icon-control:hover,
+.icon-control.active {
+  background: var(--accent-soft);
+  color: var(--gold);
+}
+.play-btn {
+  display: grid;
+  place-items: center;
+  width: 37px;
+  height: 37px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: #d9d0ff;
+  color: #25203e;
+}
+.play-btn:hover:not(:disabled) {
+  background: #c9baff;
+}
+.progress-container {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+}
+.progress-container > span {
+  font-size: 9px;
+  color: var(--text-faint);
+  font-variant-numeric: tabular-nums;
+  min-width: 28px;
+  text-align: center;
+}
+.progress-bar,
+.volume-bar {
+  appearance: none;
+  min-width: 0;
+  height: 4px;
+  border-radius: 20px;
+  outline: none;
+  background: linear-gradient(
+    to right,
+    var(--gold) var(--fill, 0%),
+    var(--hairline) var(--fill, 0%)
+  );
+  cursor: pointer;
+}
+.progress-bar {
+  width: 100%;
+  flex: 1;
+}
+.progress-bar::-webkit-slider-thumb,
+.volume-bar::-webkit-slider-thumb {
+  appearance: none;
+  width: 10px;
+  height: 10px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--gold);
+  opacity: 0;
+}
+.progress-bar:hover::-webkit-slider-thumb,
+.progress-bar:focus-visible::-webkit-slider-thumb,
+.volume-bar:hover::-webkit-slider-thumb,
+.volume-bar:focus-visible::-webkit-slider-thumb {
+  opacity: 1;
+}
+.player-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+  width: 25%;
+}
+.volume-bar {
+  width: 75px;
+}
+.action-divider {
+  height: 18px;
+  border-left: 1px solid var(--hairline);
+  margin: 0 4px;
+}
+.player-error {
+  position: absolute;
+  inset: auto 0 100%;
+  padding: 9px 16px;
+  background: var(--panel-solid);
+  border-top: 1px solid var(--crimson);
+  color: var(--crimson);
+  font-size: 11px;
+  text-align: center;
+  line-height: 1.6;
+}
+.loading-icon {
+  animation: spin 1s linear infinite;
+}
+audio {
+  display: none;
+}
+@media (max-width: 1000px) {
+  .player-bar {
+    padding-inline: 18px;
+  }
+  .player-like,
+  .expand-hint,
+  .full-player,
+  .action-divider {
+    display: none;
+  }
+  .player-actions {
+    width: 21%;
+  }
+  .control-row {
+    gap: 11px;
+  }
+}
+@media (max-width: 760px) {
+  .player-bar {
+    min-height: 72px;
+    gap: 10px;
+    padding: 10px 12px;
+    border: 1px solid var(--hairline);
+    border-radius: 14px;
+    box-shadow: 0 8px 30px #080b1830;
+  }
+  .now-track {
+    width: auto;
+    flex: 1;
+    gap: 10px;
+  }
+  .mini-art {
+    width: 45px;
+    height: 45px;
+  }
+  .track-details {
+    gap: 5px;
+  }
+  .track-details strong {
+    font-size: 11px;
+  }
+  .track-details small {
+    font-size: 9px;
+  }
+  .optional,
+  .previous-control,
+  .volume-icon,
+  .volume-bar,
+  .progress-container {
+    display: none;
+  }
+  .player-controls {
+    flex: none;
+    min-width: 0;
+    gap: 0;
+    margin: 0;
+  }
+  .control-row {
+    gap: 5px;
+  }
+  .play-btn {
+    width: 39px;
+    height: 39px;
+  }
+  .icon-control {
+    width: 35px;
+    height: 40px;
+  }
+  .player-actions {
+    width: auto;
+    flex: none;
+    gap: 0;
+  }
+  .player-error {
+    border: 1px solid var(--crimson);
+    border-radius: 10px 10px 0 0;
+    font-size: 10px;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .loading-icon {
+    animation: none;
+  }
+}
 </style>

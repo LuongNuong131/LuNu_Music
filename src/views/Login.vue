@@ -1,43 +1,98 @@
 <template>
   <main class="login-wrapper">
-    <div class="login-orbit orbit-one"></div>
-    <div class="login-orbit orbit-two"></div>
     <div class="login-layout">
       <section class="login-showcase" aria-labelledby="login-title">
-        <div class="showcase-kicker"><span class="signal-dot"></span> PERSONAL LISTENING ROOM</div>
-        <div class="showcase-copy">
-          <p class="eyebrow">LU NU / 2026 EDITION</p>
-          <h1 id="login-title">Âm thanh<br /><em>ở lại.</em></h1>
-          <p>Thư viện cá nhân cho những bài hát bạn muốn nghe chậm hơn, sâu hơn và theo cách của riêng mình.</p>
+        <div class="showcase-brand">
+          <BrandMark /><strong>LuNu<span>music</span></strong>
         </div>
-        <div class="showcase-art" aria-hidden="true">
-          <div class="vinyl-disc"><div class="vinyl-label">LN<span>LISTEN<br />SLOWLY</span></div></div>
-          <div class="showcase-caption"><span>01 / QUIET ROTATION</span><strong>Made for the moments<br />in between.</strong></div>
+        <div class="showcase-copy">
+          <span class="showcase-tag"><Headphones :size="17" /> Giai điệu của riêng bạn</span>
+          <h1 id="login-title">Một chút nhạc.<br />Một khoảng riêng.</h1>
+          <p>
+            Những bài hát bạn thích, những người bạn thương.<br />Tất cả trong một không gian của
+            riêng bạn.
+          </p>
+        </div>
+        <img
+          class="showcase-art"
+          src="/images/listening-room.svg"
+          alt="Một đĩa nhạc vinyl trên bìa đĩa màu tím"
+          fetchpriority="high"
+        />
+        <div class="showcase-footer">
+          <AudioLines :size="19" /><span>Nhạc hay hơn khi có người cùng nghe.</span>
         </div>
       </section>
-
-      <section class="glass-login-box" aria-label="Đăng nhập LuNu Music">
-        <div class="login-brand"><span class="brand-mark">LN</span><div><strong>LuNu</strong><small>Music library</small></div></div>
-        <div class="login-card-copy"><p class="eyebrow">WELCOME BACK</p><h2>Chào mừng<br /><em>trở lại.</em></h2><p>Đăng nhập để tiếp tục hành trình nghe nhạc được tuyển chọn cho riêng bạn.</p></div>
-        <form @submit.prevent="handleLogin" class="login-form">
-          <label class="input-group"><span>TÀI KHOẢN</span><input v-model.trim="username" type="text" autocomplete="username" placeholder="your.name" required /></label>
-          <label class="input-group"><span>MẬT KHẨU</span><input v-model="password" type="password" autocomplete="current-password" placeholder="••••••••" required /></label>
-          <p v-if="errorMsg" class="error-text" role="alert">{{ errorMsg }}</p>
-          <button type="submit" class="login-btn" :disabled="isLoading"><span>{{ isLoading ? 'Đang xác thực...' : 'Mở thư viện' }}</span><b>↗</b></button>
-        </form>
-        <p class="footer-text"><span>Hệ thống riêng tư</span><i></i><span>Kết nối an toàn</span></p>
+      <section class="login-form-panel" aria-labelledby="welcome-title">
+        <div class="login-form-content">
+          <span class="login-symbol"><Headphones :size="27" /></span>
+          <h2 id="welcome-title">Vui vì bạn ở đây.</h2>
+          <p class="login-intro">Đăng nhập và tiếp tục câu chuyện âm nhạc của bạn.</p>
+          <form @submit.prevent="handleLogin" class="login-form">
+            <label class="input-group"
+              ><span>Tài khoản</span
+              ><input
+                v-model.trim="username"
+                type="text"
+                autocomplete="username"
+                placeholder="Tên đăng nhập của bạn"
+                required
+                :disabled="isLoading" /></label
+            ><label class="input-group"
+              ><span>Mật khẩu</span
+              ><span class="password-field"
+                ><input
+                  v-model="password"
+                  :type="showPassword ? 'text' : 'password'"
+                  autocomplete="current-password"
+                  placeholder="Nhập mật khẩu"
+                  required
+                  :disabled="isLoading" /><button
+                  type="button"
+                  :aria-label="showPassword ? 'Ẩn mật khẩu' : 'Hiện mật khẩu'"
+                  :aria-pressed="showPassword"
+                  @click="showPassword = !showPassword"
+                >
+                  <component :is="showPassword ? EyeOff : Eye" :size="18" /></button></span
+            ></label>
+            <p v-if="errorMsg" class="error-text" role="alert">{{ errorMsg }}</p>
+            <button type="submit" class="login-btn" :disabled="isLoading">
+              <span>{{
+                isLoading ? 'Đang đăng nhập...' : 'Vào không gian của bạn'
+              }}</span><LoaderCircle v-if="isLoading" class="login-spinner" :size="19" /><ArrowRight
+                v-else
+                :size="19"
+              />
+            </button>
+          </form>
+          <p class="login-help">
+            Chưa có tài khoản? Liên hệ người quản trị<br />LuNu để được mời vào thư viện.
+          </p>
+          <p class="login-private"><LockKeyhole :size="13" /> Thư viện riêng tư, dành cho bạn.</p>
+        </div>
+        <span class="login-copyright">LuNu Music · Made for your everyday.</span>
       </section>
     </div>
   </main>
 </template>
-
 <script setup>
 import { ref } from 'vue';
+import {
+  ArrowRight,
+  AudioLines,
+  Eye,
+  EyeOff,
+  Headphones,
+  LoaderCircle,
+  LockKeyhole,
+} from '@lucide/vue';
+import BrandMark from '../components/BrandMark.vue';
 import { login } from '../services/api';
 import { loginUser } from '../store/appState';
 
 const username = ref('');
 const password = ref('');
+const showPassword = ref(false);
 const errorMsg = ref('');
 const isLoading = ref(false);
 
@@ -50,37 +105,313 @@ const handleLogin = async () => {
     else errorMsg.value = response.message || 'Thông tin đăng nhập chưa chính xác.';
   } catch (error) {
     errorMsg.value = error.message || 'Không thể kết nối đến máy chủ.';
-  } finally { isLoading.value = false; }
+  } finally {
+    isLoading.value = false;
+  }
 };
 </script>
 
 <style scoped>
-.login-wrapper { position: relative; display: grid; place-items: center; min-height: 100vh; overflow: hidden; background: radial-gradient(circle at 70% 10%, rgba(255,196,107,.15), transparent 27%), radial-gradient(circle at 15% 90%, rgba(116,107,255,.14), transparent 34%), #080a10; color: var(--text-main); }
-.login-layout { position: relative; z-index: 1; display: grid; grid-template-columns: minmax(0, 1fr) minmax(350px, 430px); gap: clamp(45px, 8vw, 120px); align-items: center; width: min(1060px, calc(100% - 48px)); padding: 36px 0; }
-.login-showcase { min-width: 0; }
-.showcase-kicker { display: inline-flex; align-items: center; gap: 9px; color: var(--gold); font: 9px var(--font-mono); letter-spacing: 1.8px; }
-.signal-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--mint); box-shadow: 0 0 14px var(--mint); }
-.showcase-copy { padding: 90px 0 44px; }
-.eyebrow { margin: 0 0 13px; color: var(--gold); font: 9px var(--font-mono); letter-spacing: 2.2px; }
-.showcase-copy h1 { margin: 0; color: #faf7f0; font: 500 clamp(66px, 9vw, 124px)/.84 var(--font-display); letter-spacing: -6px; }
-.showcase-copy h1 em, .login-card-copy h2 em { color: var(--gold); font-style: italic; }
-.showcase-copy > p:last-child { max-width: 420px; margin-top: 28px; color: var(--text-sub); font-size: 14px; line-height: 1.75; }
-.showcase-art { position: relative; min-height: 125px; padding-left: 158px; display: flex; align-items: center; }
-.vinyl-disc { position: absolute; left: 18px; width: 154px; height: 154px; border-radius: 50%; background: repeating-radial-gradient(circle at center, #11151e 0 2px, #202532 3px 4px, #10131b 5px 7px); box-shadow: 0 22px 45px rgba(0,0,0,.42), inset 0 0 0 1px rgba(255,255,255,.08); animation: slow-spin 18s linear infinite; }
-.vinyl-disc::after { content: ''; position: absolute; inset: 15px; border: 1px solid rgba(255,255,255,.06); border-radius: 50%; }
-.vinyl-label { position: absolute; inset: 52px; display: grid; place-items: center; border-radius: 50%; background: linear-gradient(135deg, var(--gold), var(--coral)); color: #18131a; text-align: center; font: 800 12px var(--font-mono); line-height: 1; }
-.vinyl-label span { display: block; margin-top: 4px; font-size: 5px; letter-spacing: 1px; line-height: 1.35; }
-.showcase-caption { display: grid; gap: 8px; padding-left: 18px; border-left: 1px solid rgba(245,185,122,.28); }
-.showcase-caption span { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1.4px; }
-.showcase-caption strong { color: var(--text-main); font: 500 18px/1.2 var(--font-display); }
-.glass-login-box { width: 100%; padding: 31px clamp(26px, 4vw, 42px) 25px; border: 1px solid rgba(255,255,255,.11); border-radius: 28px; background: linear-gradient(145deg, rgba(27,31,43,.93), rgba(12,15,23,.88)); box-shadow: 0 35px 100px rgba(0,0,0,.44), inset 0 1px 0 rgba(255,255,255,.06); backdrop-filter: blur(22px); }
-.login-brand { display: flex; align-items: center; gap: 10px; }
-.brand-mark { display: grid; place-items: center; width: 36px; height: 36px; border-radius: 11px; background: linear-gradient(135deg, var(--gold), var(--coral)); color: #171218; font: 800 10px var(--font-mono); box-shadow: 0 9px 22px rgba(245,185,122,.16); }
-.login-brand strong { display: block; font: 600 18px var(--font-display); }.login-brand small { display: block; margin-top: 2px; color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1px; text-transform: uppercase; }
-.login-card-copy { padding: 74px 0 28px; }.login-card-copy h2 { margin: 0; font: 500 40px/.95 var(--font-display); letter-spacing: -1.8px; }.login-card-copy > p:last-child { max-width: 300px; margin-top: 15px; color: var(--text-sub); font-size: 12px; line-height: 1.65; }
-.login-form { display: grid; gap: 14px; }.input-group { display: grid; gap: 7px; }.input-group span { color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: 1.5px; }.input-group input { width: 100%; box-sizing: border-box; padding: 14px; border: 1px solid var(--hairline); border-radius: 11px; outline: 0; background: rgba(3,5,9,.3); color: var(--text-main); font-size: 12px; transition: border-color .2s var(--ease-out), box-shadow .2s var(--ease-out), background .2s var(--ease-out); }.input-group input:focus { border-color: rgba(245,185,122,.7); background: rgba(3,5,9,.5); box-shadow: 0 0 0 3px rgba(245,185,122,.08); }.input-group input::placeholder { color: #555965; }.error-text { margin: 0; color: var(--crimson); font-size: 11px; }.login-btn { display: flex; align-items: center; justify-content: space-between; margin-top: 5px; padding: 14px 16px; border: 0; border-radius: 11px; background: linear-gradient(135deg, var(--gold-bright), var(--gold)); color: #171218; cursor: pointer; font-weight: 800; }.login-btn:hover:not(:disabled) { box-shadow: 0 12px 30px rgba(245,185,122,.24); transform: translateY(-2px); }.login-btn b { font-size: 17px; }.login-btn:disabled { opacity: .55; cursor: progress; }.footer-text { display: flex; justify-content: center; align-items: center; gap: 9px; margin-top: 30px; color: var(--text-faint); font: 8px var(--font-mono); letter-spacing: .8px; text-transform: uppercase; }.footer-text i { width: 3px; height: 3px; border-radius: 50%; background: var(--gold-dim); }
-.login-orbit { position: absolute; border: 1px solid rgba(245,185,122,.09); border-radius: 50%; pointer-events: none; }.orbit-one { width: min(70vw, 720px); height: min(70vw, 720px); transform: translate(35%, -30%); }.orbit-two { width: min(55vw, 560px); height: min(55vw, 560px); transform: translate(-55%, 35%); border-color: rgba(155,140,255,.1); }
-@keyframes slow-spin { to { transform: rotate(360deg); } }
-@media (max-width: 760px) { .login-layout { grid-template-columns: 1fr; gap: 18px; width: min(470px, calc(100% - 28px)); padding: 24px 0; }.login-showcase { padding: 8px 7px 0; }.showcase-copy { padding: 48px 0 24px; }.showcase-copy h1 { font-size: clamp(56px, 16vw, 86px); letter-spacing: -4px; }.showcase-copy > p:last-child { margin-top: 18px; font-size: 12px; }.showcase-art { display: none; }.glass-login-box { padding: 25px 24px 20px; border-radius: 23px; }.login-card-copy { padding: 35px 0 24px; }.login-card-copy h2 { font-size: 34px; } }
-@media (prefers-reduced-motion: reduce) { .vinyl-disc { animation: none; } }
+.login-wrapper {
+  min-height: 100%;
+  background: var(--bg-deep);
+  color: var(--text-main);
+}
+.login-layout {
+  display: grid;
+  grid-template-columns: 1.05fr 1fr;
+  min-height: 100dvh;
+  padding: 18px;
+  gap: 18px;
+}
+.login-showcase {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 680px;
+  padding: 38px clamp(30px, 5vw, 85px);
+  border-radius: 22px;
+  background: #d9d0ff;
+  color: #25203e;
+  overflow: hidden;
+}
+.showcase-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+}
+.showcase-brand svg {
+  width: 39px;
+  height: 39px;
+  color: #25203e;
+  --brand-ink: #d9d0ff;
+}
+.showcase-brand strong {
+  font-size: 25px;
+  letter-spacing: -1px;
+}
+.showcase-brand strong span {
+  font-size: 16px;
+  font-weight: 400;
+  margin-left: 5px;
+}
+.showcase-copy {
+  position: relative;
+  z-index: 1;
+  margin-top: 70px;
+}
+.showcase-tag {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 11px;
+  color: #5c5075;
+}
+.showcase-copy h1 {
+  margin-top: 22px;
+  font-size: clamp(35px, 4vw, 61px);
+  line-height: 1.25;
+  letter-spacing: -2px;
+  font-weight: 700;
+}
+.showcase-copy p {
+  margin-top: 22px;
+  font-size: 12px;
+  line-height: 1.9;
+  color: #5c5075;
+}
+.showcase-art {
+  display: block;
+  align-self: center;
+  width: min(100%, 420px);
+  margin-top: 6px;
+  flex: 1;
+  min-height: 0;
+  max-height: 360px;
+  object-fit: contain;
+}
+.showcase-footer {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  font-size: 10px;
+  color: #5c5075;
+  margin-top: auto;
+}
+.login-form-panel {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 45px 28px;
+  position: relative;
+}
+.login-form-content {
+  width: min(350px, 100%);
+}
+.login-symbol {
+  display: grid;
+  place-items: center;
+  width: 57px;
+  height: 57px;
+  border: 1px solid var(--hairline);
+  border-radius: 17px;
+  background: var(--accent-soft);
+  color: var(--gold);
+  margin-bottom: 30px;
+}
+.login-form-content h2 {
+  font-size: 30px;
+  letter-spacing: -1px;
+  font-weight: 600;
+  line-height: 1.4;
+}
+.login-intro {
+  font-size: 12px;
+  line-height: 1.9;
+  color: var(--text-sub);
+  margin-top: 12px;
+  max-width: 310px;
+}
+.login-form {
+  display: grid;
+  gap: 21px;
+  margin-top: 35px;
+}
+.input-group {
+  display: grid;
+  gap: 10px;
+}
+.input-group > span:first-child {
+  font-size: 12px;
+  color: var(--text-sub);
+  font-weight: 500;
+}
+.input-group input {
+  width: 100%;
+  height: 48px;
+  padding: 13px 15px;
+  border: 1px solid var(--hairline);
+  border-radius: 10px;
+  outline: none;
+  background: var(--glass);
+  color: var(--text-main);
+  font-size: 12px;
+}
+.input-group input:focus {
+  border-color: var(--gold);
+}
+.input-group input::placeholder {
+  color: var(--text-faint);
+}
+.password-field {
+  position: relative;
+}
+.password-field input {
+  padding-right: 47px;
+}
+.password-field button {
+  display: grid;
+  place-items: center;
+  position: absolute;
+  top: 3px;
+  right: 4px;
+  width: 41px;
+  height: 42px;
+  border: 0;
+  background: none;
+  color: var(--text-faint);
+}
+.login-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 49px;
+  padding: 14px 17px;
+  margin-top: 3px;
+  border: 0;
+  border-radius: 10px;
+  background: #d9d0ff;
+  color: #25203e;
+  font-size: 12px;
+  font-weight: 600;
+}
+.login-btn:hover:not(:disabled) {
+  background: #c9baff;
+}
+.error-text {
+  color: var(--crimson);
+  font-size: 11px;
+  line-height: 1.8;
+}
+.login-help {
+  margin-top: 24px;
+  color: var(--text-sub);
+  font-size: 10px;
+  line-height: 1.9;
+  text-align: center;
+}
+.login-private {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-top: 40px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.login-copyright {
+  position: absolute;
+  bottom: 25px;
+  color: var(--text-faint);
+  font-size: 9px;
+}
+.login-spinner {
+  animation: spin 1s linear infinite;
+}
+@media (max-width: 760px) {
+  .login-layout {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    padding: 12px;
+  }
+  .login-showcase {
+    min-height: 0;
+    padding: 25px 24px 29px;
+    border-radius: 17px;
+  }
+  .showcase-brand svg {
+    width: 31px;
+    height: 31px;
+  }
+  .showcase-brand strong {
+    font-size: 21px;
+  }
+  .showcase-copy {
+    margin-top: 33px;
+  }
+  .showcase-tag {
+    font-size: 9px;
+  }
+  .showcase-copy h1 {
+    font-size: clamp(31px, 8vw, 42px);
+    letter-spacing: -1.2px;
+    margin-top: 15px;
+  }
+  .showcase-copy p {
+    font-size: 10px;
+    margin-top: 16px;
+    max-width: 260px;
+  }
+  .showcase-art {
+    position: absolute;
+    width: 150px;
+    height: 140px;
+    bottom: -17px;
+    right: -36px;
+    opacity: 0.4;
+    pointer-events: none;
+  }
+  .showcase-footer {
+    display: none;
+  }
+  .login-form-panel {
+    padding: 36px 16px 50px;
+  }
+  .login-symbol {
+    display: none;
+  }
+  .login-form-content h2 {
+    font-size: 25px;
+  }
+  .login-intro {
+    font-size: 11px;
+  }
+  .login-form {
+    margin-top: 26px;
+    gap: 18px;
+  }
+  .input-group input {
+    font-size: 16px;
+  }
+  .login-help {
+    font-size: 10px;
+  }
+  .login-private {
+    margin-top: 26px;
+  }
+  .login-copyright {
+    bottom: 10px;
+  }
+  .login-layout {
+    min-height: 100dvh;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .login-spinner {
+    animation: none;
+  }
+}
 </style>

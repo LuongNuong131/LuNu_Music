@@ -12,7 +12,7 @@ export const loadSongs = async () => {
   try {
     const data = await getSongs();
     const remoteSongs = Array.isArray(data) ? data : [];
-    const source = remoteSongs.length ? remoteSongs : legacyCatalog;
+    const source = remoteSongs;
     songs.splice(0, songs.length, ...source);
     return songs;
   } catch (error) {

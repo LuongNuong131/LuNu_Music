@@ -45,20 +45,26 @@ let backHistory = [];
 let forwardHistory = [];
 
 const persistSettings = () => {
-  localStorage.setItem(SETTINGS_KEY, JSON.stringify({
-    volume: playerState.volume,
-    muted: playerState.muted,
-    shuffle: playerState.shuffle,
-    repeatMode: playerState.repeatMode,
-    playbackRate: playerState.playbackRate,
-  }));
+  localStorage.setItem(
+    SETTINGS_KEY,
+    JSON.stringify({
+      volume: playerState.volume,
+      muted: playerState.muted,
+      shuffle: playerState.shuffle,
+      repeatMode: playerState.repeatMode,
+      playbackRate: playerState.playbackRate,
+    }),
+  );
 };
 
 const persistQueue = () => {
-  localStorage.setItem(QUEUE_KEY, JSON.stringify({
-    queue: playerState.queue,
-    originalQueue: playerState.originalQueue,
-  }));
+  localStorage.setItem(
+    QUEUE_KEY,
+    JSON.stringify({
+      queue: playerState.queue,
+      originalQueue: playerState.originalQueue,
+    }),
+  );
 };
 
 const setMediaError = (error, fallback = 'Không thể phát bài hát này.') => {
@@ -104,14 +110,20 @@ const activateSong = (song, autoplay = true) => {
 
 export const playSong = (song, source = [], options = {}) => {
   if (!song) return;
-  const requestedCollection = Array.isArray(source) && source.length ? source : playerState.originalQueue;
-  const collection = requestedCollection.some((item) => String(item?.id) === String(song.id)) ? requestedCollection : [song, ...requestedCollection];
-  const shouldReplaceQueue = options.replaceQueue !== false && Array.isArray(source) && source.length;
+  const requestedCollection =
+    Array.isArray(source) && source.length ? source : playerState.originalQueue;
+  const collection = requestedCollection.some((item) => String(item?.id) === String(song.id))
+    ? requestedCollection
+    : [song, ...requestedCollection];
+  const shouldReplaceQueue =
+    options.replaceQueue !== false && Array.isArray(source) && source.length;
   if (shouldReplaceQueue) {
     playerState.originalQueue = [...collection];
     const index = getIndex(collection, song);
     playerState.currentIndex = index >= 0 ? index : 0;
-    playerState.queue = collection.filter((item) => String(item.id) !== String(song.id));
+    playerState.queue = playerState.shuffle
+      ? collection.filter((item) => String(item.id) !== String(song.id))
+      : collection.slice(playerState.currentIndex + 1);
     if (playerState.shuffle) playerState.queue.sort(() => Math.random() - 0.5);
     persistQueue();
   } else {
@@ -169,7 +181,9 @@ export const toggleShuffle = () => {
   if (playerState.shuffle) playerState.queue.sort(() => Math.random() - 0.5);
   else if (playerState.currentSong) {
     const current = playerState.currentSong;
-    playerState.queue = playerState.originalQueue.filter((item) => String(item.id) !== String(current.id));
+    playerState.queue = playerState.originalQueue.filter(
+      (item) => String(item.id) !== String(current.id),
+    );
   }
   persistSettings();
   persistQueue();
@@ -185,7 +199,8 @@ export const addToQueue = (song) => {
   if (!song || String(song.id) === String(playerState.currentSong?.id)) return;
   if (!playerState.queue.some((item) => String(item.id) === String(song.id))) {
     playerState.queue.push(song);
-    if (!playerState.originalQueue.some((item) => String(item.id) === String(song.id))) playerState.originalQueue.push(song);
+    if (!playerState.originalQueue.some((item) => String(item.id) === String(song.id)))
+      playerState.originalQueue.push(song);
     persistQueue();
   }
 };
@@ -234,7 +249,9 @@ export const next = () => {
   }
   if (playerState.repeatMode === 'all' && playerState.originalQueue.length > 1) {
     const currentId = playerState.currentSong.id;
-    const rebuilt = playerState.originalQueue.filter((item) => String(item.id) !== String(currentId));
+    const rebuilt = playerState.originalQueue.filter(
+      (item) => String(item.id) !== String(currentId),
+    );
     playerState.queue = playerState.shuffle ? rebuilt.sort(() => Math.random() - 0.5) : rebuilt;
     next();
     return;
@@ -257,7 +274,9 @@ export const previous = () => {
     activateSong(previousSong, true);
     return;
   }
-  const list = playerState.originalQueue.length ? playerState.originalQueue : [playerState.currentSong];
+  const list = playerState.originalQueue.length
+    ? playerState.originalQueue
+    : [playerState.currentSong];
   const index = getIndex(list, playerState.currentSong);
   const previousSong = list[index > 0 ? index - 1 : list.length - 1];
   if (previousSong && String(previousSong.id) !== String(playerState.currentSong.id)) {
@@ -273,10 +292,18 @@ export const handleAudioLoaded = (duration) => {
   if (shouldAutoplay) playAudio();
 };
 
-export const handleAudioTimeUpdate = (time) => { playerState.currentTime = time; };
-export const handleAudioWaiting = () => { playerState.isBuffering = true; };
-export const handleAudioCanPlay = () => { playerState.isBuffering = false; playerState.isLoading = false; };
-export const handleAudioError = (error) => setMediaError(error, 'File nhạc không khả dụng hoặc đã bị xoá.');
+export const handleAudioTimeUpdate = (time) => {
+  playerState.currentTime = time;
+};
+export const handleAudioWaiting = () => {
+  playerState.isBuffering = true;
+};
+export const handleAudioCanPlay = () => {
+  playerState.isBuffering = false;
+  playerState.isLoading = false;
+};
+export const handleAudioError = (error) =>
+  setMediaError(error, 'File nhạc không khả dụng hoặc đã bị xoá.');
 export const handleAudioEnded = () => next();
 
 export const usePlayer = () => ({

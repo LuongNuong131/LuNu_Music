@@ -1,875 +1,253 @@
-@import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap');
+/* LuNu listening room tokens. Shared with existing account and community views. */
+:root {
+  --bg-color: #111526;
+  --bg-deep: #111526;
+  --panel-solid: #151a2c;
+  --panel-bg: #151a2c;
+  --panel-bg-hover: #20263c;
+  --bg-elevated: #242a40;
+  --glass: rgba(180, 186, 221, 0.04);
+  --glass-strong: rgba(180, 186, 221, 0.08);
+  --gold: #b6a1ff;
+  --gold-bright: #d9d0ff;
+  --gold-dim: #9c8bcf;
+  --violet: #b6a1ff;
+  --coral: #ffb5a7;
+  --crimson: #ff9ba9;
+  --mint: #8cdbca;
+  --text-main: #f1f0fa;
+  --text-sub: #b0b3cb;
+  --text-faint: #9298b4;
+  --hairline: rgba(190, 195, 230, 0.13);
+  --hairline-soft: rgba(190, 195, 230, 0.075);
+  --surface-1: #151a2c;
+  --surface-2: rgba(190, 195, 230, 0.035);
+  --surface-3: rgba(190, 195, 230, 0.085);
+  --accent-soft: rgba(182, 161, 255, 0.12);
+  --brand-ink: #191e33;
+  --font-display: 'Be Vietnam Pro', sans-serif;
+  --font-body: 'Be Vietnam Pro', sans-serif;
+  --font-mono: 'Be Vietnam Pro', sans-serif;
+  --glass-bg: #151a2c;
+  --shadow-soft: 0 12px 32px #06091322;
+  --focus-ring: #d9d0ff;
+  color-scheme: dark;
+}
+:root[data-theme='light'] {
+  --bg-color: #f5f6fc;
+  --bg-deep: #f5f6fc;
+  --panel-solid: #fff;
+  --panel-bg: #fff;
+  --panel-bg-hover: #eef0f9;
+  --bg-elevated: #e6e8f5;
+  --glass: rgba(84, 73, 139, 0.035);
+  --glass-strong: rgba(84, 73, 139, 0.07);
+  --gold: #6850b3;
+  --gold-bright: #563b9c;
+  --gold-dim: #6b5a92;
+  --violet: #6850b3;
+  --coral: #a94c48;
+  --crimson: #b73c60;
+  --mint: #287969;
+  --text-main: #24263f;
+  --text-sub: #626780;
+  --text-faint: #6b7089;
+  --hairline: rgba(40, 42, 75, 0.15);
+  --hairline-soft: rgba(40, 42, 75, 0.08);
+  --surface-1: #fff;
+  --surface-2: rgba(84, 73, 139, 0.025);
+  --surface-3: rgba(84, 73, 139, 0.07);
+  --accent-soft: #ece7fb;
+  --brand-ink: #fff;
+  --glass-bg: #fff;
+  --shadow-soft: 0 12px 32px #2923480a;
+  --focus-ring: #6850b3;
+  color-scheme: light;
+}
 
 :root {
-  --bg-color: #090b11;
-  --bg-deep: #06080d;
-  --panel-bg: rgba(15, 18, 27, 0.9);
-  --panel-solid: #10131c;
-  --panel-bg-hover: #181c28;
-  --bg-elevated: #1a1f2b;
-  --glass: rgba(255, 255, 255, 0.055);
-  --glass-strong: rgba(255, 255, 255, 0.085);
-  --gold: #f5b97a;
-  --gold-bright: #ffd6a3;
-  --gold-dim: #aa7957;
-  --coral: #ff7e67;
-  --violet: #9b8cff;
-  --crimson: #ff6d7d;
-  --mint: #82e5c3;
-  --text-main: #f6f3ef;
-  --text-sub: #a3a7b4;
-  --text-faint: #626878;
-  --hairline: rgba(255, 255, 255, 0.11);
-  --hairline-soft: rgba(255, 255, 255, 0.065);
-  --font-display: 'Space Grotesk', 'Inter', sans-serif;
-  --font-body: 'DM Sans', 'Segoe UI', sans-serif;
-  --font-mono: 'JetBrains Mono', monospace;
+  --font-sans: var(--font-body);
+  --text-muted: var(--text-sub);
+  --primary-color: var(--gold);
+  --color-primary: var(--gold);
   --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
   --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
-  --primary-color: var(--gold);
-  --surface-1: rgba(15, 18, 27, .9);
-  --surface-2: rgba(255, 255, 255, .055);
-  --surface-3: rgba(255, 255, 255, .085);
-  --shadow-soft: 0 18px 55px rgba(0, 0, 0, .22);
-  --focus-ring: var(--gold);
-  --aurora-primary: #f5b97a;
-  --aurora-secondary: #9b8cff;
-  --aurora-accent: #82e5c3;
-  --aurora-glow: #f5b97a;
-  --aurora-mesh-one: rgba(245, 185, 122, .24);
-  --aurora-mesh-two: rgba(155, 140, 255, .18);
-  --aurora-mesh-three: rgba(130, 229, 195, .13);
-  --spring: cubic-bezier(.22, 1.35, .36, 1);
-  --spring-soft: cubic-bezier(.16, 1, .3, 1.08);
-  --glass-bg: rgba(13, 16, 25, .62);
+  --spring: cubic-bezier(0.22, 1, 0.36, 1);
+  --spring-soft: cubic-bezier(0.16, 1, 0.3, 1);
+  --shadow-deep: 0 25px 80px #06091350;
+  --aurora-primary: rgb(182, 161, 255);
+  --aurora-mesh-one: rgba(182, 161, 255, 0.18);
+  --aurora-mesh-two: rgba(217, 208, 255, 0.12);
+  --aurora-mesh-three: rgba(140, 219, 202, 0.1);
 }
-
-:root[data-theme='light'] {
-  --bg-color: #f2ede5;
-  --bg-deep: #e9e1d6;
-  --panel-bg: rgba(255, 252, 247, .9);
-  --panel-solid: #fffaf3;
-  --panel-bg-hover: #f6eee4;
-  --bg-elevated: #fffaf3;
-  --glass: rgba(255, 255, 255, .64);
-  --glass-strong: rgba(255, 255, 255, .86);
-  --gold: #9a673c;
-  --gold-bright: #6f4528;
-  --gold-dim: #a58264;
-  --coral: #bb5b46;
-  --violet: #6659a8;
-  --crimson: #b64252;
-  --mint: #26775e;
-  --text-main: #252129;
-  --text-sub: #665f5a;
-  --text-faint: #948b84;
-  --hairline: rgba(61, 45, 35, .16);
-  --hairline-soft: rgba(61, 45, 35, .09);
-  --surface-1: rgba(255, 252, 247, .9);
-  --surface-2: rgba(255, 255, 255, .64);
-  --surface-3: rgba(255, 255, 255, .86);
-  --shadow-soft: 0 18px 55px rgba(91, 67, 46, .14);
-  --focus-ring: #9a673c;
-  --glass-bg: rgba(255, 252, 246, .68);
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+  scrollbar-width: thin;
+  scrollbar-color: var(--hairline) transparent;
 }
-
-* { margin: 0; padding: 0; box-sizing: border-box; }
-
-html, body { height: 100vh; width: 100vw; overflow: hidden; }
+html,
+body {
+  width: 100%;
+  height: 100%;
+  min-width: 320px;
+  overflow: hidden;
+}
 body {
   font-family: var(--font-body);
-  background: var(--bg-color);
+  background: var(--bg-deep);
   color: var(--text-main);
-  transition: background-color .35s var(--spring-soft), color .25s ease;
-  isolation: isolate;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
 }
-
-button, input { font: inherit; }
-button { -webkit-tap-highlight-color: transparent; }
-#app { position: relative; z-index: 0; height: 100%; width: 100%; }
-#app::before, #app::after { position: fixed; inset: -18%; z-index: -2; content: ''; pointer-events: none; }
-#app::before { background: radial-gradient(42% 38% at 12% 20%, var(--aurora-mesh-one), transparent 72%), radial-gradient(34% 42% at 86% 10%, var(--aurora-mesh-two), transparent 74%), radial-gradient(38% 36% at 58% 94%, var(--aurora-mesh-three), transparent 72%); filter: blur(32px) saturate(1.18); animation: aurora-drift 24s var(--ease-in-out) infinite alternate; }
-#app::after { z-index: -1; background: linear-gradient(135deg, rgba(6, 8, 13, .92), rgba(6, 8, 13, .58) 46%, rgba(6, 8, 13, .86)); mix-blend-mode: multiply; opacity: .84; }
-:root[data-theme='light'] #app::after { background: linear-gradient(135deg, rgba(249, 244, 236, .66), rgba(255, 252, 247, .24) 46%, rgba(239, 231, 219, .58)); mix-blend-mode: multiply; opacity: .72; }
-::selection { background: var(--gold); color: var(--bg-deep); }
-
-::-webkit-scrollbar { width: 8px; height: 8px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb {
-  background: rgba(245, 185, 122, 0.24);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: padding-box;
+#app {
+  width: 100%;
+  height: 100%;
 }
-::-webkit-scrollbar-thumb:hover { background: rgba(245, 185, 122, 0.45); background-clip: padding-box; }
-
-a:focus-visible, button:focus-visible, input:focus-visible {
-  outline: 2px solid var(--gold);
+button,
+input,
+select,
+textarea {
+  font-family: var(--font-body);
+  font-size: inherit;
+}
+button {
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+button:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+a {
+  color: inherit;
+}
+img {
+  max-width: 100%;
+}
+input[type='range'] {
+  accent-color: var(--gold);
+}
+:where(button, a, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--focus-ring);
   outline-offset: 3px;
 }
-
-@media (prefers-reduced-motion: reduce) {
-  #app::before { animation: none; }
-  *, *::before, *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
-  }
+::selection {
+  background: var(--gold);
+  color: var(--panel-solid);
 }
-
-@keyframes fade-up {
-  from { opacity: 0; transform: translateY(12px); }
-  to { opacity: 1; transform: translateY(0); }
+.glass-panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--hairline);
+  box-shadow: var(--shadow-soft);
 }
-
-@keyframes shimmer {
-  from { transform: translateX(-100%); }
-  to { transform: translateX(100%); }
-}
-
-@keyframes aurora-drift {
-  0% { transform: translate3d(-2%, -1%, 0) scale(1); }
-  50% { transform: translate3d(2%, 1.5%, 0) scale(1.035); }
-  100% { transform: translate3d(-1%, 3%, 0) scale(1.07); }
-}
-
-@keyframes ambient-pulse {
-  0%, 100% { opacity: 0.55; transform: scale(1); }
-  50% { opacity: 0.8; transform: scale(1.04); }
-}
-
-@keyframes eq {
-  0%, 100% { transform: scaleY(0.35); }
-  50% { transform: scaleY(1); }
-}
-
-@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-
-a { color: inherit; }
-* { scrollbar-width: thin; scrollbar-color: rgba(245, 185, 122, 0.3) transparent; }
-/* Keep the player feeling quiet when there is no active track. */
-button:disabled { cursor: not-allowed; opacity: 0.45; }
-
-@media (max-width: 640px) {
-  html, body { min-width: 320px; }
-}
-
-/* Decorative ambient lights used by the player shell. */
-.ambient-orb { position: absolute; pointer-events: none; border-radius: 999px; filter: blur(1px); animation: ambient-pulse 8s ease-in-out infinite; }
-.ambient-orb--gold { background: rgba(245, 185, 122, 0.14); }
-.ambient-orb--violet { background: rgba(155, 140, 255, 0.12); animation-delay: -3s; }
-
-/* Range inputs share the same premium fill across components. */
-input[type='range'] { accent-color: var(--gold); }
-input[type='range']::-moz-range-thumb { width: 13px; height: 13px; border: 0; border-radius: 50%; background: var(--gold-bright); }
-
-/* Small utility for screen readers without impacting the visual system. */
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-
-/* The original Login screen keeps its own component styles; these values make it inherit the refresh. */
-.login-page, .login-card { color: var(--text-main); }
-
-/* Shared brand mark treatment. */
-.logo-mark { position: relative; overflow: hidden; }
-.logo-mark::after { content: ''; position: absolute; inset: 0; background: linear-gradient(110deg, transparent 25%, rgba(255,255,255,0.35), transparent 75%); transform: translateX(-100%); }
-.logo-mark:hover::after { animation: shimmer 800ms var(--ease-out); }
-
-@media (max-width: 640px) {
-  .ambient-orb { display: none; }
-}
-
-@keyframes equalizer {
-  0%, 100% { height: 4px; }
-  50% { height: 15px; }
-}
-
-.eq { display: inline-flex; align-items: flex-end; gap: 2px; height: 16px; }
-.eq i { width: 3px; border-radius: 4px; background: currentColor; animation: equalizer 850ms ease-in-out infinite; }
-.eq i:nth-child(2) { animation-delay: -250ms; }
-.eq i:nth-child(3) { animation-delay: -500ms; }
-
-@media (prefers-reduced-motion: reduce) {
-  .logo-mark:hover::after, .ambient-orb, .eq i { animation: none; }
-}
-
-/* Keep app links/buttons tactile. */
-button, a { transition: color 180ms var(--spring-soft), background 180ms var(--spring-soft), border-color 180ms var(--spring-soft), transform 180ms var(--spring), box-shadow 180ms var(--spring-soft); }
-button:active, a:active { transform: scale(0.97); }
-input::placeholder { color: var(--text-faint); }
-
-/* Form controls used throughout the app. */
-input { color: var(--text-main); }
-
-/* The player shell uses a subtle grid texture instead of a flat black canvas. */
-.player-layout::before {
-  content: '';
-  position: fixed;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.22;
-  background-image: linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px);
-  background-size: 56px 56px;
-  mask-image: linear-gradient(to bottom, rgba(0,0,0,0.45), transparent 80%);
-}
-
-@media (max-width: 640px) {
-  .player-layout::before { background-size: 38px 38px; }
-}
-
-/* Route views are allowed to fill the shell. */
-.router-view, .player-layout { min-height: 0; }
-
-/* A utility that prevents overly long metadata from destabilizing grids. */
-.truncate { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-
-/* Improve tap targets on touch devices. */
-@media (pointer: coarse) {
-  button { min-height: 36px; }
-}
-
-/* Focus styles for dark glass surfaces. */
-.glass-focus:focus-visible { box-shadow: 0 0 0 3px rgba(245, 185, 122, 0.2), 0 0 0 1px var(--gold); }
-
-/* Prevent browser overscroll glow from fighting the app background. */
-body { overscroll-behavior: none; }
-
-/* Ensure content does not hide behind the fixed player on narrow screens. */
-@media (max-width: 640px) {
-  .main-view { padding-bottom: 106px !important; }
-}
-
-/* Subtle noise without loading a binary asset. */
-.noise-overlay::after {
-  content: '';
+.sr-only {
   position: absolute;
-  inset: 0;
-  pointer-events: none;
-  opacity: 0.035;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E");
-  mix-blend-mode: screen;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }
-
-/* The app has a dark visual identity by default. */
-:root { color-scheme: dark; }
-
-/* Browser-safe tooltip fallback for title-bearing buttons. */
-[title] { cursor: pointer; }
-
-/* Slightly calmer text selection inside lyrics. */
-.np-lyrics-container ::selection { background: rgba(245, 185, 122, 0.4); color: white; }
-
-/* Keep SVG icons crisp on high-DPI displays. */
-svg { display: block; }
-
-/* Do not let images flash as broken white boxes while the local cover loads. */
-img { display: block; }
-
-/* Accessible hidden state for visually collapsed components. */
-[hidden] { display: none !important; }
-
-/* Shared glass border. */
-.glass-panel { background: var(--glass); border: 1px solid var(--hairline-soft); backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px); }
-
-/* The app remains usable with keyboard navigation. */
-:focus:not(:focus-visible) { outline: none; }
-
-/* Keep the layout stable on mobile browser address-bar changes. */
-@supports (height: 100dvh) {
-  html, body, #app { height: 100dvh; }
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
 }
-
-/* End of LuNu Music design system. */
-
-/* Responsive foundation v2: stable on mobile browser chrome, tablets and wide screens. */
-html, body { min-height: 100%; overflow: hidden; }
-body { min-width: 320px; }
-#app { min-height: 100dvh; }
-button, input, select, textarea { min-width: 0; }
-@media (max-width: 1100px) {
-  #app-container { grid-template-columns: 208px minmax(0, 1fr); }
-  .main-content { padding: 22px; }
+::-webkit-scrollbar-track {
+  background: transparent;
 }
-@media (max-width: 760px) {
-  #app-container { display: flex; flex-direction: column; min-height: 100dvh; height: 100dvh; overflow: hidden; }
-  #app-container .main-content { order: 0; flex: 1 1 auto; width: 100%; min-height: 0; padding: 14px 14px calc(154px + env(safe-area-inset-bottom)); overflow-x: hidden; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-  #app-container > .glass-sidebar { order: 2; position: fixed; right: 0; bottom: 0; left: 0; z-index: 120; width: 100%; height: calc(64px + env(safe-area-inset-bottom)); padding: 6px 8px env(safe-area-inset-bottom); border-top: 1px solid var(--hairline); border-right: 0; }
-  #app-container > .player-bar { order: 1; position: fixed !important; right: 0; bottom: calc(64px + env(safe-area-inset-bottom)); left: 0; z-index: 110; }
+::-webkit-scrollbar-thumb {
+  background: var(--hairline);
+  border-radius: 10px;
 }
-@media (min-width: 761px) {
-  #app-container { min-height: 100dvh; height: 100dvh; }
+/* Existing community and management screens share the new theme surfaces. */
+:root[data-theme='light']
+  :is(
+    .glass-panel,
+    .queue-panel,
+    .cmd-box,
+    .notification-popover,
+    .edit-song-panel,
+    .lyrics-modal,
+    .playlist-picker,
+    .editor-panel,
+    .chat-panel,
+    .notification-header,
+    .room-modal,
+    .create-room-panel,
+    .ai-panel
+  ) {
+  background: var(--panel-solid);
+  border-color: var(--hairline);
+  box-shadow: var(--shadow-soft);
 }
-@media (max-width: 430px) {
-  #app-container .main-content { padding-right: 10px; padding-left: 10px; }
+:root[data-theme='light']
+  .main-content
+  :is(
+    .view-header,
+    .admin-header,
+    .room-card,
+    .person-card,
+    .proposal-row,
+    .list-item,
+    .playlist-card,
+    .artist-card,
+    .conversation-list,
+    .messages-panel,
+    .lyrics-preview,
+    .report-card
+  ) {
+  background: var(--surface-2);
+  border-color: var(--hairline);
 }
-
-/* LuNu responsive pass: one shared system for compact phones, tablets and desktop. */
-@media (max-width: 900px) {
-  .view-header { min-height: 0 !important; padding: 30px !important; }
-  .view-header h1 { font-size: clamp(34px, 6vw, 54px) !important; }
-  .stats-row { flex-wrap: wrap; gap: 16px 28px !important; }
-  .stats-row .status-note { width: 100%; margin-left: 0 !important; }
-  .recommendation-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; }
-  .songs-grid { grid-template-columns: repeat(3, minmax(0, 1fr)) !important; gap: 12px !important; }
-  .library-toolbar { flex-wrap: wrap; align-items: center !important; }
-  .library-toolbar .section-heading { flex-basis: 100%; }
-  .search-box { width: min(100%, 360px) !important; }
-  .admin-header, .proposal-hero, .cinema-hero { padding-left: 0 !important; padding-right: 0 !important; }
-  .admin-panel, .proposal-panel, .cinema-panel { overflow: hidden; }
-  .list-item { gap: 10px !important; }
+:root[data-theme='light'] .main-content :is(input:not([type='range']), textarea, select) {
+  background: var(--panel-solid);
+  color: var(--text-main);
+  border-color: var(--hairline);
 }
-@media (max-width: 760px) {
-  .view-header { align-items: flex-start !important; flex-direction: column; gap: 22px !important; padding: 24px 18px !important; border-radius: 20px !important; }
-  .view-header .header-actions { width: 100%; }
-  .view-header .header-actions > * { flex: 1; }
-  .view-header h1 { font-size: clamp(34px, 10vw, 48px) !important; letter-spacing: -1.5px !important; }
-  .lede { margin-top: 14px !important; font-size: 11px !important; }
-  .stats-row { padding: 20px 2px 24px !important; gap: 14px 20px !important; }
-  .stat-value { font-size: 20px !important; }
-  .stat-label { font-size: 7px !important; }
-  .recommendation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; }
-  .recommendation-card { padding: 7px !important; }
-  .songs-grid { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 10px !important; }
-  .song-card { padding: 7px !important; border-radius: 13px !important; }
-  .song-info { padding: 9px 2px 3px !important; }
-  .song-title { font-size: 11px !important; }
-  .song-artist { margin-bottom: 9px !important; font-size: 9px !important; }
-  .card-meta { align-items: flex-start !important; flex-direction: column; gap: 6px !important; }
-  .card-actions { width: 100%; justify-content: space-between; }
-  .card-meta button { font-size: 8px !important; }
-  .library-toolbar { gap: 10px !important; padding-top: 26px !important; }
-  .library-toolbar select { flex: 1; }
-  .search-box { width: 100% !important; }
-  .edit-modal-backdrop, .lyrics-modal-backdrop, .editor-backdrop { padding: 10px !important; }
-  .edit-song-panel, .lyrics-modal, .lyrics-editor { max-height: calc(100dvh - 20px); overflow-y: auto; padding: 16px !important; }
-  .notification-center { top: 9px !important; right: 10px !important; }
-  .notification-trigger { width: 38px !important; height: 38px !important; }
-  .cmd-box { width: calc(100vw - 20px) !important; max-height: 78dvh !important; }
-  .cmd-footer { flex-wrap: wrap; gap: 7px !important; }
-  .player-bar { min-height: 70px !important; padding: 8px 10px !important; }
-  .player-bar .now-track { min-width: 0; }
-  .player-bar .player-controls { min-width: 40px !important; }
-  .player-bar .track-details { max-width: calc(100vw - 165px); }
-  .player-bar .player-actions { flex: 0 0 auto; }
-}
-@media (max-width: 520px) {
-  .admin-container, .proposal-page, .cinema-container { padding-bottom: 90px !important; }
-  .admin-header, .proposal-hero, .cinema-hero { align-items: flex-start !important; flex-direction: column !important; gap: 16px !important; }
-  .admin-header h1 { font-size: 40px !important; }
-  .tab-buttons { width: 100%; overflow-x: auto; }
-  .tab-buttons button { flex: 0 0 auto; }
-  .admin-panel { padding: 14px !important; border-radius: 14px !important; }
-  .panel-heading { align-items: flex-start !important; flex-direction: column; gap: 10px !important; }
-  .panel-actions { width: 100%; flex-wrap: wrap; }
-  .panel-actions > * { flex: 1; }
-  .list-item { align-items: flex-start !important; flex-direction: column; padding: 12px 0 !important; }
-  .list-item .info { width: 100%; }
-  .list-item .row-actions { width: 100%; justify-content: flex-end; }
-  .bulk-lyrics-textarea { min-height: 160px; }
-  .stats-grid { grid-template-columns: 1fr !important; }
-  .manager-header { margin-bottom: 24px !important; }
-  .manager-title { font-size: 40px !important; letter-spacing: -1.5px !important; }
-  .lyrics-row { grid-template-columns: 45px minmax(0, 1fr) !important; min-height: 70px !important; }
-  .lyrics-row .row-status { grid-column: 2 !important; grid-row: 2; }
-  .lyrics-row .edit-btn { grid-column: 2 !important; grid-row: 1 / span 2; align-self: center; }
-  .lyrics-row .row-copy { grid-column: 2 !important; }
-  .lyrics-row .row-art { width: 38px !important; height: 38px !important; }
-  .proposal-row { grid-template-columns: 30px minmax(0, 1fr) !important; }
-  .proposal-actions { grid-column: 2 !important; width: 100%; }
-  .proposal-actions > * { flex: 1; }
-  .search-wrapper, .metadata-form, .suggest-form { grid-template-columns: 1fr !important; }
-  .search-wrapper > *, .metadata-form .wide, .suggest-form .wide, .form-actions { grid-column: 1 !important; }
-  .selected-video { align-items: flex-start !important; }
-  .selected-video strong { white-space: normal !important; }
-  .video-info { width: calc(100% - 105px) !important; }
-  .theater-room header { align-items: flex-start !important; }
-  .theater-room h2 { max-width: calc(100vw - 100px); font-size: 18px !important; }
-  .playlist-picker { max-height: calc(100dvh - 30px); overflow-y: auto; }
-}
-@media (max-width: 360px) {
-  .songs-grid { grid-template-columns: 1fr !important; }
-  .recommendation-grid { grid-template-columns: 1fr !important; }
-  .player-bar .track-artist { display: none; }
-  .player-bar .track-details { max-width: calc(100vw - 125px); }
-}
-
-
-/* LuNu premium refresh v3: shared visual language across every workspace view. */
-:root {
-  --surface-0: rgba(8, 11, 18, .72);
-  --surface-1: rgba(18, 22, 32, .78);
-  --surface-2: rgba(28, 33, 47, .82);
-  --hairline-glow: rgba(245, 185, 122, .24);
-  --shadow-soft: 0 18px 60px rgba(0, 0, 0, .22);
-  --shadow-deep: 0 30px 100px rgba(0, 0, 0, .34);
-}
-
-#app-container { position: relative; isolation: isolate; background: radial-gradient(circle at 88% 4%, rgba(245, 185, 122, .08), transparent 25%), radial-gradient(circle at 8% 92%, rgba(155, 140, 255, .08), transparent 28%), var(--bg-deep); }
-#app-container::before { content: ''; position: fixed; z-index: -1; inset: 0; pointer-events: none; opacity: .24; background-image: linear-gradient(rgba(255, 255, 255, .018) 1px, transparent 1px), linear-gradient(90deg, rgba(255, 255, 255, .018) 1px, transparent 1px); background-size: 52px 52px; mask-image: radial-gradient(circle at 55% 20%, black, transparent 72%); }
-.main-content { position: relative; scrollbar-gutter: stable; }
-.main-content > section { animation: workspace-enter .48s var(--ease-out) both; }
-@keyframes workspace-enter { from { opacity: 0; transform: translateY(9px); } to { opacity: 1; transform: translateY(0); } }
-
-/* Consistent surfaces and controls without changing the player controls. */
-.main-content .glass-panel { border-color: rgba(255, 255, 255, .085); background: linear-gradient(145deg, rgba(255, 255, 255, .055), rgba(255, 255, 255, .018)); box-shadow: var(--shadow-soft); }
-.main-content input:not([type='range']), .main-content select, .main-content textarea { border-color: rgba(255, 255, 255, .115); background-color: rgba(4, 7, 13, .48); transition: border-color .2s var(--ease-out), background .2s var(--ease-out), box-shadow .2s var(--ease-out); }
-.main-content input:not([type='range']):hover, .main-content select:hover, .main-content textarea:hover { border-color: rgba(245, 185, 122, .28); background-color: rgba(8, 11, 18, .65); }
-.main-content input:not([type='range']):focus, .main-content select:focus, .main-content textarea:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245, 185, 122, .1), 0 10px 30px rgba(0, 0, 0, .12); }
-.main-content button:not(.card-play):not(.play-btn):not(.icon-control):not(.queue-toggle):not(.volume-icon) { font-weight: 600; }
-.main-content .primary-btn, .main-content .play-all, .main-content .composer-footer button, .main-content .discovery-play { box-shadow: 0 10px 25px rgba(245, 185, 122, .14); }
-.main-content .primary-btn:hover, .main-content .play-all:hover, .main-content .composer-footer button:hover, .main-content .discovery-play:hover { box-shadow: 0 15px 34px rgba(245, 185, 122, .22); }
-
-/* Refined navigation shell. */
-#app-container > .glass-sidebar { box-shadow: 18px 0 55px rgba(0, 0, 0, .18); background: linear-gradient(180deg, rgba(18, 22, 32, .96), rgba(8, 11, 17, .94)); }
-#app-container > .glass-sidebar .nav-menu button { min-height: 42px; }
-#app-container > .glass-sidebar .nav-menu button.active { box-shadow: inset 3px 0 0 var(--gold), 0 8px 20px rgba(0, 0, 0, .12); }
-#app-container > .glass-sidebar .sidebar-note { box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
-
-/* Card rhythm shared by library, cinema, rooms, social and management views. */
-.main-content .song-card, .main-content .recommendation-card, .main-content .room-card, .main-content .person-card, .main-content .proposal-row, .main-content .list-item, .main-content .notification-item { box-shadow: 0 8px 24px rgba(0, 0, 0, .08); }
-.main-content .song-card:hover, .main-content .recommendation-card:hover, .main-content .room-card:hover, .main-content .person-card:hover, .main-content .proposal-row:hover, .main-content .list-item:hover { box-shadow: 0 16px 38px rgba(0, 0, 0, .18); }
-.main-content .state-card, .main-content .detail-empty, .main-content .artist-empty { background: linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.012)); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
-.main-content .section-heading h2, .main-content .panel-heading h2 { letter-spacing: -.4px; }
-
-/* Notification and modal safety: long copy must remain readable on all widths. */
-.notification-center { width: min(390px, calc(100vw - 24px)); }
-.notification-center, .notification-center * { min-width: 0; }
-.notification-item, .notification-item p, .notification-item strong, .notification-item small { overflow-wrap: anywhere; word-break: break-word; }
-.edit-modal-backdrop, .lyrics-modal-backdrop, .editor-backdrop, .playlist-picker-backdrop { overscroll-behavior: contain; }
-
-@media (max-width: 900px) {
-  #app-container::before { background-size: 42px 42px; }
-  .main-content > section { animation-duration: .35s; }
-}
-@media (max-width: 760px) {
-  .main-content { scrollbar-gutter: auto; }
-  .main-content .glass-panel { border-radius: 16px; }
-  .main-content .state-card, .main-content .detail-empty { min-height: 260px; }
-  .notification-center { width: min(360px, calc(100vw - 20px)); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .main-content > section { animation: none; }
-}
-
-
-/* Theme surfaces: keep the light room warm and editorial rather than pure white. */
-:root[data-theme='light'] body { background: radial-gradient(circle at 70% -20%, rgba(154,103,60,.12), transparent 34%), radial-gradient(circle at 0% 100%, rgba(102,89,168,.09), transparent 38%), var(--bg-color); }
-:root[data-theme='light'] #app-container { background: radial-gradient(circle at 70% -20%, rgba(154,103,60,.13), transparent 34%), radial-gradient(circle at 0% 100%, rgba(102,89,168,.09), transparent 38%), var(--bg-deep); }
-:root[data-theme='light'] .glass-panel { border-color: rgba(76, 55, 40, .14); background: var(--surface-1); box-shadow: var(--shadow-soft); }
-:root[data-theme='light'] .glass-sidebar { border-color: rgba(76, 55, 40, .14); background: linear-gradient(180deg, rgba(255,252,247,.96), rgba(239,231,220,.92)); box-shadow: 18px 0 45px rgba(91,67,46,.08); }
-:root[data-theme='light'] .mobile-menu-toggle { background: rgba(255,250,243,.92); color: var(--gold-bright); box-shadow: 0 10px 28px rgba(91,67,46,.14); }
-:root[data-theme='light'] .mobile-menu-backdrop { background: rgba(83,65,51,.28); }
-:root[data-theme='light'] input, :root[data-theme='light'] select, :root[data-theme='light'] textarea { background: rgba(255,255,255,.6); }
-:root[data-theme='light'] ::selection { background: var(--gold); color: #fffaf3; }
-
-/* Readability pass v4: larger type scale for the workspace while leaving the player untouched. */
-.main-content { font-size: 13px; }
-.main-content .eyebrow, .main-content .panel-kicker { font-size: 10px !important; letter-spacing: 1.7px; }
-.main-content button, .main-content input, .main-content select, .main-content textarea { font-size: 12px; }
-.main-content .song-title, .main-content .track-copy strong, .main-content .person-copy strong, .main-content .conversation-row strong, .main-content .artist-card strong, .main-content .list-item strong, .main-content .proposal-row strong { font-size: 13px !important; }
-.main-content .song-artist, .main-content .track-copy small, .main-content .person-copy span, .main-content .conversation-row span, .main-content .artist-card small, .main-content .list-item small, .main-content .proposal-row small { font-size: 11px !important; }
-.main-content .lede, .main-content .chat-header p:last-child, .main-content .detail-head p:last-child, .main-content .room-description, .main-content .section-description { font-size: 13px; line-height: 1.7; }
-.main-content .stat-label, .main-content .card-meta, .main-content .track-album, .main-content .track-year { font-size: 10px !important; }
-
-/* Chat Hub premium readability and hierarchy. */
-.main-content .chat-header h1 { font-size: clamp(44px, 5.4vw, 68px); }
-.main-content .chat-layout { border-color: rgba(245, 185, 122, .16); background: linear-gradient(135deg, rgba(255,255,255,.065), rgba(255,255,255,.018)); }
-.main-content .chat-header p:last-child { max-width: 680px; font-size: 14px; }
-.main-content .panel-heading h2, .main-content .message-heading h2 { font-size: 27px; }
-.main-content .conversation-row { min-height: 58px; padding: 11px 10px; }
-.main-content .conversation-row strong { font-size: 13px !important; }
-.main-content .conversation-row span { font-size: 10px !important; }
-.main-content .message-list { gap: 13px; padding-top: 22px; }
-.main-content .message-bubble { padding: 13px 16px; border-radius: 15px 15px 15px 5px; box-shadow: 0 8px 20px rgba(0,0,0,.1); }
-.main-content .message-bubble.mine { border-radius: 15px 15px 5px 15px; box-shadow: 0 10px 24px rgba(245,185,122,.09); }
-.main-content .message-meta strong { font-size: 11px; }
-.main-content .message-meta time { font-size: 10px; }
-.main-content .message-bubble p { margin-top: 9px; font-size: 14px; line-height: 1.62; }
-.main-content .file-attachment strong, .main-content .attachment-draft strong { font-size: 12px; }
-.main-content .file-attachment small, .main-content .attachment-draft small { font-size: 10px; }
-.main-content .composer textarea { min-height: 58px; font-size: 14px; line-height: 1.55; }
-.main-content .composer-footer, .main-content .composer-footer button { font-size: 11px; }
-.main-content .composer-footer button { padding: 11px 17px; }
-.main-content .message-actions button { font-size: 10px; }
-.main-content .empty-chat strong, .main-content .message-empty h2 { font-size: 19px; }
-.main-content .empty-chat small, .main-content .message-empty p { font-size: 11px; }
-
-@media (max-width: 760px) {
-  .main-content .chat-header h1 { font-size: clamp(38px, 12vw, 52px); }
-  .main-content .chat-header p:last-child { font-size: 12px; }
-  .main-content .panel-heading h2, .main-content .message-heading h2 { font-size: 22px; }
-  .main-content .message-bubble p { font-size: 13px; }
-  .main-content .composer textarea { font-size: 13px; }
-}
-
-/* Light room v2: warm editorial surfaces, ink typography and controlled contrast. */
-:root[data-theme='light'] {
-  --bg-color: #f3eee6;
-  --bg-deep: #ebe4da;
-  --panel-bg: rgba(255, 253, 249, .9);
-  --panel-solid: #fffdf8;
-  --panel-bg-hover: #f7efe6;
-  --bg-elevated: #fffdf8;
-  --glass: rgba(255, 255, 255, .68);
-  --glass-strong: rgba(255, 255, 255, .88);
-  --gold: #a8663b;
-  --gold-bright: #c17a45;
-  --gold-dim: #9d806a;
-  --coral: #c46852;
-  --violet: #6c61a2;
-  --crimson: #b44d5b;
-  --mint: #317866;
-  --text-main: #2e2929;
-  --text-sub: #6b625c;
-  --text-faint: #998d83;
-  --hairline: rgba(80, 58, 43, .18);
-  --hairline-soft: rgba(80, 58, 43, .1);
-  --surface-0: rgba(243, 237, 228, .72);
-  --surface-1: rgba(255, 253, 249, .9);
-  --surface-2: rgba(255, 255, 255, .72);
-  --surface-3: rgba(255, 253, 248, .96);
-  --hairline-glow: rgba(168, 102, 59, .23);
-  --shadow-soft: 0 18px 55px rgba(94, 65, 43, .1);
-  --shadow-deep: 0 30px 90px rgba(94, 65, 43, .16);
-  color-scheme: light;
-}
-:root[data-theme='light'] body { background: radial-gradient(circle at 86% -12%, rgba(209, 145, 94, .18), transparent 28%), radial-gradient(circle at 2% 94%, rgba(119, 105, 177, .11), transparent 30%), var(--bg-color); }
-:root[data-theme='light'] #app-container { background: radial-gradient(circle at 92% 0%, rgba(209, 145, 94, .16), transparent 25%), radial-gradient(circle at 4% 98%, rgba(119, 105, 177, .1), transparent 28%), var(--bg-deep); }
-:root[data-theme='light'] #app-container::before { opacity: .16; background-image: linear-gradient(rgba(91, 67, 46, .045) 1px, transparent 1px), linear-gradient(90deg, rgba(91, 67, 46, .045) 1px, transparent 1px); }
-:root[data-theme='light'] ::selection { background: var(--gold); color: #fffdf8; }
-:root[data-theme='light'] ::-webkit-scrollbar-thumb { background: rgba(168, 102, 59, .28); background-clip: padding-box; }
-:root[data-theme='light'] ::-webkit-scrollbar-thumb:hover { background: rgba(168, 102, 59, .48); background-clip: padding-box; }
-
-:root[data-theme='light'] #app-container > .glass-sidebar { border-color: rgba(80, 58, 43, .14); background: linear-gradient(180deg, rgba(255, 253, 248, .96), rgba(241, 232, 220, .94)); box-shadow: 18px 0 55px rgba(91, 67, 46, .1); }
-:root[data-theme='light'] #app-container > .glass-sidebar .sidebar-brand strong,
-:root[data-theme='light'] #app-container > .glass-sidebar .user-copy strong,
-:root[data-theme='light'] #app-container > .glass-sidebar .theme-switcher strong { color: var(--text-main); }
-:root[data-theme='light'] #app-container > .glass-sidebar .nav-menu button { color: var(--text-sub); }
-:root[data-theme='light'] #app-container > .glass-sidebar .nav-menu button:hover,
-:root[data-theme='light'] #app-container > .glass-sidebar .nav-menu button.active { border-color: rgba(168, 102, 59, .16); background: linear-gradient(90deg, rgba(168, 102, 59, .13), rgba(168, 102, 59, .035)); color: var(--text-main); }
-:root[data-theme='light'] #app-container > .glass-sidebar .nav-menu button span { color: var(--text-faint); }
-:root[data-theme='light'] #app-container > .glass-sidebar .nav-menu button.active span { color: var(--gold); }
-:root[data-theme='light'] #app-container > .glass-sidebar .theme-switcher { border-color: rgba(80, 58, 43, .12); background: rgba(255, 255, 255, .56); }
-:root[data-theme='light'] #app-container > .glass-sidebar .theme-switcher:hover { background: rgba(168, 102, 59, .1); }
-:root[data-theme='light'] #app-container > .glass-sidebar .sidebar-note { border-color: rgba(168, 102, 59, .16); background: radial-gradient(circle at 15% 10%, rgba(209, 145, 94, .16), transparent 65%), rgba(255, 255, 255, .46); }
-:root[data-theme='light'] #app-container > .glass-sidebar .user-info { border-color: rgba(80, 58, 43, .12); }
-
-:root[data-theme='light'] .app-utility-bar { color: var(--text-faint); }
-:root[data-theme='light'] .utility-search { border-color: rgba(80, 58, 43, .14); background: rgba(255, 255, 255, .62); color: var(--text-sub); }
-:root[data-theme='light'] .utility-search:hover { border-color: rgba(168, 102, 59, .35); background: rgba(255, 255, 255, .9); color: var(--text-main); }
-:root[data-theme='light'] .utility-search kbd { border-color: rgba(80, 58, 43, .13); }
-:root[data-theme='light'] .notification-center.compact .notification-trigger { border-color: rgba(80, 58, 43, .14); background: rgba(255, 255, 255, .62); box-shadow: 0 8px 20px rgba(91, 67, 46, .08); }
-:root[data-theme='light'] .notification-popover { border-color: rgba(80, 58, 43, .16); background: #fffdf8; box-shadow: 0 25px 80px rgba(91, 67, 46, .18); }
-:root[data-theme='light'] .notification-item:hover,
-:root[data-theme='light'] .notification-item.unread { border-color: rgba(80, 58, 43, .1); background: rgba(168, 102, 59, .07); }
-
-:root[data-theme='light'] .main-content .view-header { border-color: rgba(80, 58, 43, .14); background: linear-gradient(120deg, rgba(255, 253, 248, .96), rgba(247, 237, 226, .9)), radial-gradient(circle at 88% 12%, rgba(209, 145, 94, .24), transparent 34%); box-shadow: var(--shadow-soft); }
-:root[data-theme='light'] .main-content .view-header h1 { color: var(--text-main) !important; }
-:root[data-theme='light'] .main-content .view-header h1 em { color: var(--gold); }
-:root[data-theme='light'] .main-content .lede { color: var(--text-sub); }
-:root[data-theme='light'] .main-content .view-header::after { border-color: rgba(168, 102, 59, .22); box-shadow: 0 0 0 20px rgba(168, 102, 59, .035), 0 0 0 42px rgba(168, 102, 59, .025); }
-:root[data-theme='light'] .main-content .discovery-panel { border-color: rgba(168, 102, 59, .18); background: linear-gradient(115deg, rgba(209, 145, 94, .15), rgba(255, 253, 248, .86) 47%, rgba(119, 105, 177, .1)); box-shadow: var(--shadow-soft); }
-:root[data-theme='light'] .main-content .recommendation-card,
-:root[data-theme='light'] .main-content .recent-item,
-:root[data-theme='light'] .main-content .song-card { border-color: rgba(80, 58, 43, .1); background: rgba(255, 253, 249, .7); box-shadow: 0 8px 22px rgba(94, 65, 43, .06); }
-:root[data-theme='light'] .main-content .recommendation-card:hover,
-:root[data-theme='light'] .main-content .recent-item:hover,
-:root[data-theme='light'] .main-content .song-card:hover,
-:root[data-theme='light'] .main-content .song-card.active { border-color: rgba(168, 102, 59, .28); background: rgba(255, 255, 255, .92); box-shadow: 0 16px 34px rgba(94, 65, 43, .12); }
-:root[data-theme='light'] .main-content .library-toolbar { background: linear-gradient(180deg, rgba(235, 228, 218, .98) 72%, rgba(235, 228, 218, .84) 88%, transparent); }
-:root[data-theme='light'] .main-content input:not([type='range']),
-:root[data-theme='light'] .main-content select,
-:root[data-theme='light'] .main-content textarea { border-color: rgba(80, 58, 43, .17); background-color: rgba(255, 255, 255, .8); color: var(--text-main); box-shadow: 0 4px 16px rgba(94, 65, 43, .04); }
-:root[data-theme='light'] .main-content input:not([type='range']):hover,
-:root[data-theme='light'] .main-content select:hover,
-:root[data-theme='light'] .main-content textarea:hover { border-color: rgba(168, 102, 59, .32); background-color: rgba(255, 255, 255, .96); }
-:root[data-theme='light'] .main-content input:not([type='range']):focus,
-:root[data-theme='light'] .main-content select:focus,
-:root[data-theme='light'] .main-content textarea:focus { border-color: var(--gold); box-shadow: 0 0 0 3px rgba(168, 102, 59, .12), 0 10px 26px rgba(94, 65, 43, .08); }
-:root[data-theme='light'] .main-content .state-card,
-:root[data-theme='light'] .main-content .detail-empty,
-:root[data-theme='light'] .main-content .artist-empty { border-color: rgba(80, 58, 43, .17); background: rgba(255, 253, 249, .62); }
-:root[data-theme='light'] .main-content .card-play,
-:root[data-theme='light'] .main-content .primary-btn,
-:root[data-theme='light'] .main-content .discovery-play { background: linear-gradient(135deg, #d48b52, #b96838); color: #fffaf4; box-shadow: 0 10px 24px rgba(168, 102, 59, .2); }
-:root[data-theme='light'] .main-content .ghost-btn { border-color: rgba(80, 58, 43, .16); background: rgba(255, 255, 255, .52); color: var(--text-main); }
-:root[data-theme='light'] .main-content .ghost-btn:hover { background: rgba(255, 255, 255, .9); }
-
-:root[data-theme='light'] #app-container > .player-bar { border-color: rgba(80, 58, 43, .13); background: rgba(255, 253, 248, .92); box-shadow: 0 -10px 35px rgba(91, 67, 46, .1); color: var(--text-main); }
-:root[data-theme='light'] #app-container > .player-bar .track-artist,
-:root[data-theme='light'] #app-container > .player-bar .time { color: var(--text-sub); }
-:root[data-theme='light'] #app-container > .player-bar .icon-control,
-:root[data-theme='light'] #app-container > .player-bar .queue-toggle,
-:root[data-theme='light'] #app-container > .player-bar .volume-icon { color: var(--text-sub); }
-:root[data-theme='light'] #app-container > .player-bar .icon-control:hover,
-:root[data-theme='light'] #app-container > .player-bar .queue-toggle:hover { background: rgba(168, 102, 59, .1); color: var(--gold); }
-:root[data-theme='light'] #app-container > .player-bar .mini-art { box-shadow: 0 8px 20px rgba(91, 67, 46, .16); }
-:root[data-theme='light'] #app-container > .player-bar .quality-pill { border-color: rgba(49, 120, 102, .22); }
-
-@media (max-width: 760px) {
-  :root[data-theme='light'] #app-container .app-utility-bar { border-bottom-color: rgba(80, 58, 43, .12); background: linear-gradient(180deg, rgba(255, 253, 248, .97), rgba(255, 253, 248, .88)); }
-  :root[data-theme='light'] #app-container .mobile-menu-toggle { border-color: rgba(80, 58, 43, .15); background: rgba(255, 253, 248, .94); color: var(--gold); box-shadow: 0 8px 22px rgba(91, 67, 46, .12); }
-  :root[data-theme='light'] #app-container > .glass-sidebar { background: linear-gradient(180deg, rgba(255, 253, 248, .99), rgba(243, 234, 223, .98)); }
-  :root[data-theme='light'] #app-container > .player-bar { border-color: rgba(168, 102, 59, .18); background: rgba(255, 253, 248, .96); box-shadow: 0 18px 45px rgba(91, 67, 46, .18); }
-}
-
-/* Light room surfaces for secondary workspaces. */
-:root[data-theme='light'] .main-content .admin-panel,
-:root[data-theme='light'] .main-content .proposal-panel,
-:root[data-theme='light'] .main-content .cinema-panel,
-:root[data-theme='light'] .main-content .chat-layout,
-:root[data-theme='light'] .main-content .conversation-panel,
-:root[data-theme='light'] .main-content .message-panel,
-:root[data-theme='light'] .main-content .account-grid,
-:root[data-theme='light'] .main-content .account-status,
-:root[data-theme='light'] .main-content .artist-detail,
-:root[data-theme='light'] .main-content .artist-card,
-:root[data-theme='light'] .main-content .room-card,
-:root[data-theme='light'] .main-content .now-room-card,
-:root[data-theme='light'] .main-content .queue-room-card,
-:root[data-theme='light'] .main-content .members-card,
-:root[data-theme='light'] .main-content .bulk-lyrics-card,
-:root[data-theme='light'] .main-content .lyrics-editor,
-:root[data-theme='light'] .main-content .lyrics-modal,
-:root[data-theme='light'] .main-content .edit-song-panel,
-:root[data-theme='light'] .main-content .modal-card,
-:root[data-theme='light'] .main-content .cmd-box,
-:root[data-theme='light'] .main-content .cinema-card,
-:root[data-theme='light'] .main-content .list-item,
-:root[data-theme='light'] .main-content .proposal-row,
-:root[data-theme='light'] .main-content .file-attachment,
-:root[data-theme='light'] .main-content .attachment-draft { border-color: rgba(80, 58, 43, .13); background: rgba(255, 253, 249, .88); color: var(--text-main); box-shadow: 0 14px 38px rgba(94, 65, 43, .07); }
-:root[data-theme='light'] .main-content .admin-header,
-:root[data-theme='light'] .main-content .proposal-hero,
-:root[data-theme='light'] .main-content .cinema-hero,
-:root[data-theme='light'] .main-content .artists-hero,
-:root[data-theme='light'] .main-content .chat-header,
-:root[data-theme='light'] .main-content .account-header,
-:root[data-theme='light'] .main-content .lyrics-header,
-:root[data-theme='light'] .main-content .manager-header { border-color: rgba(80, 58, 43, .13); background: linear-gradient(120deg, rgba(255, 253, 248, .96), rgba(247, 237, 226, .86)); color: var(--text-main); }
-:root[data-theme='light'] .main-content .admin-header h1,
-:root[data-theme='light'] .main-content .proposal-hero h1,
-:root[data-theme='light'] .main-content .cinema-hero h1,
-:root[data-theme='light'] .main-content .artists-hero h1,
-:root[data-theme='light'] .main-content .chat-header h1,
-:root[data-theme='light'] .main-content .account-header h1,
-:root[data-theme='light'] .main-content .lyrics-header h1,
-:root[data-theme='light'] .main-content .manager-title,
-:root[data-theme='light'] .main-content .panel-heading h2,
-:root[data-theme='light'] .main-content .message-heading h2,
-:root[data-theme='light'] .main-content .section-head h3 { color: var(--text-main) !important; }
-:root[data-theme='light'] .main-content .admin-header p,
-:root[data-theme='light'] .main-content .proposal-hero p,
-:root[data-theme='light'] .main-content .cinema-hero p,
-:root[data-theme='light'] .main-content .artists-hero p,
-:root[data-theme='light'] .main-content .chat-header p,
-:root[data-theme='light'] .main-content .account-header p,
-:root[data-theme='light'] .main-content .lyrics-header p,
-:root[data-theme='light'] .main-content .manager-sub { color: var(--text-sub) !important; }
-:root[data-theme='light'] .main-content .filter-tabs,
-:root[data-theme='light'] .main-content .lyrics-list-head,
-:root[data-theme='light'] .main-content .lyrics-row,
-:root[data-theme='light'] .main-content .conversation-row,
-:root[data-theme='light'] .main-content .message-context-menu { border-color: rgba(80, 58, 43, .1); background: rgba(255, 255, 255, .48); color: var(--text-main); }
-:root[data-theme='light'] .main-content .conversation-row:hover,
-:root[data-theme='light'] .main-content .lyrics-row:hover,
-:root[data-theme='light'] .main-content .message-context-menu button:hover { background: rgba(168, 102, 59, .08); }
-:root[data-theme='light'] .main-content .btn-solid,
-:root[data-theme='light'] .main-content .approve-btn,
-:root[data-theme='light'] .main-content .accept-btn,
-:root[data-theme='light'] .main-content .join-room-btn { border-color: transparent; background: linear-gradient(135deg, #d48b52, #b96838); color: #fffaf4; }
-:root[data-theme='light'] .main-content .btn-ghost,
-:root[data-theme='light'] .main-content .quiet-btn,
-:root[data-theme='light'] .main-content .cancel-btn { border-color: rgba(80, 58, 43, .16); background: rgba(255, 255, 255, .62); color: var(--text-main); }
-:root[data-theme='light'] .main-content .danger-btn,
-:root[data-theme='light'] .main-content .danger-outline { border-color: rgba(180, 77, 91, .26); color: var(--crimson); }
-:root[data-theme='light'] .main-content .code-pill,
-:root[data-theme='light'] .main-content .connection-pill,
-:root[data-theme='light'] .main-content .media-key { border-color: rgba(168, 102, 59, .18); background: rgba(168, 102, 59, .08); color: var(--gold); }
-:root[data-theme='light'] .main-content .composer textarea,
-:root[data-theme='light'] .main-content .bulk-lyrics-textarea,
-:root[data-theme='light'] .main-content .lyrics-text { background: rgba(255, 255, 255, .78); color: var(--text-main); }
-:root[data-theme='light'] .main-content .message-bubble { border-color: rgba(80, 58, 43, .1); background: #f1e8de; color: var(--text-main); }
-:root[data-theme='light'] .main-content .message-bubble.mine { border-color: rgba(168, 102, 59, .18); background: linear-gradient(135deg, #d48b52, #c17445); color: #fffaf4; }
-:root[data-theme='light'] .main-content .empty-chat,
-:root[data-theme='light'] .main-content .message-empty,
-:root[data-theme='light'] .main-content .directory-empty,
-:root[data-theme='light'] .main-content .lyrics-empty { color: var(--text-sub); }
-
-/* Light room overlays and interaction surfaces. */
-:root[data-theme='light'] .queue-overlay,
-:root[data-theme='light'] .cmd-overlay,
-:root[data-theme='light'] .modal-overlay,
-:root[data-theme='light'] .edit-modal-backdrop,
-:root[data-theme='light'] .lyrics-modal-backdrop,
-:root[data-theme='light'] .editor-backdrop,
-:root[data-theme='light'] .playlist-picker-backdrop { background: rgba(75, 55, 42, .24); }
-:root[data-theme='light'] .queue-panel { border-color: rgba(80, 58, 43, .14); background: linear-gradient(180deg, #fffdf8, #f5ece1 88%); box-shadow: -20px 0 70px rgba(91, 67, 46, .16); }
-:root[data-theme='light'] .queue-summary,
-:root[data-theme='light'] .queue-item:hover { border-color: rgba(80, 58, 43, .11); background: rgba(255, 255, 255, .62); }
-:root[data-theme='light'] .queue-item.now-playing { border-color: rgba(168, 102, 59, .18); background: linear-gradient(100deg, rgba(209, 145, 94, .16), rgba(255, 255, 255, .5)); }
-:root[data-theme='light'] .empty-queue { border-color: rgba(80, 58, 43, .17); }
-:root[data-theme='light'] .cmd-box { border-color: rgba(80, 58, 43, .15); background: linear-gradient(180deg, #fffdf8, #f5ece1); box-shadow: 0 30px 80px rgba(91, 67, 46, .2); }
-:root[data-theme='light'] .cmd-item.active { background: rgba(168, 102, 59, .1); }
-:root[data-theme='light'] .cmd-item-icon { background: rgba(168, 102, 59, .08); }
-:root[data-theme='light'] .cmd-kbd { border-color: rgba(80, 58, 43, .15); background: rgba(255, 255, 255, .5); }
-:root[data-theme='light'] .playlist-picker { border-color: rgba(80, 58, 43, .15); background: #fffdf8; box-shadow: 0 25px 80px rgba(91, 67, 46, .2); }
-:root[data-theme='light'] .playlist-picker-list button { background: rgba(168, 102, 59, .045); }
-:root[data-theme='light'] .playlist-picker-list button:hover:not(:disabled) { border-color: rgba(168, 102, 59, .3); background: rgba(168, 102, 59, .1); }
-
-
-/* LuNu design tokens v5: semantic aliases shared by new and legacy surfaces. */
-:root {
-  --color-bg: var(--bg-deep);
-  --color-bg-elevated: var(--bg-color);
-  --color-surface: var(--panel-solid);
-  --color-surface-hover: var(--panel-bg-hover);
-  --color-primary: var(--gold);
-  --color-secondary: var(--violet);
-  --color-accent: var(--mint);
-  --color-text-primary: var(--text-main);
-  --color-text-secondary: var(--text-sub);
-  --color-text-muted: var(--text-faint);
-  --color-border: var(--hairline);
-  --color-divider: var(--hairline-soft);
-  --color-success: var(--mint);
-  --color-warning: var(--gold);
-  --color-danger: var(--crimson);
-  --color-info: var(--violet);
-  --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
-  --radius-xl: 26px;
-  --shadow-sm: 0 6px 18px rgba(0, 0, 0, .12);
-  --shadow-md: var(--shadow-soft);
-  --shadow-lg: var(--shadow-deep);
-  --space-1: 4px;
-  --space-2: 8px;
-  --space-3: 12px;
-  --space-4: 16px;
-  --space-5: 20px;
-  --space-6: 24px;
-  --space-8: 32px;
-  --space-10: 40px;
-  --duration-fast: 120ms;
-  --duration-normal: 220ms;
-  --duration-slow: 380ms;
-}
-
-:root[data-theme='light'] {
-  --shadow-sm: 0 5px 15px rgba(94, 65, 43, .07);
-  --shadow-md: var(--shadow-soft);
-  --shadow-lg: var(--shadow-deep);
-}
-
-/* Ensure the global system follows the active visual theme in every browser. */
-:root[data-theme='dark'] { color-scheme: dark; }
-:root[data-theme='light'] { color-scheme: light; }
-
-/* More reliable artwork fallbacks and stable media geometry. */
-img { max-width: 100%; }
-.song-cover, .recommendation-art img, .recent-item img, .mini-art img, .row-art img { aspect-ratio: 1; background: var(--surface-2); }
-
-/* A consistent visible focus treatment for keyboard and assistive technology users. */
-:where(button, a, input, select, textarea):focus-visible {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 3px;
-}
-
-/* Avoid accidental horizontal overflow from long music metadata. */
-:where(.song-card, .recommendation-card, .recent-item, .list-item, .conversation-row, .track-copy, .track-details) {
-  min-width: 0;
-}
-
-/* Touch controls should remain comfortable without inflating desktop layouts. */
-@media (pointer: coarse) {
-  :where(.nav-menu button, .primary-btn, .ghost-btn, .play-btn, .icon-control, .queue-toggle, .volume-icon, .like-btn, .card-play) {
-    min-width: 44px;
-    min-height: 44px;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .workspace-enter-active, .workspace-leave-active,
-  .song-cover, .song-card, .recommendation-card, .recent-item,
-  button, a, input, select, textarea {
-    transition-duration: 0.01ms !important;
-  }
-}
-
-
-/* Utility controls keep the light room editorial and readable. */
-:root[data-theme='light'] .utility-theme {
-  border-color: rgba(80, 58, 43, .14);
-  background: rgba(255, 255, 255, .62);
-  color: var(--text-sub);
-}
-:root[data-theme='light'] .utility-theme:hover {
-  border-color: rgba(168, 102, 59, .35);
-  background: rgba(255, 255, 255, .9);
+:root[data-theme='light'] .main-content :is(h1, h2, h3, h4) {
   color: var(--text-main);
 }
-
-/* Section headings in the grouped sidebar remain legible on compact heights. */
-.nav-group .sidebar-label { user-select: none; }
-@media (max-height: 720px) and (min-width: 761px) {
-  .nav-menu { gap: 10px; }
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
 }
-
-/* Flagship material layer: shared acrylic surfaces. */
-.glass-sidebar, .glass-panel {
-  border-color: rgba(255, 255, 255, .11) !important;
-  background: color-mix(in srgb, var(--glass-bg) 86%, transparent) !important;
-  box-shadow: var(--shadow-soft), 0 1px 0 rgba(255,255,255,.04) inset;
-  backdrop-filter: blur(28px) saturate(1.24);
+@keyframes eq {
+  0%,
+  100% {
+    transform: scaleY(0.35);
+  }
+  50% {
+    transform: scaleY(1);
+  }
 }
-
-.glass-sidebar {
-  transition: background .42s var(--spring-soft), box-shadow .42s var(--spring-soft), border-color .42s var(--spring-soft);
+@keyframes shimmer {
+  from {
+    opacity: 0.45;
+  }
+  to {
+    opacity: 1;
+  }
 }
-
-.gradient-heading, h1, h2, h3 {
-  text-wrap: balance;
+@keyframes fade-up {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
 }
-
 @media (prefers-reduced-motion: reduce) {
-  .glass-sidebar { transition: none; }
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+    scroll-behavior: auto !important;
+  }
 }
-
-
-/* LuNu visual refresh v5: elevated editorial surfaces, presentation only. */
-:root {
-  --radius-card: 18px;
-  --shadow-card: 0 14px 42px rgba(0, 0, 0, .16);
-  --line-highlight: rgba(255, 255, 255, .12);
-}
-body { background-image: radial-gradient(circle at 15% 15%, rgba(245,185,122,.045), transparent 27%), radial-gradient(circle at 85% 85%, rgba(155,140,255,.045), transparent 30%); }
-#app-container { gap: 0; }
-.app-utility-bar { position: relative; z-index: 5; padding: 8px 10px; border: 1px solid var(--hairline-soft); border-radius: 14px; background: rgba(255,255,255,.028); box-shadow: inset 0 1px 0 var(--line-highlight), 0 10px 28px rgba(0,0,0,.08); backdrop-filter: blur(18px); }
-.utility-context { padding-left: 4px; }
-.utility-actions button { transition: transform .22s var(--spring), background .22s ease, border-color .22s ease; }
-.utility-actions button:hover { transform: translateY(-2px); }
-.main-content > .workspace-view { max-width: 1480px; margin: 0 auto; }
-.main-content .view-header, .main-content .admin-header, .main-content .cinema-hero, .main-content .proposal-hero { box-shadow: var(--shadow-deep), inset 0 1px 0 var(--line-highlight); }
-.main-content .view-header::before, .main-content .admin-header::before, .main-content .cinema-hero::before, .main-content .proposal-hero::before { content: ''; position: absolute; inset: 0; pointer-events: none; background: linear-gradient(125deg, rgba(255,255,255,.07), transparent 28%, transparent 72%, rgba(245,185,122,.045)); mix-blend-mode: screen; }
-.main-content .song-card, .main-content .recommendation-card, .main-content .room-card, .main-content .person-card, .main-content .proposal-row, .main-content .list-item, .main-content .notification-item { border-color: rgba(255,255,255,.075); border-radius: var(--radius-card); background: linear-gradient(145deg, rgba(255,255,255,.065), rgba(255,255,255,.018)); box-shadow: var(--shadow-card), inset 0 1px 0 rgba(255,255,255,.035); }
-.main-content .song-card:hover, .main-content .recommendation-card:hover, .main-content .room-card:hover, .main-content .person-card:hover, .main-content .proposal-row:hover, .main-content .list-item:hover { border-color: rgba(245,185,122,.34); transform: translateY(-3px); }
-.main-content .song-card.active { border-color: rgba(245,185,122,.62); box-shadow: 0 0 0 1px rgba(245,185,122,.18), 0 18px 48px rgba(245,185,122,.12); }
-.main-content .section-heading h2, .main-content .panel-heading h2 { text-wrap: balance; }
-.main-content .library-toolbar { border-bottom: 1px solid var(--hairline-soft); }
-.main-content .search-box, .main-content .admin-search { box-shadow: inset 0 1px 0 rgba(255,255,255,.045); }
-.main-content .state-card, .main-content .detail-empty, .main-content .artist-empty { border-color: rgba(255,255,255,.09); border-radius: 22px; }
-.glass-sidebar { border-right-color: rgba(245,185,122,.14); }
-.glass-sidebar .brand-mark { box-shadow: 0 0 0 5px rgba(245,185,122,.045), 0 12px 30px rgba(245,185,122,.2); }
-.glass-sidebar .nav-menu button { transition: transform .2s var(--spring), background .2s ease, border-color .2s ease; }
-.glass-sidebar .nav-menu button:hover { transform: translateX(3px); }
-.player-bar { box-shadow: 0 -20px 80px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.08); }
-@media (max-width: 760px) {
-  .app-utility-bar { border: 0; background: transparent; box-shadow: none; padding: 4px 0; }
-  .main-content .view-header, .main-content .admin-header, .main-content .cinema-hero, .main-content .proposal-hero { box-shadow: 0 18px 45px rgba(0,0,0,.16), inset 0 1px 0 var(--line-highlight); }
-}
-:root[data-theme='light'] body { background-image: radial-gradient(circle at 15% 15%, rgba(154,103,60,.06), transparent 28%), radial-gradient(circle at 85% 85%, rgba(102,89,168,.06), transparent 30%); }
-:root[data-theme='light'] .app-utility-bar { background: rgba(255,255,255,.4); box-shadow: inset 0 1px 0 rgba(255,255,255,.8), 0 10px 28px rgba(91,67,46,.08); }
-:root[data-theme='light'] .main-content .song-card, :root[data-theme='light'] .main-content .recommendation-card, :root[data-theme='light'] .main-content .room-card, :root[data-theme='light'] .main-content .person-card, :root[data-theme='light'] .main-content .proposal-row, :root[data-theme='light'] .main-content .list-item { background: linear-gradient(145deg, rgba(255,255,255,.82), rgba(255,250,243,.58)); box-shadow: 0 14px 36px rgba(91,67,46,.1), inset 0 1px 0 rgba(255,255,255,.9); }
