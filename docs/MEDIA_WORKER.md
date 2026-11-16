@@ -70,3 +70,19 @@ python -m pytest backend/tests -q
 ```
 
 Nếu dùng Chromium hệ thống, đặt `PLAYWRIGHT_CHROMIUM_EXECUTABLE=/duong-dan/chromium`. Các kiểm thử dùng audio giả lập và worker cục bộ; không tải YouTube, đăng nhập tài khoản thật hay ghi dữ liệu production.
+
+## Khi log báo cookie đã hết hiệu lực
+
+`valid_format: true` chỉ xác nhận định dạng file, không kiểm tra phiên đăng nhập. Nếu yt-dlp cảnh báo `The provided YouTube account cookies are no longer valid`, LuNu sẽ đánh dấu phiên bị từ chối và thử tải công khai đúng một lần. Phiên cũ không được sử dụng lại trong process đó. Nếu YouTube vẫn yêu cầu xác minh thì không có thay đổi giao diện hay API key tìm kiếm nào tự tạo được phiên hợp lệ.
+
+Cập nhật cookie trực tiếp trong [Environment của LuNu trên Render](https://dashboard.render.com/web/srv-da67mpjl550s73ae4fc0/env), không gửi cookie vào chat hoặc GitHub:
+
+1. Mở một cửa sổ ẩn danh và đăng nhập YouTube.
+2. Trong cùng tab, mở `https://www.youtube.com/robots.txt`. Chỉ giữ một tab ẩn danh này.
+3. Export cookie của `youtube.com` ở định dạng Netscape bằng công cụ trình duyệt phù hợp, rồi đóng cửa sổ ẩn danh để phiên export không tiếp tục bị trình duyệt xoay vòng.
+4. Trong Render → Environment → Secret Files, thay nội dung file được trỏ bởi `YOUTUBE_COOKIES_PATH`. Nếu đang dùng `YOUTUBE_COOKIES_B64`, cập nhật biến đó thay vì Secret File; base64 có ưu tiên cao hơn file.
+5. Lưu và deploy lại. Thử thêm đúng một bài, rồi kiểm tra thông báo kết quả.
+
+Nguồn: [hướng dẫn export cookie hiện tại của yt-dlp](https://github.com/yt-dlp/yt-dlp/wiki/Extractors#exporting-youtube-cookies). Cookie hợp lệ vẫn không bảo đảm IP trung tâm dữ liệu được YouTube chấp nhận.
+
+Dành cho vận hành: `LUNU_YOUTUBE_STARTUP_PROBE=<video-id>` bật một phép thử tải/transcode vào thư mục tạm khi process khởi động. Phép thử không upload Cloudinary và không ghi Supabase. Kết quả đã lược bỏ dữ liệu nhạy cảm xuất hiện ở `/api/health` → `youtube_probe`. Mặc định không chạy; xóa giá trị biến và deploy sau khi chẩn đoán để tránh chạy lại ở lần restart tiếp theo.

@@ -114,7 +114,7 @@ def test_youtube_challenge_sets_cooldown_and_cleans_private_cookie(tmp_path, mon
     monkeypatch.setattr(main.yt_dlp, 'YoutubeDL', BlockedDownloader)
     with pytest.raises(gateway.MediaDownloadError) as first:
         main._download_youtube_locally(VIDEO, str(tmp_path), 'song')
-    assert first.value.code == 'YOUTUBE_RATE_LIMITED'
+    assert first.value.code == 'YOUTUBE_VERIFICATION_REQUIRED'
     assert first.value.retry_after > 0
     assert not cookie.exists()
     with pytest.raises(gateway.MediaDownloadError) as second:
@@ -180,3 +180,106 @@ def test_health_reports_configuration_without_credentials(monkeypatch):
     assert response.json()['media_worker'] == {'configured': True, 'configuration_valid': True}
     assert TOKEN not in response.text
     assert 'private-worker.example' not in response.text
+
+
+def test_expired_cookie_is_retried_anonymously_once_then_skipped(tmp_path, monkeypatch):
+    from youtube_session import CookieSessions
+    import youtube_session
+    sessions = CookieSessions()
+    monkeypatch.setattr(main, 'cookie_sessions', sessions)
+    monkeypatch.setattr(youtube_session, 'cookie_sessions', sessions)
+    source = tmp_path / 'source-cookies.txt'
+    source.write_bytes(b'# Netscape HTTP Cookie File\r\n.youtube.com\tTRUE\t/\tTRUE\t9999999999\tSID\ttest-session\r\n')
+    monkeypatch.setenv('YOUTUBE_COOKIES_PATH', str(source))
+    calls = []
+    class Downloader:
+        def __init__(self, options):
+            self.options = options
+            calls.append(options)
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            pass
+        def extract_info(self, *args, **kwargs):
+            if self.options.get('cookiefile'):
+                self.options['logger'].warning('[youtube] The provided YouTube account cookies are no longer valid. They have likely been rotated in the browser.')
+                raise RuntimeError('Sign in to confirm you are not a bot')
+            return {'id': VIDEO, 'formats': [{'acodec': 'aac'}]}
+        def process_ie_result(self, info, download=True):
+            (tmp_path / f'{VIDEO}.mp3').write_bytes(b'audio'*400)
+    monkeypatch.setattr(main.yt_dlp, 'YoutubeDL', Downloader)
+    path = main._download_youtube_locally(VIDEO, str(tmp_path), 'song')
+    assert path.read_bytes() == b'audio'*400
+    assert len(calls) == 2
+    assert calls[0].get('cookiefile')
+    assert 'cookiefile' not in calls[1]
+    assert not Path(calls[0]['cookiefile']).exists()
+    assert main.youtube_circuit.remaining() == 0
+    assert main.youtube_cookie_status()['session_status'] == 'rejected'
+    assert source.exists()  # Never delete the Render Secret File itself.
+    assert 'cookiefile' not in main.get_ydl_opts(True, str(tmp_path))
+    source.write_bytes(source.read_bytes().replace(b'test-session', b'new-session'))
+    options = main.get_ydl_opts(True, str(tmp_path))
+    assert options.get('cookiefile')
+    Path(options['cookiefile']).unlink()
+    assert main.youtube_cookie_status()['session_status'] == 'unverified'
+
+
+def test_anonymous_retry_failure_reports_expired_session_and_stops(tmp_path, monkeypatch):
+    from youtube_session import YoutubeLogger, CookieSessions
+    import youtube_session
+    sessions = CookieSessions()
+    monkeypatch.setattr(main, 'cookie_sessions', sessions)
+    monkeypatch.setattr(youtube_session, 'cookie_sessions', sessions)
+    cookie = tmp_path / 'old-cookie.txt'
+    cookie.write_text('# Netscape HTTP Cookie File\n')
+    monkeypatch.setenv('YOUTUBE_COOKIES_PATH', str(cookie))
+    calls = []
+    class BlockedDownloader:
+        def __init__(self, options):
+            calls.append(options)
+            self.options = options
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            pass
+        def extract_info(self, *args, **kwargs):
+            if self.options.get('cookiefile'):
+                self.options['logger'].warning('The provided YouTube account cookies are no longer valid.')
+            raise RuntimeError('HTTP Error 403: Sign in to confirm you are not a bot')
+    monkeypatch.setattr(main.yt_dlp, 'YoutubeDL', BlockedDownloader)
+    with pytest.raises(gateway.MediaDownloadError) as result:
+        main._download_youtube_locally(VIDEO, str(tmp_path), 'song')
+    assert result.value.code == 'YOUTUBE_SESSION_REJECTED'
+    assert 'Secret Files' in str(result.value)
+    assert len(calls) == 2
+    with pytest.raises(gateway.MediaDownloadError) as cooldown:
+        main._download_youtube_locally(VIDEO, str(tmp_path), 'song')
+    assert cooldown.value.code == 'YOUTUBE_COOLDOWN'
+    assert len(calls) == 2
+
+
+def test_release_probe_checks_real_download_without_upload_and_cleans_files(monkeypatch):
+    paths = []
+    def download(video_id, temp_dir, mode):
+        output = Path(temp_dir) / 'probe.mp3'
+        output.write_bytes(b'audio' * 400)
+        paths.append(output)
+        return output
+    monkeypatch.setattr(main, 'youtube_probe', {'status': 'running'})
+    monkeypatch.setattr(main, 'download_media', download)
+    main.probe_youtube_download(VIDEO)
+    assert main.youtube_probe['status'] == 'completed'
+    assert main.youtube_probe['downloaded_bytes'] == 2000
+    assert not paths[0].parent.exists()
+
+
+def test_probe_error_does_not_expose_upstream_urls_or_credentials(monkeypatch):
+    monkeypatch.setattr(main, 'youtube_probe', {'status': 'running'})
+    def download(*_):
+        raise gateway.MediaDownloadError('YOUTUBE_SESSION_REJECTED', 'https://example.com/?token=private-token')
+    monkeypatch.setattr(main, 'download_media', download)
+    main.probe_youtube_download(VIDEO)
+    assert main.youtube_probe['status'] == 'failed'
+    assert main.youtube_probe['error_code'] == 'YOUTUBE_SESSION_REJECTED'
+    assert 'private-token' not in str(main.youtube_probe)

@@ -26,6 +26,7 @@ import cloudinary
 import cloudinary.uploader
 import yt_dlp
 from media_gateway import MediaDownloadError, download_from_worker, validate_media_request, worker_config, worker_status, youtube_circuit
+from youtube_session import YoutubeLogger, cookie_sessions
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, Depends, FastAPI, File, Form, Header, HTTPException, Query, UploadFile, WebSocket, WebSocketDisconnect, status
 from fastapi.middleware.cors import CORSMiddleware
@@ -110,6 +111,8 @@ else:
 
 
 _cleanup_task: Optional[asyncio.Task] = None
+_youtube_probe_task: Optional[asyncio.Task] = None
+youtube_probe = {'status': 'not_requested'}
 
 
 async def periodic_cinema_cleanup() -> None:
@@ -133,13 +136,25 @@ async def periodic_cinema_cleanup() -> None:
 
 @app.on_event('startup')
 async def start_periodic_cleanup() -> None:
-    global _cleanup_task
+    global _cleanup_task, _youtube_probe_task
     _cleanup_task = asyncio.create_task(periodic_cinema_cleanup())
+    probe_id = os.getenv('LUNU_YOUTUBE_STARTUP_PROBE', '').strip()
+    if probe_id:
+        try:
+            validate_media_request(probe_id, 'song')
+        except MediaDownloadError:
+            youtube_probe.update(status='invalid_configuration')
+        else:
+            youtube_probe.update(status='running')
+            _youtube_probe_task = asyncio.create_task(asyncio.to_thread(probe_youtube_download, probe_id))
 
 
 @app.on_event('shutdown')
 async def stop_periodic_cleanup() -> None:
-    global _cleanup_task
+    global _cleanup_task, _youtube_probe_task
+    if _youtube_probe_task:
+        _youtube_probe_task.cancel()
+        _youtube_probe_task = None
     if _cleanup_task:
         _cleanup_task.cancel()
         try:
@@ -478,35 +493,24 @@ def update_profile_record(client: Client, user_id: str, payload: dict) -> dict:
 
 
 def _youtube_cookie_file() -> Optional[Path]:
-    """Materialize a validated, writable Netscape cookie jar for yt-dlp."""
+    """Read the secret source and create a private, disposable yt-dlp cookie jar."""
     configured_path = os.getenv('YOUTUBE_COOKIES_PATH', '').strip()
     cookies_b64 = os.getenv('YOUTUBE_COOKIES_B64', '').strip()
-    source: Optional[Path] = Path(configured_path).expanduser() if configured_path else None
-    if cookies_b64:
-        source = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-source-{os.getpid()}-{secrets.token_hex(4)}.txt'
-        try:
-            decoded = base64.b64decode(cookies_b64, validate=True)
-            source.write_bytes(decoded)
-            source.chmod(0o600)
-        except Exception as error:
-            raise RuntimeError(f'YOUTUBE_COOKIES_B64 không hợp lệ: {error}') from error
-    if not source or not source.is_file():
+    if not configured_path and not cookies_b64:
         return None
     try:
-        content = source.read_text(encoding='utf-8', errors='replace')
-    except OSError as error:
-        raise RuntimeError(f'Không đọc được cookie YouTube: {error}') from error
-    if '# Netscape HTTP Cookie File' not in content and '#HttpOnly_' not in content:
-        raise RuntimeError('Cookie YouTube không phải Netscape cookie export. Hãy export lại bằng extension hỗ trợ Netscape format.')
-    writable = Path(tempfile.gettempdir()) / f'lunu-youtube-cookies-{os.getpid()}-{secrets.token_hex(4)}.txt'
-    try:
-        shutil.copyfile(source, writable)
-        writable.chmod(0o600)
-        if cookies_b64:
-            source.unlink(missing_ok=True)
-    except OSError as error:
-        raise RuntimeError(f'Không thể chuẩn bị file cookie YouTube: {error}') from error
-    return writable
+        content = base64.b64decode(cookies_b64, validate=True) if cookies_b64 else Path(configured_path).expanduser().read_bytes()
+    except (ValueError, OSError):
+        raise MediaDownloadError('YOUTUBE_COOKIE_CONFIG', 'Không đọc được cookie YouTube. Kiểm tra Secret File hoặc giá trị base64 trên Render.') from None
+    text = content.decode('utf-8', errors='replace')
+    if '# Netscape HTTP Cookie File' not in text and '#HttpOnly_' not in text:
+        raise MediaDownloadError('YOUTUBE_COOKIE_CONFIG', 'Cookie YouTube chưa đúng định dạng Netscape. Cập nhật Secret File trên Render.')
+    if cookie_sessions.rejected(cookie_sessions.fingerprint(content)):
+        return None  # A newly exported file gets a different fingerprint automatically.
+    with tempfile.NamedTemporaryFile(prefix='lunu-youtube-cookies-', suffix='.txt', delete=False) as writable:
+        writable.write(content)
+        return Path(writable.name)
+
 
 
 def youtube_cookie_status() -> dict:
@@ -521,11 +525,17 @@ def youtube_cookie_status() -> dict:
             valid_format = '# Netscape HTTP Cookie File' in content or '#HttpOnly_' in content
         except (ValueError, OSError, UnicodeError):
             valid_format = False
-    return {'configured': configured, 'source': 'base64' if has_b64 else ('file' if path_exists else None), 'valid_format': valid_format}
+    session_status = 'not_configured'
+    if configured:
+        session_status = 'invalid_format' if not valid_format else 'unverified'
+        if valid_format and cookie_sessions.rejected(cookie_sessions.fingerprint(content.encode('utf-8'))):
+            session_status = 'rejected'
+    return {'configured': configured, 'source': 'base64' if has_b64 else ('file' if path_exists else None), 'valid_format': valid_format, 'session_status': session_status}
 
 
 
-def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'default', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None) -> dict:
+
+def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, client: str = 'default', format_selector: Optional[str] = None, output_template: Optional[str] = None, postprocessors: Optional[list[dict]] = None, max_filesize: Optional[int] = None, use_cookies: bool = True) -> dict:
     opts = {
         'extractor_args': {'youtube': {'player_client': [client]}} if client != 'default' else {},
         'js_runtimes': {'node': {}},
@@ -540,7 +550,9 @@ def get_ydl_opts(is_download: bool = False, temp_dir: Optional[str] = None, *, c
         'check_formats': 'selected',
     }
     if is_download:
-        cookie_path = _youtube_cookie_file()
+        cookie_path = _youtube_cookie_file() if use_cookies else None
+        fingerprint = cookie_sessions.fingerprint(cookie_path.read_bytes()) if cookie_path else ''
+        opts['logger'] = YoutubeLogger(fingerprint)
         if cookie_path:
             opts['cookiefile'] = str(cookie_path)
         if temp_dir:
@@ -1399,6 +1411,17 @@ def download_media(video_id: str, temp_dir: str, mode: str) -> Path:
 def _download_youtube_locally(video_id: str, temp_dir: str, mode: str) -> Path:
     validate_media_request(video_id, mode)
     youtube_circuit.check()
+    try:
+        return _download_youtube_attempt(video_id, temp_dir, mode, use_cookies=True)
+    except MediaDownloadError as error:
+        if error.code != 'YOUTUBE_COOKIES_EXPIRED':
+            raise
+        # An explicitly rejected account session does not prove an IP block.
+        # Try public access exactly once; never rotate clients or retry a block.
+        return _download_youtube_attempt(video_id, temp_dir, mode, use_cookies=False)
+
+
+def _download_youtube_attempt(video_id: str, temp_dir: str, mode: str, *, use_cookies: bool) -> Path:
     url = f'https://www.youtube.com/watch?v={video_id}'
     audio_selector = 'bestaudio[ext=m4a]/bestaudio/best[acodec!=none]'
     video_selector = 'best[height<=480][filesize<450M][ext=mp4]/best[height<=360][filesize<450M][ext=mp4]/best[height<=360]'
@@ -1417,6 +1440,7 @@ def _download_youtube_locally(video_id: str, temp_dir: str, mode: str) -> Path:
                 format_selector=selector,
                 postprocessors=[] if mode == 'video' else None,
                 max_filesize=RENDER_MAX_DOWNLOAD_BYTES if mode == 'video' else MAX_AUDIO_UPLOAD_BYTES,
+                use_cookies=use_cookies,
             )
             with yt_dlp.YoutubeDL(options) as ydl:
                 info = ydl.extract_info(url, download=False)
@@ -1457,9 +1481,12 @@ def _download_youtube_locally(video_id: str, temp_dir: str, mode: str) -> Path:
             output = Path(temp_dir) / f'{video_id}.mp4'
             run_ffmpeg(source, output, 'video')
             return output
-        except MediaTooLargeError:
+        except (MediaTooLargeError, MediaDownloadError):
             raise
         except Exception as error:
+            logger = options.get('logger')
+            if use_cookies and getattr(logger, 'cookies_rejected', False):
+                raise MediaDownloadError('YOUTUBE_COOKIES_EXPIRED', 'YouTube báo cookie đã hết hiệu lực. Đang thử một lần không dùng phiên cũ.') from None
             error_text = str(error)
             lower_error = error_text.lower()
             if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
@@ -1482,8 +1509,22 @@ def _download_youtube_locally(video_id: str, temp_dir: str, mode: str) -> Path:
             if cookie_path:
                 Path(cookie_path).unlink(missing_ok=True)
     if blocked_by_youtube:
-        raise MediaDownloadError('YOUTUBE_RATE_LIMITED', 'YouTube đang từ chối tải từ máy chủ (403/429 hoặc yêu cầu xác minh). Hãy cấu hình máy tải nhạc riêng hoặc thêm file audio từ thiết bị. API key tìm kiếm không khắc phục được lỗi tải này.', youtube_circuit.remaining())
+        if youtube_cookie_status().get('session_status') == 'rejected':
+            raise MediaDownloadError('YOUTUBE_SESSION_REJECTED', 'Cookie YouTube đã hết hiệu lực; tải không dùng cookie cũng bị YouTube yêu cầu xác minh. Cập nhật cookie Netscape mới trong Render → LuNu_Music → Environment → Secret Files rồi deploy lại. API key tìm kiếm không thay thế được phiên này.', youtube_circuit.remaining())
+        raise MediaDownloadError('YOUTUBE_VERIFICATION_REQUIRED', 'YouTube từ chối tải từ máy chủ (403/429 hoặc yêu cầu xác minh). Cần một phiên cookie hợp lệ hoặc nguồn tải khác; tìm kiếm thành công không có nghĩa là tải được audio.', youtube_circuit.remaining())
     raise RuntimeError('Không tải được media từ YouTube: ' + ' | '.join(errors[-4:]))
+
+
+def probe_youtube_download(video_id: str) -> None:
+    """Opt-in end-to-end extraction/transcode check; no database or cloud upload."""
+    try:
+        with tempfile.TemporaryDirectory(prefix='lunu-youtube-probe-') as temp_dir:
+            result = download_media(video_id, temp_dir, 'song')
+            youtube_probe.update(status='completed', downloaded_bytes=result.stat().st_size)
+    except Exception as error:
+        youtube_probe.update(status='failed', error_code=getattr(error, 'code', 'YOUTUBE_DOWNLOAD_FAILED'))
+    finally:
+        youtube_probe['finished_at'] = datetime.now(ZoneInfo('Asia/Ho_Chi_Minh')).isoformat()
 
 
 def process_and_upload_song(job_id: str, request_data: dict) -> None:
@@ -1852,6 +1893,7 @@ async def health() -> dict:
         'youtube_download_policy': 'remote-worker-if-configured; local-cooldown-on-429-403',
         'media_worker': worker_status(),
         'youtube_cooldown_seconds': youtube_circuit.remaining(),
+        'youtube_probe': dict(youtube_probe),
         'direct_audio_providers': {
             'jamendo': {'configured': bool(JAMENDO_CLIENT_ID), 'download_policy': 'license-and-download-allowed-only'},
             'internet_archive': {'configured': True, 'download_policy': 'creative-commons-or-public-domain-only'},

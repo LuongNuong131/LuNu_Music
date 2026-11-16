@@ -11,6 +11,8 @@
     <template v-else-if="health"
       ><div class="source-badges">
         <span><Upload :size="14" /> Thêm file từ thiết bị</span
+        ><span v-if="health.youtube_cookie?.session_status === 'rejected'"
+          >Cookie YouTube đã hết hiệu lực</span
         ><span v-if="health.media_worker?.configured && health.media_worker?.configuration_valid"
           ><Server :size="14" /> Đã cấu hình máy tải riêng</span
         ><span v-if="health.youtube_cooldown_seconds"
@@ -18,7 +20,12 @@
           {{ Math.ceil(health.youtube_cooldown_seconds / 60) }} phút</span
         ><span v-if="health.direct_audio_providers?.jamendo?.configured">Jamendo</span>
       </div>
-      <p v-if="health.media_worker?.configuration_valid === false">
+      <p v-if="health.youtube_cookie?.session_status === 'rejected'">
+        YouTube đã từ chối phiên cookie hiện tại. Cập nhật cookie Netscape mới trong Render →
+        LuNu_Music → Environment → Secret Files, lưu và deploy lại. “Đúng định dạng” không có nghĩa
+        là phiên đăng nhập còn hiệu lực.
+      </p>
+      <p v-else-if="health.media_worker?.configuration_valid === false">
         Cấu hình máy tải nhạc chưa hợp lệ. Kiểm tra địa chỉ HTTPS và khóa kết nối.
       </p>
       <p v-else-if="!health.media_worker?.configured">
