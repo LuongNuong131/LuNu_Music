@@ -1491,7 +1491,7 @@ def _download_youtube_attempt(video_id: str, temp_dir: str, mode: str, *, use_co
             lower_error = error_text.lower()
             if '[Errno 101]' in error_text or 'Network is unreachable' in error_text:
                 errors.append(f'{client}: Render không có route mạng tới stream YouTube (Errno 101); đã thử lại với IPv4/backoff')
-            elif any(token in lower_error for token in ('http error 429', 'too many requests', 'http error 403', 'forbidden', 'sign in to confirm', 'not a bot', 'challenge')):
+            elif getattr(logger, 'upstream_blocked', False) or any(token in lower_error for token in ('http error 429', 'too many requests', 'http error 403', 'forbidden', 'sign in to confirm', 'not a bot', 'challenge')):
                 blocked_by_youtube = True
                 if youtube_cookie_status()['configured']:
                     errors.append(f'{client}: YouTube đang giới hạn/challenge IP hoặc session (429/403); cookie có thể không cùng phiên')

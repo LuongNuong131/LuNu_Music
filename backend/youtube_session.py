@@ -34,6 +34,7 @@ class YoutubeLogger:
     def __init__(self, cookie_fingerprint: str = ''):
         self.cookie_fingerprint = cookie_fingerprint
         self.cookies_rejected = False
+        self.upstream_blocked = False
 
     def debug(self, message):
         if not str(message).startswith('[debug]'):
@@ -42,6 +43,8 @@ class YoutubeLogger:
     def warning(self, message):
         text = str(message)
         lowered = text.lower()
+        if any(marker in lowered for marker in ('http error 403', 'http error 429', 'too many requests')):
+            self.upstream_blocked = True
         if self.cookie_fingerprint and any(marker in lowered for marker in (
             'cookies are no longer valid', 'cookies have expired', 'cookies are expired',
         )):
@@ -50,4 +53,6 @@ class YoutubeLogger:
         logger.warning('%s', text)
 
     def error(self, message):
+        if any(marker in str(message).lower() for marker in ('http error 403', 'http error 429', 'too many requests')):
+            self.upstream_blocked = True
         logger.error('%s', message)

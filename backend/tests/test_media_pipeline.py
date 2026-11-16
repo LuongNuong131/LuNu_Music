@@ -283,3 +283,22 @@ def test_probe_error_does_not_expose_upstream_urls_or_credentials(monkeypatch):
     assert main.youtube_probe['status'] == 'failed'
     assert main.youtube_probe['error_code'] == 'YOUTUBE_SESSION_REJECTED'
     assert 'private-token' not in str(main.youtube_probe)
+
+
+def test_player_response_failure_preserves_prior_http_block_and_cooldown(tmp_path, monkeypatch):
+    class Downloader:
+        def __init__(self, options):
+            self.options = options
+        def __enter__(self):
+            return self
+        def __exit__(self, *_):
+            pass
+        def extract_info(self, *args, **kwargs):
+            self.options['logger'].warning('Unable to download webpage: HTTP Error 429: Too Many Requests')
+            self.options['logger'].warning('Unable to download API page: HTTP Error 403: Forbidden')
+            raise RuntimeError('Failed to extract any player response')
+    monkeypatch.setattr(main.yt_dlp, 'YoutubeDL', Downloader)
+    with pytest.raises(gateway.MediaDownloadError) as result:
+        main._download_youtube_locally(VIDEO, str(tmp_path), 'song')
+    assert result.value.code == 'YOUTUBE_VERIFICATION_REQUIRED'
+    assert main.youtube_circuit.remaining() > 0
